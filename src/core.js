@@ -1,0 +1,101 @@
+export const CONFIG = Object.freeze({
+  stormAt:60, asteroidAt:120, impactAt:137, embraceAt:145, kissAt:152, hitAt:164, titleAt:167.5,
+  impactDistance:235, boatScale:2.15, deckY:-.07, eyeHeight:1.62, walkSpeed:1.5, runSpeed:2.45,
+  respawnAfter:3.5, fixedStep:1/60, slapRange:1.7, protocol:2
+});
+export const clamp=(x,a=0,b=1)=>Math.max(a,Math.min(b,x));
+export const lerp=(a,b,t)=>a+(b-a)*t;
+export const smooth=(a,b,x)=>{const t=clamp((x-a)/(b-a));return t*t*(3-2*t)};
+export function phaseAt(t){return t<60?'sunset':t<120?'storm':t<137?'asteroid':t<145?'wave':t<164?'farewell':t<167.5?'blackout':'title'}
+// fade é um corte seco: a tela apaga no quadro exato em que a onda alcança o barco.
+export function weatherAt(t){return {storm:smooth(60,85,t)*(1-smooth(120,130,t)*.45),red:smooth(120,126,t),wave:smooth(137,164,t),fade:t>=CONFIG.hitAt?1:0,phase:phaseAt(t)};}
+
+// Ondas direcionais: a mesma tabela alimenta a CPU (flutuação do barco) e o shader do oceano.
+// [direção x, direção z, comprimento de onda, amplitude relativa, velocidade, nitidez da crista]
+export const WAVES=[
+  [.83,.55,34,1,1.0,1.6],[-.62,.78,21,.52,1.1,1.8],[.29,-.96,13,.3,1.25,2.0],
+  [.97,-.24,8.5,.17,1.4,2.2],[-.86,-.51,5.3,.09,1.6,2.4],[.45,.89,3.4,.05,1.8,2.6]
+];
+const waveK=WAVES.map(w=>2*Math.PI/w[2]),waveW=WAVES.map((w,i)=>Math.sqrt(9.81*waveK[i])*w[4]*.55);
+export function seaAmplitude(storm){return .16+storm*.95;}
+export function waveHeight(x,z,t,storm=0){
+  const a=seaAmplitude(storm);let h=0;
+  for(let i=0;i<WAVES.length;i++){const w=WAVES[i],s=Math.sin((x*w[0]+z*w[1])*waveK[i]-t*waveW[i]);h+=a*w[3]*(2*Math.pow((s+1)/2,w[5])-.72);}
+  return h;
+}
+export const waveGLSL=`
+float seaHeight(vec2 p,float t,float storm){
+  float a=${'.16'}+storm*.95;float h=0.;
+${WAVES.map((w,i)=>`  h+=a*${w[3].toFixed(3)}*(2.*pow((sin(dot(p,vec2(${w[0].toFixed(3)},${w[1].toFixed(3)}))*${waveK[i].toFixed(5)}-t*${waveW[i].toFixed(5)})+1.)*.5,${w[5].toFixed(2)})-.72);`).join('\n')}
+  return h;
+}`;
+
+// Tsunami: frente radial analítica sincronizada para tocar o barco exatamente em hitAt.
+// A simulação de fluido (fluid.js) acrescenta os anéis caóticos sobre esta frente.
+// Em hitAt a face da onda está exatamente na proa (≈4,6 m à frente do centro do barco): é nesse quadro que a tela apaga.
+export const BOW_OFFSET=4.6;
+export function tsunamiRadius(t,distance){const a=clamp((t-CONFIG.impactAt)/(CONFIG.hitAt-CONFIG.impactAt),0,1.2);return Math.max(distance-BOW_OFFSET,0)*(.08+.92*Math.pow(a,1.12))*(a>0?1:0);}
+export function tsunamiAmplitude(t){const a=clamp((t-CONFIG.impactAt)/(CONFIG.hitAt-CONFIG.impactAt),0,1.2);return a<=0?0:lerp(9,46,Math.pow(a,1.6));}
+export function tsunamiProfile(s,H){
+  // s>0: à frente da parede (face íngreme e o mar recuando); s<0: corpo longo da onda
+  if(s>0)return H*Math.exp(-Math.pow(s/6.5,1.7))-H*.16*Math.exp(-Math.pow((s-38)/26,2));
+  return H*(Math.exp(-Math.pow(s/70,2))*.8+.2*Math.exp(s/120))*(1+.06*Math.exp(-Math.pow((s+6)/6,2)));
+}
+export function tsunamiHeight(x,z,t,impact){
+  if(!impact||t<CONFIG.impactAt)return 0;
+  const r=Math.hypot(x-impact.x,z-impact.z),R=tsunamiRadius(t,impact.d);
+  return tsunamiProfile(r-R,tsunamiAmplitude(t))*clamp((R-r+260)/80,0,1);
+}
+export const tsunamiGLSL=`
+float tsunamiProfile(float s,float H){
+  if(s>0.)return H*exp(-pow(s/6.5,1.7))-H*.16*exp(-pow((s-38.)/26.,2.));
+  return H*(exp(-pow(s/70.,2.))*.8+.2*exp(s/120.))*(1.+.06*exp(-pow((s+6.)/6.,2.)));
+}`;
+// Largura útil do convés: segue o casco (o mesmo perfil de boat.js e do shader do mar) na altura do piso,
+// menos a largura do corpo, para os pés nunca atravessarem o costado.
+function hullHalf(zq){const L=(a,b,t)=>a+(b-a)*t;if(zq< -1.65)return L(.48,.67,(zq+2)/.35);if(zq< -1.1)return L(.67,.79,(zq+1.65)/.55);if(zq< -.45)return L(.79,.84,(zq+1.1)/.65);if(zq<.35)return L(.84,.83,(zq+.45)/.8);if(zq<1.05)return L(.83,.71,(zq-.35)/.7);if(zq<1.6)return L(.71,.49,(zq-1.05)/.55);if(zq<2)return L(.49,.2,(zq-1.6)/.4);return L(.2,.025,(zq-2)/.21);}
+export function deckHalfWidth(z){const zq=z/2.15,t=Math.max(0,((-.07+.68)/2.15-(.16+.11*Math.pow(Math.abs(zq)/2.21,3)))/.64);return hullHalf(zq)*(.57+.43*(t+.12))*2.15;}
+export function insideBoat(x,z){return Math.abs(z)<3.6 && Math.abs(x)<deckHalfWidth(z)-.2;}
+export class Lobby {
+  constructor(mode='online'){this.mode=mode;this.players=new Map();}
+  join(id,character){if(![0,1].includes(character))throw Error('Personagem invalido');if(!this.players.has(id)&&this.players.size>=2)throw Error('Barco cheio');for(const [key,p]of this.players)if(key!==id&&p.character===character)throw Error('Personagem ocupado');this.players.set(id,{id,character,ready:false});}
+  ready(id,value){const p=this.players.get(id);if(p)p.ready=!!value;}
+  leave(id){this.players.delete(id);}
+  get canStart(){return this.players.size===(this.mode==='solo'?1:2)&&[...this.players.values()].every(p=>p.ready);}
+  snapshot(){return [...this.players.values()].map(p=>({...p}));}
+}
+// Pesca: cada lançamento sorteia a espécie e o peso. O peixe tem "corridas" (puxões para um lado),
+// o ponteiro tem inércia, a faixa verde encolhe com a dificuldade e fisgar rápido dá vantagem.
+export const FISH_TABLE=[{diff:.15,kg:[.08,.2],rarity:30},{diff:.3,kg:[.5,1.3],rarity:24},{diff:.45,kg:[.9,2.6],rarity:16},{diff:.55,kg:[1.4,4.2],rarity:13},{diff:.75,kg:[3,8.5],rarity:8},{diff:.9,kg:[4,11],rarity:5},{diff:.2,kg:[.6,.6],rarity:4}];
+export function pickFish(r){const total=FISH_TABLE.reduce((s,f)=>s+f.rarity,0);let x=r*total;for(let i=0;i<FISH_TABLE.length;i++){x-=FISH_TABLE[i].rarity;if(x<0)return i;}return 0;}
+export class Fishing {
+  constructor(random=Math.random){this.random=random;this.reset();this.caught=0;this.lastSpecies=-1;this.lastWeight=0;}
+  reset(){this.phase='idle';this.timer=0;this.progress=0;this.tension=.3;this.target=.5;this.needle=.5;this.vel=0;this.run=0;this.runDir=1;this.biteAge=0;this.perfect=false;this.species=-1;this.weight=0;}
+  get zone(){return this.species<0?.18:.2-FISH_TABLE[this.species].diff*.065;}
+  cast(){if(this.phase!=='idle')return false;this.phase='waiting';this.timer=2.5+this.random()*4;this.species=pickFish(this.random());const k=FISH_TABLE[this.species].kg;this.weight=Math.round((k[0]+(k[1]-k[0])*this.random())*100)/100;return true;}
+  reel(){if(this.phase==='bite'){this.phase='reeling';this.perfect=this.biteAge<.45;this.progress=this.perfect?.12:0;this.timer=0;return true;}return false;}
+  step(dt,held,time){
+    if(this.phase==='waiting'){this.timer-=dt;if(this.timer<=0){this.phase='bite';this.timer=2;this.biteAge=0;return 'bite';}if(this.timer<1.8&&this.random()>1-dt*1.3)return 'nibble';}
+    else if(this.phase==='bite'){this.timer-=dt;this.biteAge+=dt;if(this.timer<=0){this.reset();return 'escaped';}}
+    else if(this.phase==='reeling'){
+      const d=FISH_TABLE[this.species]?.diff??.2;this.timer+=dt;let event=null;
+      if(this.run<=0&&this.random()>1-dt*(.12+d*.4)){this.run=.7+d*1.3;this.runDir=this.random()<.5?-1:1;event='run';}
+      if(this.run>0)this.run-=dt;
+      const base=.5+Math.sin(time*(1.2+d*.9))*(.18+d*.08)+Math.sin(time*3.1+1)*.05*d;
+      const goal=clamp(base+(this.run>0?this.runDir*(.22+d*.12):0),.08,.92);this.target+=(goal-this.target)*Math.min(1,dt*(this.run>0?4.5:2.6));
+      this.vel+=(held?1.9:-1.5)*dt;this.vel*=Math.exp(-dt*2.2);this.needle+=this.vel*dt;if(this.needle<0||this.needle>1){this.needle=clamp(this.needle);this.vel=0;}
+      const accurate=Math.abs(this.needle-this.target)<this.zone;
+      this.progress=clamp(this.progress+(accurate?.22*(1-d*.35):-.06)*dt);
+      this.tension=clamp(this.tension+(accurate?-.28:.3+(this.run>0?.22:0))*dt);
+      if(this.progress>=1){this.caught++;this.lastSpecies=this.species;this.lastWeight=this.weight;this.reset();return 'caught';}
+      if(this.tension>=1||this.timer>30){this.lastSpecies=this.species;this.reset();return 'escaped';}
+      if(!event&&this.random()>1-dt*(.18+d*.2))event='jump';
+      return event;
+    }
+    return null;
+  }
+}
+export function newPlayer(id,character){return {id,character,x:id===0?-.45:.45,z:-1.1,yaw:0,pitch:0,mode:'walk',fish:0,slap:0,ragTime:0,height:0,vy:0,speed:0,tp:0,cx:0,cz:0};}
+// yaw é relativo ao barco; x/z/h são a posição prevista pelo próprio cliente (movimento com autoridade local).
+export function inputPacket(input){const n=(v,a,b)=>clamp(Number(v)||0,a,b);return {type:'input',v:CONFIG.protocol,x:n(input.x,-1,1),z:n(input.z,-1,1),yaw:n(input.yaw,-1e4,1e4),pitch:n(input.pitch,-1.6,1.6),px:n(input.px,-4,4),pz:n(input.pz,-5,5),ph:n(input.ph,0,3),speed:n(input.speed,0,4),tp:Math.floor(n(input.tp,0,1e6)),run:!!input.run,interact:!!input.interact,cast:!!input.cast,slap:!!input.slap,jump:!!input.jump,reel:!!input.reel,fall:!!input.fall};}
+export function validPacket(p){return p&&p.v===CONFIG.protocol&&['hello','ready','start','input','snapshot','lobby','event','bye'].includes(p.type);}

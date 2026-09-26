@@ -1,0 +1,16 @@
+import fs from 'node:fs';
+import path from 'node:path';
+const source=process.argv[2],out=path.resolve('public/assets');
+if(!source)throw Error('Informe a pasta com os modelos GLB originais.');
+for(let index=0;index<2;index++){
+ const name=`personagem-0${index+1}.glb`,file=fs.readFileSync(path.join(source,name)),jl=file.readUInt32LE(12),doc=JSON.parse(file.subarray(20,20+jl).toString()),bin=file.subarray(28+jl);
+ const chunks=[bin];let offset=bin.length;
+ function view(buffer,target){const padded=Buffer.concat([buffer,Buffer.alloc((4-buffer.length%4)%4)]),id=doc.bufferViews.length;doc.bufferViews.push({buffer:0,byteOffset:offset,byteLength:buffer.length,...(target?{target}: {})});chunks.push(padded);offset+=padded.length;return id;}
+ function accessor(arr,type){const id=doc.accessors.length,width=type==='VEC2'?2:3,ac={bufferView:view(Buffer.from(new Float32Array(arr).buffer),34962),componentType:5126,count:arr.length/width,type};if(type==='VEC3'){ac.min=[0,1,2].map(k=>Math.min(...arr.filter((_,i)=>i%3===k)));ac.max=[0,1,2].map(k=>Math.max(...arr.filter((_,i)=>i%3===k)));}doc.accessors.push(ac);return id;}
+ const rows=[[-.18,.069],[-.15,.094],[-.08,.12],[0,.129],[.1,.122],[.17,.108]],v=[],uv=[],positions=[],texcoords=[],normals=[];
+ for(const [y,w]of rows)for(let i=0;i<=10;i++){const u=i/10,x=(u*2-1)*w;v.push([x,1.622+y,.173-Math.pow(Math.abs(x)/.14,2)*.05]);const c=index===0?[.196,.265,.865,.90]:[.264,.267,.752,.882];uv.push([c[0]+u*(c[2]-c[0]),c[1]+(1-(y+.18)/.35)*(c[3]-c[1])]);}
+ for(let j=0;j<rows.length-1;j++)for(let i=0;i<10;i++){const a=j*11+i,b=a+11;for(const k of[a,a+1,b,a+1,b+1,b]){positions.push(...v[k]);texcoords.push(...uv[k]);normals.push(0,0,1);}}
+ const png=fs.readFileSync(path.join(out,`rosto-0${index+1}.png`));doc.images=[{name:'Foto original do rosto',bufferView:view(png),mimeType:'image/png'}];doc.samplers=[{magFilter:9729,minFilter:9729,wrapS:33071,wrapT:33071}];doc.textures=[{sampler:0,source:0}];doc.extensionsUsed=['KHR_materials_unlit'];doc.materials.push({name:'Rosto fotografico',pbrMetallicRoughness:{baseColorTexture:{index:0},metallicFactor:0,roughnessFactor:1},doubleSided:true,extensions:{KHR_materials_unlit:{}}});doc.meshes.push({name:'Foto colada no rosto',primitives:[{attributes:{POSITION:accessor(positions,'VEC3'),NORMAL:accessor(normals,'VEC3'),TEXCOORD_0:accessor(texcoords,'VEC2')},material:doc.materials.length-1}]});doc.nodes.push({name:'Rosto fotografico',mesh:doc.meshes.length-1});doc.nodes[0].children=doc.nodes[0].children.filter(i=>!/Olho|Iris|Pupila|Sobrancelha|Nariz|boca|Labio|Bigode|Cavanhaque|Barba/i.test(doc.nodes[i].name));doc.nodes[0].children.push(doc.nodes.length-1);
+ doc.buffers[0].byteLength=offset;let json=Buffer.from(JSON.stringify(doc));json=Buffer.concat([json,Buffer.alloc((4-json.length%4)%4,32)]);const data=Buffer.concat(chunks),h=Buffer.alloc(12),jh=Buffer.alloc(8),bh=Buffer.alloc(8);h.writeUInt32LE(0x46546c67);h.writeUInt32LE(2,4);h.writeUInt32LE(28+json.length+data.length,8);jh.writeUInt32LE(json.length);jh.writeUInt32LE(0x4e4f534a,4);bh.writeUInt32LE(data.length);bh.writeUInt32LE(0x004e4942,4);fs.writeFileSync(path.join(out,name),Buffer.concat([h,jh,json,bh,data]));console.log(`${name}: textura original incorporada (${offset} bytes binarios).`);
+}
+fs.copyFileSync(path.join(source,'barco-de-pesca.glb'),path.join(out,'barco-de-pesca.glb'));

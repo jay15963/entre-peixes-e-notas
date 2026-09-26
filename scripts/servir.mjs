@@ -1,0 +1,10 @@
+import http from 'node:http';
+import fs from 'node:fs';
+import path from 'node:path';
+import {fileURLToPath} from 'node:url';
+const root=fileURLToPath(new URL('../dist/',import.meta.url));
+const port=Number(process.env.PORT)||5190,host=process.argv.includes('--lan')?'0.0.0.0':'127.0.0.1';
+const mime={'.html':'text/html; charset=utf-8','.js':'application/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.png':'image/png','.glb':'model/gltf-binary','.json':'application/json'};
+const server=http.createServer((req,res)=>{let uri;try{uri=decodeURIComponent(new URL(req.url,'http://localhost').pathname);}catch{res.writeHead(400).end();return;}const target=path.resolve(root,'.'+(uri==='/'?'/index.html':uri));if(!target.startsWith(path.resolve(root)+path.sep)){res.writeHead(403).end();return;}fs.stat(target,(err,stat)=>{if(err||!stat.isFile()){res.writeHead(404).end('Arquivo nao encontrado');return;}res.writeHead(200,{'Content-Type':mime[path.extname(target)]||'application/octet-stream','Cache-Control':'no-cache','X-Content-Type-Options':'nosniff'});fs.createReadStream(target).pipe(res);});});
+server.on('error',e=>{console.error(e.code==='EADDRINUSE'?`A porta ${port} ja esta em uso. Se o jogo ja estiver aberto, use http://127.0.0.1:${port}/` :e.message);process.exitCode=1;});
+server.listen(port,host,()=>console.log(`Entre peixes e Notas\nJogo: http://127.0.0.1:${port}/\nAtelie: http://127.0.0.1:${port}/atelier.html\nMantenha esta janela aberta. Ctrl+C encerra o servidor.`));
