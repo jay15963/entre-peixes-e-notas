@@ -9,30 +9,66 @@ export function roomCode(){let s='';const r=crypto.getRandomValues(new Uint8Arra
 // Topologia em estrela: o anfitrião (id 0) fala com até 3 convidados (ids 1..3); convidados só falam com o anfitrião.
 // onMessage(pacote, deQuem) · onStatus('connected'|'peer-join'|'peer-leave'|'disconnected'|'error'|'full', id)
 export class Transport {
-  constructor(onMessage,onStatus){this.onMessage=onMessage;this.onStatus=onStatus;this.host=false;this.peers=new Map();this.link=null;this.broker=null;this.local=null;this.pc=null;this.ping=0;this.key=Math.random().toString(36).slice(2);}
+  constructor(onMessage,onStatus){this.onMessage=onMessage;this.onStatus=onStatus;this.host=false;this.peers=new Map();this.bridged=new Map();this.bridgeOf=new Map();this.link=null;this.broker=null;this.local=null;this.pc=null;this.ping=0;this.key=Math.random().toString(36).slice(2);}
   get connected(){return this.host?this.peers.size>0:!!this.link?.open;}
   freeId(){for(let i=1;i<CONFIG.maxPlayers;i++)if(!this.peers.has(i))return i;return -1;}
   deliver(raw,from){try{const p=typeof raw==='string'?JSON.parse(raw):raw;if(p.type==='ping'){this.sendTo(from,{type:'pong',at:p.at});return;}if(p.type==='pong'){this.ping=performance.now()-p.at;return;}if(validPacket(p))this.onMessage(p,from);}catch{this.onStatus('invalid')}}
   startPing(){clearInterval(this.pingTimer);this.pingTimer=setInterval(()=>this.send({type:'ping',at:performance.now()}),2000);}
   // Anfitrião registra um convidado (qualquer transporte que saiba enviar e fechar)
-  addPeer(send,close){const id=this.freeId();if(id<0){send({type:'full',v:CONFIG.protocol});setTimeout(close,300);this.onStatus('full');return -1;}this.peers.set(id,{send,close});this.startPing();send({type:'welcome',id,v:CONFIG.protocol});this.onStatus('peer-join',id);return id;}
-  dropPeer(id){if(!this.peers.has(id))return;this.peers.delete(id);this.onStatus('peer-leave',id);}
-  // ----- Sala com código curto (PeerJS só para a sinalização; os dados vão direto entre os navegadores) -----
+  addPeer(send,close,via='direto'){const id=this.freeId();if(id<0){send({type:'full',v:CONFIG.protocol});setTimeout(close,300);this.onStatus('full');return -1;}this.peers.set(id,{send,close});this.startPing();send({type:'welcome',id,v:CONFIG.protocol});this.onStatus('peer-join',id);return id;}
+  dropPeer(id){if(!this.peers.has(id))return;this.peers.delete(id);this.onStatus('peer-leave',id);
+    // quem entrou pela ponte desse jogador cai junto
+    for(const [pid,via]of [...this.bridgeOf])if(via===id){this.bridgeOf.delete(pid);for(const [k,v]of [...this.bridged])if(v===pid)this.bridged.delete(k);this.dropPeer(pid);}}
+  // ----- Sala com código curto -----
+  // PeerJS só apresenta os navegadores; os dados vão direto entre as máquinas. Se um convidado não alcança o
+  // anfitrião (CGNAT dos dois lados), ele entra por uma "ponte": outro convidado que alcança os dois e repassa
+  // os pacotes. Nenhum servidor carrega a partida — só as máquinas dos jogadores.
   async room(code,host){
-    this.close();this.host=host;const {Peer}=await import('peerjs');
-    return new Promise((resolve,reject)=>{
-      const id=ROOM_PREFIX+code.toUpperCase();const timeout=setTimeout(()=>reject(Error(host?'O servidor de salas não respondeu. Tente de novo em instantes.':'Não foi possível abrir a conexão com a sala em 20 s. Se o código está certo, a rede de um dos dois provavelmente bloqueia conexão direta: tente outra rede (Wi‑Fi em vez de 4G) ou peça para outra pessoa criar a sala.')),host?15000:20000);
-      const peer=new Peer(host?id:undefined,{config:{iceServers:ICE_SERVERS},debug:0});this.broker=peer;
-      peer.on('error',e=>{clearTimeout(timeout);const msg=e.type==='unavailable-id'?'Esse código já está em uso. Crie outra sala.':e.type==='peer-unavailable'?'Sala não encontrada. Confira o código.':e.type==='network'||e.type==='server-error'?'Sem acesso ao servidor de salas. Use a conexão manual.':'Falha na conexão: '+e.type;if(!this.connected)reject(Error(msg));else this.onStatus('error');});
-      peer.on('open',()=>{if(host){clearTimeout(timeout);resolve(code);return;}
-        const conn=peer.connect(id,{reliable:true,serialization:'json'});this.link=conn;
-        // Diagnóstico: a sala existe, mas o caminho direto entre as duas redes não abre (NAT restrito / CGNAT de 4G)
-        const watchIce=()=>{const pc=conn.peerConnection;if(!pc){setTimeout(watchIce,200);return;}pc.addEventListener('iceconnectionstatechange',()=>{if(pc.iceConnectionState==='failed'&&!this.connected){clearTimeout(timeout);reject(Error('A sala foi encontrada, mas a rede de um dos dois bloqueia a conexão direta (comum em 4G/5G, Wi‑Fi de empresa ou faculdade). Tente outra rede — por exemplo Wi‑Fi em vez do celular — ou peça para outra pessoa criar a sala.'));}});};watchIce();
-        conn.on('open',()=>{clearTimeout(timeout);this.startPing();this.onStatus('connected');resolve(code);});conn.on('data',d=>{if(d?.type==='full'){this.onStatus('full');return;}this.deliver(d,0);});conn.on('close',()=>{this.link=null;this.onStatus('disconnected');});conn.on('error',()=>this.onStatus('error'));});
-      if(host)peer.on('connection',conn=>{let pid=-1;conn.on('open',()=>{pid=this.addPeer(p=>{const dc=conn.dataChannel;if(!dc||dc.bufferedAmount<256000)conn.send(p);},()=>conn.close());});conn.on('data',d=>{if(pid>=0)this.deliver(d,pid);});conn.on('close',()=>{if(pid>=0)this.dropPeer(pid);});});
-      peer.on('disconnected',()=>{try{peer.reconnect();}catch{}});
-    });
+    this.close();this.host=host;code=code.toUpperCase();this.code=code;const {Peer}=await import('peerjs');this.Peer=Peer;
+    if(host)return this.hostRoom(code);
+    // diagnóstico: window.__peixesForcarPonte simula uma rede que não alcança o anfitrião
+    try{if(globalThis.__peixesForcarPonte)throw Error('ponte forçada');await this.joinVia(ROOM_PREFIX+code,12000);this.via='direto';this.registerBridge(code);}
+    catch(e){if(e.fatal)throw e;this.onStatus('trying','ponte');
+      for(let n=1;n<=CONFIG.maxPlayers-1;n++){try{await this.joinVia(ROOM_PREFIX+code+'-r'+n,9000);this.via='ponte';this.onStatus('connected');return code;}catch{}}
+      throw Error('Não deu para conectar direto com o anfitrião, e nenhum outro pescador da sala conseguiu servir de ponte. Isso acontece quando as duas redes estão atrás de CGNAT do provedor. Peça para quem já conecta com todo mundo criar a sala, ou entre depois que esse amigo estiver na sala.');}
+    this.onStatus('connected');return code;
   }
+  hostRoom(code){return new Promise((resolve,reject)=>{
+    const peer=new this.Peer(ROOM_PREFIX+code,{config:{iceServers:ICE_SERVERS},debug:0});this.broker=peer;const timeout=setTimeout(()=>reject(Error('O servidor de salas não respondeu. Tente de novo em instantes.')),15000);
+    peer.on('open',()=>{clearTimeout(timeout);resolve(code);});
+    peer.on('error',e=>{clearTimeout(timeout);const msg=e.type==='unavailable-id'?'Esse código já está em uso. Crie outra sala.':e.type==='network'||e.type==='server-error'?'Sem acesso ao servidor de salas. Use a conexão manual.':'Falha na sala: '+e.type;if(!this.connected)reject(Error(msg));else this.onStatus('error');});
+    peer.on('connection',conn=>{let pid=-1;conn.on('open',()=>{pid=this.addPeer(p=>{const dc=conn.dataChannel;if(!dc||dc.bufferedAmount<256000)conn.send(p);},()=>conn.close());});
+      conn.on('data',d=>{if(pid<0)return;if(d?.type==='relay')this.bridgeIn(pid,d);else this.deliver(d,pid);});conn.on('close',()=>{if(pid>=0)this.dropPeer(pid);});});
+    peer.on('disconnected',()=>{try{peer.reconnect();}catch{}});
+  });}
+  // Anfitrião: pacote de alguém que chegou pela ponte "via" (outro convidado)
+  bridgeIn(via,p){const inner=p.data;if(!inner||typeof p.from!=='string')return;const key=via+':'+p.from;let id=this.bridged.get(key);
+    if(id===undefined){if(inner.type!=='hello')return;const bridge=()=>this.peers.get(via);
+      id=this.addPeer(q=>bridge()?.send({type:'relay',to:p.from,data:q,v:CONFIG.protocol}),()=>bridge()?.send({type:'relay',to:p.from,data:{type:'bye',v:CONFIG.protocol},v:CONFIG.protocol}),'ponte');
+      if(id<0)return;this.bridged.set(key,id);this.bridgeOf.set(id,via);}
+    if(inner.type==='bye'){this.bridged.delete(key);this.bridgeOf.delete(id);this.dropPeer(id);return;}this.deliver(inner,id);}
+  // Convidado: tenta abrir o canal com um id do PeerJS (a sala ou uma ponte)
+  joinVia(target,ms){return new Promise((resolve,reject)=>{
+    const go=()=>{const peer=this.broker;let done=false,conn=null;const fail=(msg,fatal=false)=>{if(done)return;done=true;clearTimeout(timeout);peer.off('error',onErr);try{conn?.close();}catch{}const e=Error(msg);e.fatal=fatal;reject(e);};
+      const onErr=e=>{if(e.type==='peer-unavailable')fail(target===ROOM_PREFIX+this.code?'Sala não encontrada. Confira o código.':'ponte indisponível',target===ROOM_PREFIX+this.code);else if(e.type==='network'||e.type==='server-error')fail('Sem acesso ao servidor de salas. Tente de novo.',true);};
+      peer.on('error',onErr);const timeout=setTimeout(()=>fail('A conexão direta não abriu.'),ms);
+      conn=peer.connect(target,{reliable:true,serialization:'json'});
+      const watch=()=>{const pc=conn.peerConnection;if(!pc){if(!done)setTimeout(watch,200);return;}pc.addEventListener('iceconnectionstatechange',()=>{if(pc.iceConnectionState==='failed'&&!done)fail('A conexão direta não abriu.');});};watch();
+      conn.on('open',()=>{if(done)return;done=true;clearTimeout(timeout);peer.off('error',onErr);this.link=conn;this.startPing();
+        conn.on('data',d=>{if(d?.type==='full'){this.onStatus('full');return;}if(d?.type==='relay'){this.bridgeOut(d);return;}this.deliver(d,0);});
+        conn.on('close',()=>{if(this.link===conn){this.link=null;this.onStatus('disconnected');}});resolve();});};
+    if(this.broker&&this.broker.open)go();else{const peer=this.broker||new this.Peer(undefined,{config:{iceServers:ICE_SERVERS},debug:0});this.broker=peer;peer.on('disconnected',()=>{try{peer.reconnect();}catch{}});
+      const t=setTimeout(()=>{const e=Error('O servidor de salas não respondeu. Tente de novo em instantes.');e.fatal=true;reject(e);},12000);peer.once('open',()=>{clearTimeout(t);go();});}
+  });}
+  // Convidado conectado direto vira ponte: registra "sala-rN" e repassa pacotes entre quem chegar e o anfitrião
+  registerBridge(code){this.bridges=new Map();const tryId=n=>{if(n>=CONFIG.maxPlayers||!this.link)return;const peer=new this.Peer(ROOM_PREFIX+code+'-r'+n,{config:{iceServers:ICE_SERVERS},debug:0});
+      peer.on('error',e=>{if(e.type==='unavailable-id'){peer.destroy();tryId(n+1);}});
+      peer.on('open',()=>{this.bridgePeer=peer;});peer.on('disconnected',()=>{try{peer.reconnect();}catch{}});
+      peer.on('connection',conn=>{const key=Math.random().toString(36).slice(2,10);conn.on('open',()=>{this.bridges.set(key,conn);});
+        conn.on('data',d=>{if(this.link?.open)this.link.send({type:'relay',from:key,data:d,v:CONFIG.protocol});});
+        conn.on('close',()=>{this.bridges.delete(key);if(this.link?.open)this.link.send({type:'relay',from:key,data:{type:'bye',v:CONFIG.protocol},v:CONFIG.protocol});});});};
+    tryId(1);}
+  bridgeOut(p){const conn=this.bridges?.get(p.to);if(!conn||!p.data)return;const dc=conn.dataChannel;if(!dc||dc.bufferedAmount<256000)conn.send(p.data);if(p.data.type==='bye')setTimeout(()=>conn.close(),200);}
   // ----- Troca manual de códigos (um convidado; sem servidor além dos STUN) -----
   channelTo(channel){channel.onmessage=e=>{if(this.host){this.deliver(e.data,this.manualId);}else this.deliver(e.data,0);};channel.onclose=()=>{if(this.host)this.dropPeer(this.manualId);else{this.onStatus('disconnected');}};channel.onerror=()=>this.onStatus('error');
     channel.onopen=()=>{if(this.host)this.manualId=this.addPeer(p=>{if(channel.readyState==='open'&&channel.bufferedAmount<256000)channel.send(JSON.stringify(p));},()=>channel.close());else{this.link={open:true,send:p=>{if(channel.readyState==='open')channel.send(JSON.stringify(p));},close:()=>channel.close()};this.startPing();this.onStatus('connected');}};}
@@ -52,5 +88,5 @@ export class Transport {
   // host: para todos (to indefinido) ou para um; convidado: sempre para o anfitrião
   send(packet,to){const p={...packet,v:CONFIG.protocol};if(this.host){if(to===undefined){for(const peer of this.peers.values())peer.send(p);}else this.peers.get(to)?.send(p);}else this.link?.send(p);}
   sendTo(id,packet){if(this.host)this.send(packet,id);else this.send(packet);}
-  close(){clearInterval(this.helloTimer);clearInterval(this.pingTimer);try{if(!this.host)this.link?.close();for(const p of this.peers.values())p.close();}catch{}this.local?.close();this.local=null;try{this.pc?.close();this.broker?.destroy();}catch{}this.pc=null;this.broker=null;this.link=null;this.peers.clear();}
+  close(){clearInterval(this.helloTimer);clearInterval(this.pingTimer);try{for(const c of this.bridges?.values()||[])c.close();this.bridgePeer?.destroy();}catch{}this.bridgePeer=null;this.bridges=null;this.bridged.clear();this.bridgeOf.clear();this.via=null;try{if(!this.host)this.link?.close();for(const p of this.peers.values())p.close();}catch{}this.local?.close();this.local=null;try{this.pc?.close();this.broker?.destroy();}catch{}this.pc=null;this.broker=null;this.link=null;this.peers.clear();}
 }
