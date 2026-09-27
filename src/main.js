@@ -283,8 +283,8 @@ function renderBaker(t,dt){const m=baker.model;if(!m)return;if(island.exploded||
   m.userData.anim.update(dt,{time:t,speed:baker.mode==='walk'?Math.min(sp,1.6):0,yaw:d.yaw,grounded:true,look});}
 // ---------- Alvos de interação: só vale olhar para a malha do objeto (raio do centro da tela, até 3 m) ----------
 const T={HELM:1,RIFLE0:2,RIFLE1:3,BUCKET:4,COIL:5,GUITAR:6,ROPE:7,SELL:8,BAKER:9,LANE:10};
-let sellProxy=null,laneProxies=[],hover=null;const _ray=new THREE.Raycaster();
-function targetObjects(){const l=[[T.HELM,helm],[T.RIFLE0,rackRifles[0]],[T.RIFLE1,rackRifles[1]],[T.BUCKET,bucketObj],[T.COIL,hull.userData.coil],[T.GUITAR,guitarStand],[T.ROPE,rope.mesh],[T.ROPE,rope.loop],[T.SELL,sellProxy],[T.BAKER,baker.model]];for(const o of laneProxies)l.push([T.LANE,o]);return l;}
+let sellProxy=null,laneProxies=[],tieProxies=[],hover=null;const _ray=new THREE.Raycaster();
+function targetObjects(){const l=[[T.HELM,helm],[T.RIFLE0,rackRifles[0]],[T.RIFLE1,rackRifles[1]],[T.BUCKET,bucketObj],[T.COIL,hull.userData.coil],[T.GUITAR,guitarStand],[T.ROPE,rope.mesh],[T.ROPE,rope.loop],[T.ROPE,tieProxies[0]],[T.ROPE,tieProxies[1]],[T.SELL,sellProxy],[T.BAKER,baker.model]];for(const o of laneProxies)l.push([T.LANE,o]);return l;}
 const shown=o=>{for(let q=o;q;q=q.parent){if(!q.visible)return false;if(q===scene)return true;}return false;};
 function targetPos(code,p){const w=worldOf(p,1.2);switch(code){
   case T.HELM:return helm.getWorldPosition(V());case T.RIFLE0:case T.RIFLE1:return rackRifles[code-T.RIFLE0].getWorldPosition(V());case T.BUCKET:return bucketWorld();
@@ -302,7 +302,9 @@ function targetLabel(code,p){const free=handsFree(p);switch(code){
   case T.SELL:{const v=world.bucket.reduce((q,[sp,kg])=>q+catchValue(sp,kg),0);return world.bucketAt===p.id?(world.bucket.length?[`Vender o balde (≈ ${money(v)})`,1]:['O balde está vazio',0]):['Peixaria · traga o balde até aqui',0];}
   case T.BAKER:return baker.mode==='work'&&!world.talk?['Falar com o padeiro',1]:null;
   case T.LANE:return ['Caixa de autoatendimento · em breve',1];}return null;}
-function pickTarget(){hover=null;const p=me();if(!p||p.mode==='ragdoll'||cinematic||window.__peixesThirdPerson)return;_ray.setFromCamera({x:0,y:0},camera);_ray.far=3.2;let best=null;
+function pickTarget(){hover=null;
+  // corda amarrada: área de clique em volta do cabeço e do cunho da proa (mirar só na corda fina era difícil)
+  const tied=world.rope.s==='tied';tieProxies.forEach(o=>o.visible=tied);if(tied){tieProxies[1].position.copy(bollardPos(world.rope.tgt)).add(V(0,-.05,0));tieProxies[1].updateMatrixWorld();}const p=me();if(!p||p.mode==='ragdoll'||cinematic||window.__peixesThirdPerson)return;_ray.setFromCamera({x:0,y:0},camera);_ray.far=3.2;let best=null;
   for(const [code,obj]of targetObjects()){if(!obj||!shown(obj))continue;const h=_ray.intersectObject(obj,true)[0];if(h&&(!best||h.distance<best.distance))best={code,point:h.point,distance:h.distance};}
   if(best){const lab=targetLabel(best.code,p);if(lab)hover={...best,label:lab[0],ok:lab[1]};}}
 function interact(p,target=-1){
@@ -717,7 +719,8 @@ async function init(){
   ragdolls.addIsland((x,z)=>island.ground(x,z),{x0:ISLAND.x-ISLAND.size/2,z0:ISLAND.z-ISLAND.size/2,size:ISLAND.size,n:115},island.colliders.filter(c=>!c.dock));
   $('loading-text').textContent='Chamando os moradores de Laguna…';villagers=new Villagers(scene,assets,{quality});
   baker.model=addBakerOutfit(spawn(0));scene.add(baker.model);{const h=bakerHome();baker.x=h.x;baker.y=h.y;baker.z=h.z;}
-  {const hid=new THREE.MeshBasicMaterial({visible:false}),sp=island.shop.points.sell;/* leme: disco invisível no aro (o raio passaria entre os raios da roda) */const hp=new THREE.Mesh(new THREE.CylinderGeometry(.36,.36,.08,16).rotateX(Math.PI/2),hid);helm.add(hp);sellProxy=new THREE.Mesh(new THREE.BoxGeometry(1.5,1.4,3),hid);sellProxy.position.set(ISLAND.x+sp.u-1.25,SHOP.floor+.7,ISLAND.z+sp.v);scene.add(sellProxy);
+  {const hid=new THREE.MeshBasicMaterial({visible:false}),sp=island.shop.points.sell;/* leme: disco invisível no aro (o raio passaria entre os raios da roda) */const hp=new THREE.Mesh(new THREE.CylinderGeometry(.36,.36,.08,16).rotateX(Math.PI/2),hid);helm.add(hp);
+    tieProxies=[new THREE.Mesh(new THREE.BoxGeometry(.7,.6,.7),hid),new THREE.Mesh(new THREE.CylinderGeometry(.45,.45,.9,12),hid)];tieProxies[0].position.set(BOW_CLEAT.x,BOW_CLEAT.y,BOW_CLEAT.z);boat.add(tieProxies[0]);scene.add(tieProxies[1]);sellProxy=new THREE.Mesh(new THREE.BoxGeometry(1.5,1.4,3),hid);sellProxy.position.set(ISLAND.x+sp.u-1.25,SHOP.floor+.7,ISLAND.z+sp.v);scene.add(sellProxy);
     laneProxies=island.shop.points.lanes.map(l=>{const o=new THREE.Mesh(new THREE.BoxGeometry(1.1,1.6,1.1),hid);o.position.set(ISLAND.x+l.u,SHOP.floor+.8,ISLAND.z+l.v+.7);scene.add(o);return o;});}
   fx=new FishingFX(scene);fx.onCard=showCard;fx.onBucket=pos=>sound.effect('bucket',{pos});
   // itens do barco: balde solto, corda (Verlet) com rolo na mão, violão no banco da proa
