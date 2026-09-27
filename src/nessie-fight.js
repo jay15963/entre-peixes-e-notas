@@ -15,7 +15,7 @@ const smooth=(a,b,x)=>{const t=clamp((x-a)/(b-a));return t*t*(3-2*t);};
 const damp=(a,b,k,dt)=>a+(b-a)*(1-Math.exp(-k*dt));
 const angDiff=(a,b)=>Math.atan2(Math.sin(a-b),Math.cos(a-b));
 const rnd=(a=0,b=1)=>a+Math.random()*(b-a);
-export const MAX_HP=2400,STAGE_AT=[1,.66,.33],BASE_DMG=10;
+export const MAX_HP=500,STAGE_AT=[1,.66,.33],BASE_DMG=10;
 export const ZONES={eye:{mult:5,label:'OLHO',color:'#ffd23c'},mouth:{mult:3,label:'GARGANTA',color:'#ff8a3c'},gill:{mult:2,label:'GUELRA',color:'#ff5ad0'},body:{mult:1,label:'CORPO',color:'#ffffff'},spine:{mult:.25,label:'ESPINHOS',color:'#8fa9a3'}};
 export const ZONE_LIST=['eye','mouth','gill','body','spine'];
 export const ATTACK_NAMES={ram:'INVESTIDA SUBMERSA',tripleRam:'INVESTIDA EM SÉRIE',tail:'GOLPE DE CAUDA',emerge:'O RUGIDO',rage:'FÚRIA DA MATRIARCA',cannon:'JATO D\'ÁGUA',whirlpool:'REDEMOINHO',bite:'MORDIDA DO ABISMO',wall:'MURALHA D\'ÁGUA',volley:'CHUVA DE ESPINHOS',death:'',cruise:''};
