@@ -5,7 +5,7 @@ import {makeCatch} from './fish.js';
 // Gaivotas ladras. Coordenadas no espaço do barco; o anfitrião simula e os demais interpolam.
 // Regra clara: circulando lá no alto elas NÃO podem ser atingidas. Só a ladra pode — quando mergulha
 // para o balde, quando paira pegando o peixe e quando foge carregando o peixe (pesada, devagar).
-export const STATES=['away','circle','dive','grab','flee','dead'];
+export const STATES=['away','circle','dive','grab','flee','dead','tug'];
 const V=(x=0,y=0,z=0)=>new THREE.Vector3(x,y,z);
 export const GULL_RADIUS=.55;
 const CIRCLE_H=27,DIVE_SPEED=8.5,FLEE_SPEED=3.4,ESCAPE=46;
@@ -49,13 +49,15 @@ export class GullFlock {
       this.gulls.push({id:i,state:'away',t:5+i*4+Math.random()*5,pos:V(0,CIRCLE_H,-60),vel:V(),seed:Math.random()*100,fish:false,mesh,target:V(0,CIRCLE_H,-60),spin:0,flap:Math.random()*6});}
     this.events=[];
   }
-  thief(g){return g.state==='dive'||g.state==='grab'||(g.state==='flee'&&g.fish);}
+  thief(g){return g.state==='dive'||g.state==='grab'||g.state==='tug'||(g.state==='flee'&&g.fish);}
   // ---------- simulação (anfitrião) ----------
-  simulate(dt,{active,bucketCount,time,water}){
+  // bucket: posição do balde no espaço do barco (ele pode estar no convés, na mão de alguém ou no chão); held: na mão
+  simulate(dt,{active,bucketCount,time,water,bucket=null,held=false}){
+    if(bucket)this.bucket.copy(bucket).add(V(0,.35,0));const C=this.bucket;
     const thieves=this.gulls.filter(g=>this.thief(g)&&g.state!=='flee').length,maxThieves=bucketCount>=5?2:1;
     for(const g of this.gulls){g.t-=dt;const p=g.pos;
-      if(g.state==='away'){if(g.t<=0&&active){g.state='circle';g.t=5+Math.random()*6;const a=Math.random()*6.283;p.set(Math.cos(a)*60,CIRCLE_H+6,Math.sin(a)*60);g.vel.set(-Math.cos(a)*7,0,-Math.sin(a)*7);}continue;}
-      if(g.state==='circle'){const a=time*.28+g.seed,r=19+Math.sin(g.seed)*4;const goal=V(Math.cos(a)*r,CIRCLE_H+Math.sin(time*.5+g.seed)*2.5+(g.id%2)*3,Math.sin(a)*r);this.steer(g,goal,8,dt,1.6);
+      if(g.state==='away'){if(g.t<=0&&active){g.state='circle';g.t=5+Math.random()*6;const a=Math.random()*6.283;p.set(C.x+Math.cos(a)*60,CIRCLE_H+6,C.z+Math.sin(a)*60);g.vel.set(-Math.cos(a)*7,0,-Math.sin(a)*7);}continue;}
+      if(g.state==='circle'){const a=time*.28+g.seed,r=19+Math.sin(g.seed)*4;const goal=V(C.x+Math.cos(a)*r,C.y+CIRCLE_H+Math.sin(time*.5+g.seed)*2.5+(g.id%2)*3,C.z+Math.sin(a)*r);this.steer(g,goal,8,dt,1.6);
         if(!active){g.state='flee';g.t=0;continue;}
         if(g.t<=0){if(bucketCount>0&&thieves<maxThieves){g.state='dive';g.t=9;this.events.push({name:'dive',gull:g.id});}else g.t=3+Math.random()*5;}}
       else if(g.state==='dive'){const d=this.bucket.clone().sub(p),dist=d.length();const side=V(-d.z,0,d.x).normalize();
@@ -63,18 +65,24 @@ export class GullFlock {
         const weave=Math.min(1,dist/14)*1.4,goal=this.bucket.clone().addScaledVector(side,Math.sin(time*2.2+g.seed)*weave);
         this.steer(g,goal,DIVE_SPEED,dt,3.2);if(dist<1){g.state='grab';g.t=1.15;}if(g.t<=0||!active||bucketCount<=0){g.state='flee';}}
       else if(g.state==='grab'){p.lerp(this.bucket.clone().add(V(0,.3,0)),1-Math.exp(-dt*8));g.vel.multiplyScalar(.8);
-        if(g.t<=0){if(bucketCount>0&&!g.fish){g.fish=true;bucketCount--;this.events.push({name:'stolen',gull:g.id});}g.state='flee';const a=Math.random()*6.283;g.vel.set(Math.cos(a)*2,1.2,Math.sin(a)*2);g.fleeDir=a;}}
+        // balde na mão de alguém: a gaivota agarra e puxa (minigame de espantar); no convés ou no chão, leva direto
+        if(g.t<=0&&held&&bucketCount>0){g.state='tug';g.t=12;this.events.push({name:'shoo',gull:g.id});}
+        else if(g.t<=0)this.steal(g,bucketCount>0&&!g.fish&&bucketCount--);}
+      else if(g.state==='tug'){p.lerp(this.bucket.clone().add(V(Math.sin(time*9+g.seed)*.12,.42+Math.sin(time*13)*.05,Math.cos(time*7)*.1)),1-Math.exp(-dt*10));g.vel.set(Math.sin(time*9)*.6,0,Math.cos(time*7)*.6);if(g.t<=0)this.resolve(g.id,false);}
       else if(g.state==='flee'){
         // com o peixe no bico ela fica pesada: voa devagar e sobe aos poucos (dá tempo de mirar)
-        if(g.fish){const a=g.fleeDir??Math.atan2(p.z,p.x);const goal=V(Math.cos(a)*(Math.hypot(p.x,p.z)+12),Math.min(CIRCLE_H*.7,p.y+4),Math.sin(a)*(Math.hypot(p.x,p.z)+12)).add(V(Math.sin(time*1.3+g.seed)*1.5,Math.sin(time*2.1)*.6,Math.cos(time*1.1+g.seed)*1.5));this.steer(g,goal,FLEE_SPEED,dt,1.8);}
-        else{const out=V(p.x,0,p.z).normalize();if(out.lengthSq()<.1)out.set(1,0,0);this.steer(g,p.clone().addScaledVector(out,20).add(V(0,8,0)),11,dt,3);}
-        if(V(p.x,0,p.z).length()>ESCAPE){if(g.fish)this.events.push({name:'lost',gull:g.id});g.fish=false;g.state='away';g.t=8+Math.random()*9;}}
+        if(g.fish){const a=g.fleeDir??Math.atan2(p.z-C.z,p.x-C.x),R=Math.hypot(p.x-C.x,p.z-C.z)+12;const goal=V(C.x+Math.cos(a)*R,Math.min(C.y+CIRCLE_H*.7,p.y+4),C.z+Math.sin(a)*R).add(V(Math.sin(time*1.3+g.seed)*1.5,Math.sin(time*2.1)*.6,Math.cos(time*1.1+g.seed)*1.5));this.steer(g,goal,FLEE_SPEED,dt,1.8);}
+        else{const out=V(p.x-C.x,0,p.z-C.z).normalize();if(out.lengthSq()<.1)out.set(1,0,0);this.steer(g,p.clone().addScaledVector(out,20).add(V(0,8,0)),11,dt,3);}
+        if(Math.hypot(p.x-C.x,p.z-C.z)>ESCAPE){if(g.fish)this.events.push({name:'lost',gull:g.id});g.fish=false;g.state='away';g.t=8+Math.random()*9;}}
       else if(g.state==='dead'){g.vel.y-=11*dt;p.addScaledVector(g.vel,dt);g.spin+=dt*9;if(p.y<water(p)){this.events.push({name:'gullSplash',gull:g.id,pos:p.toArray()});g.state='away';g.t=10+Math.random()*8;g.fish=false;}}
     }
     return bucketCount;
   }
+  steal(g,took){if(took){g.fish=true;this.events.push({name:'stolen',gull:g.id});}g.state='flee';const a=Math.random()*6.283;g.vel.set(Math.cos(a)*2,1.2,Math.sin(a)*2);g.fleeDir=a;}
+  // fim do cabo de guerra: levou o peixe ou foi espantada (sai voando sem nada)
+  resolve(id,stole){const g=this.gulls[id];if(!g||g.state!=='tug')return;if(stole)this.steal(g,true);else{g.state='flee';g.fish=false;g.vel.set(0,6,0);this.events.push({name:'scared',gull:id});}}
   steer(g,goal,speed,dt,agility){const want=goal.clone().sub(g.pos);const d=want.length();if(d>1e-3)want.multiplyScalar(speed/d);g.vel.lerp(want,1-Math.exp(-dt*agility));g.pos.addScaledVector(g.vel,dt);}
-  kill(id){const g=this.gulls[id];if(!g||!this.thief(g))return null;const hadFish=g.fish;g.state='dead';g.vel.multiplyScalar(.35).add(V(0,2.5,0));g.spin=0;const overBoat=Math.abs(g.pos.x)<1.6&&Math.abs(g.pos.z)<4.4&&g.pos.y<9;g.fish=false;return {hadFish,overBoat,pos:g.pos.toArray()};}
+  kill(id){const g=this.gulls[id];if(!g||!this.thief(g))return null;const hadFish=g.fish;g.state='dead';g.vel.multiplyScalar(.35).add(V(0,2.5,0));g.spin=0;const overBoat=Math.hypot(g.pos.x-this.bucket.x,g.pos.z-this.bucket.z)<4.5&&g.pos.y-this.bucket.y<9;g.fish=false;return {hadFish,overBoat,pos:g.pos.toArray()};}
   snapshot(){return this.gulls.map(g=>[STATES.indexOf(g.state),+g.pos.x.toFixed(2),+g.pos.y.toFixed(2),+g.pos.z.toFixed(2),+g.vel.x.toFixed(1),+g.vel.y.toFixed(1),+g.vel.z.toFixed(1),g.fish?1:0]);}
   apply(snap){snap?.forEach((s,i)=>{const g=this.gulls[i];if(!g)return;g.state=STATES[s[0]]||'away';g.target.set(s[1],s[2],s[3]);g.vel.set(s[4],s[5],s[6]);g.fish=!!s[7];if(g.pos.distanceTo(g.target)>8)g.pos.copy(g.target);});}
   // ---------- visual (todos) ----------
@@ -84,7 +92,7 @@ export class GullFlock {
       m.position.copy(g.pos);const v=g.vel,sp=Math.hypot(v.x,v.z),yaw=Math.atan2(v.x,v.z),climb=Math.atan2(-v.y,Math.max(sp,.1));
       const b=m.userData.body,dist=g.pos.distanceTo(this.bucket);
       if(g.state==='dead'){m.rotation.set(g.spin,yaw,g.spin*.6);poseWings(m,{flap:1.3,glide:1});m.userData.legs.visible=true;m.userData.fish.visible=false;continue;}
-      const hover=g.state==='grab'?1:0,dive=g.state==='dive'&&dist>4?1:0,heavy=g.state==='flee'&&g.fish;
+      const hover=g.state==='grab'||g.state==='tug'?1:0,dive=g.state==='dive'&&dist>4?1:0,heavy=g.state==='flee'&&g.fish;
       // banking nas curvas: inclina para dentro
       const bank=THREE.MathUtils.clamp((g.lastYaw!==undefined?Math.atan2(Math.sin(yaw-g.lastYaw),Math.cos(yaw-g.lastYaw))/Math.max(dt,1e-3):0)*-.35,-.8,.8);g.lastYaw=yaw;g.bank=THREE.MathUtils.lerp(g.bank||0,bank,1-Math.exp(-dt*4));
       m.rotation.set(hover?-.5:climb*.8,yaw,g.bank);

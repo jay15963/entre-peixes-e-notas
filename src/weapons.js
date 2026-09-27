@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import {Kit,loft,limb,ellipsoid,box,sculpt,sweep,paint,V} from './geometry.js';
 import {Spring} from './animation.js';
+import {RoundedBoxGeometry} from 'three/addons/geometries/RoundedBoxGeometry.js';
 
 // ================= Rifle de ferrolho com luneta =================
 // Eixo +z = cano; origem no punho (mão do gatilho). O lado "direito" do atirador é −x (ferrolho e janela de ejeção).
@@ -63,7 +64,7 @@ export function makeRifle(){
   const A=(x,y,z,rx=0,ry=0,rz=0)=>{const o=new THREE.Object3D();o.position.set(x,y,z);o.rotation.set(rx,ry,rz);g.add(o);return o;};
   const muzzle=A(0,.02,.77),eye=A(0,sc,-.23),grip=A(-.02,-.05,-.08),fore=A(0,-.05,.29),magBottom=A(0,-.1,.075),port=A(-.02,.03,.06);
   // punhos das mãos em primeira pessoa (origem da mão = pulso): palma na lateral direita do punho; palma para cima sob o guarda-mão
-  const gripW=A(-.031,-.007,-.1),foreW=A(-.05,-.051,.28),magW=A(-.05,-.118,.06);const knobW=new THREE.Object3D();knobW.position.set(-.068,-.025,-.14);bolt.add(knobW);
+  const gripW=A(-.036,-.03,-.128),foreW=A(.05,-.052,.2),magW=A(.012,-.125,.03);const knobW=new THREE.Object3D();knobW.position.set(-.095,-.02,-.14);bolt.add(knobW);
   g.userData={muzzle,eye,grip,fore,bolt,handle,knob,knobW,gripW,foreW,magW,mag,magHome:mag.position.clone(),magBottom,port,mats,scopeY:sc};
   return g;
 }
@@ -91,25 +92,39 @@ export function rigState(kind,t){
 }
 
 // ================= Braços em primeira pessoa =================
-function makeHand(look,side){
-  // mão com dedos articulados (3 falanges) e polegar; eixo +z = dedos, palma para −y
-  const skin=new THREE.MeshStandardMaterial({color:look.skin,roughness:.6,flatShading:true}),root=new THREE.Group();
-  const palm=new THREE.Mesh(new THREE.BoxGeometry(.078,.026,.085),skin);palm.position.z=.04;root.add(palm);
-  const knuckle=new THREE.Mesh(new THREE.BoxGeometry(.078,.024,.02),skin);knuckle.position.set(0,.002,.085);root.add(knuckle);
-  const fingers=[];for(let f=0;f<4;f++){let parent=root;const x=(-.029+f*.0195)*side,lens=[.036,.024,.02].map(l=>l*(f===3?.8:f===0?.95:1));const chain=[];
-    for(let k=0;k<3;k++){const j=new THREE.Group();j.position.set(k?0:x,0,k?lens[k-1]:.092);const seg=new THREE.Mesh(new THREE.BoxGeometry(.0165,.017,lens[k]+.004),skin);seg.position.z=lens[k]/2;j.add(seg);parent.add(j);chain.push(j);parent=j;}
-    const nail=new THREE.Mesh(new THREE.BoxGeometry(.012,.003,.01),new THREE.MeshStandardMaterial({color:new THREE.Color(look.skin).lerp(new THREE.Color(0xffe8e0),.5),roughness:.3}));nail.position.set(0,.009,lens[2]-.004);chain[2].add(nail);fingers.push(chain);}
-  const t0=new THREE.Group();t0.position.set(.035*side,-.004,.03);t0.rotation.set(0,-.7*side,0);const ts=new THREE.Mesh(new THREE.BoxGeometry(.021,.02,.04),skin);ts.position.z=.02;t0.add(ts);const t1=new THREE.Group();t1.position.z=.04;const ts2=new THREE.Mesh(new THREE.BoxGeometry(.018,.018,.032),skin);ts2.position.z=.016;t1.add(ts2);t0.add(t1);root.add(t0);
-  root.userData={fingers,thumb:[t0,t1]};return root;}
-function curl(hand,amount,thumb=.6){for(const chain of hand.userData.fingers)chain.forEach((j,k)=>j.rotation.x=amount*(k?1.15:.9));const [t0,t1]=hand.userData.thumb;t0.rotation.x=thumb*.6;t1.rotation.x=thumb*.8;}
-function makeArm(look){const sleeveColor=look.long?look.shirt:look.skin;const mat=new THREE.MeshStandardMaterial({color:sleeveColor,roughness:.85,flatShading:true});
-  const upper=new THREE.Mesh(new THREE.CylinderGeometry(.052,.046,1,9).translate(0,.5,0),mat),fore=new THREE.Mesh(new THREE.CylinderGeometry(.044,.034,1,9).translate(0,.5,0),mat);
-  const cuff=look.long?new THREE.Mesh(new THREE.CylinderGeometry(.042,.042,.03,9),new THREE.MeshStandardMaterial({color:look.shirtDark,roughness:.8,flatShading:true})):null;
-  // camiseta: manga curta cobrindo só o começo do braço; antebraço de pele
-  if(!look.long){fore.material=new THREE.MeshStandardMaterial({color:look.skin,roughness:.6,flatShading:true});upper.material=new THREE.MeshStandardMaterial({color:look.skin,roughness:.6,flatShading:true});}
-  const sleeve=!look.long?new THREE.Mesh(new THREE.CylinderGeometry(.064,.06,.16,9).translate(0,.08,0),new THREE.MeshStandardMaterial({color:look.shirt,roughness:.85,flatShading:true})):null;
-  const wrist=new THREE.Mesh(new THREE.BoxGeometry(.012,.012,.012),new THREE.MeshStandardMaterial({color:0x222222}));// relógio/pulseira no braço do gatilho (detalhe)
-  return {upper,fore,cuff,sleeve,wrist};}
+// Mão anatômica: palma arredondada, dedos em cápsulas com três falanges, polegar com metacarpo.
+// Espaço da mão: origem no pulso, +z = dedos, +y = costas da mão (palma para −y). Mão direita: polegar em +x.
+function capsule(r,len,mat){const g=new THREE.CapsuleGeometry(r,Math.max(.001,len-2*r),3,8).rotateX(Math.PI/2).translate(0,0,len/2);return new THREE.Mesh(g,mat);}
+function makeHand(look,side){// side: +1 mão direita, −1 mão esquerda
+  const skin=new THREE.MeshStandardMaterial({color:look.skin,roughness:.7,envMapIntensity:.35}),root=new THREE.Group();
+  const nailM=new THREE.MeshStandardMaterial({color:new THREE.Color(look.skin).lerp(new THREE.Color(0xffe6de),.55),roughness:.25});
+  const palm=new THREE.Mesh(new RoundedBoxGeometry(.078,.03,.088,3,.012),skin);palm.position.set(0,0,.046);root.add(palm);
+  // punho mais estreito ligando ao antebraço e o monte do polegar
+  const wrist=new THREE.Mesh(new RoundedBoxGeometry(.06,.034,.04,2,.014),skin);wrist.position.z=.006;root.add(wrist);
+  const mound=new THREE.Mesh(new THREE.SphereGeometry(.024,10,8),skin);mound.scale.set(1,.7,1.5);mound.position.set(side*.026,-.008,.03);root.add(mound);
+  const fingers=[],spec=[[.028,[.042,.026,.022],.0098],[.0095,[.046,.029,.023],.0096],[-.0095,[.043,.027,.022],.0092],[-.027,[.034,.021,.019],.0082]];
+  for(const [fx,lens,r]of spec){let parent=root;const chain=[];
+    for(let k=0;k<3;k++){const j=new THREE.Group();if(k===0)j.position.set(side*fx,.002,.088-Math.abs(fx)*.25);else j.position.z=lens[k-1];const seg=capsule(r*(1-k*.07),lens[k]+r*.6,skin);seg.position.z=-r*.3;j.add(seg);parent.add(j);chain.push(j);parent=j;}
+    const nail=new THREE.Mesh(new THREE.BoxGeometry(r*1.3,.0025,lens[2]*.45),nailM);nail.position.set(0,r*.85,lens[2]*.62);chain[2].add(nail);
+    const knuckle=new THREE.Mesh(new THREE.SphereGeometry(r*1.05,8,6),skin);knuckle.position.set(side*fx,.006,.086-Math.abs(fx)*.25);root.add(knuckle);fingers.push(chain);}
+  // polegar: metacarpo sai da base da palma, aponta para frente e para o lado da palma
+  const t0=new THREE.Group();t0.position.set(side*.03,-.006,.018);const m0=capsule(.0125,.046,skin);t0.add(m0);
+  const t1=new THREE.Group();t1.position.z=.046;t1.add(capsule(.0112,.032,skin));const t2=new THREE.Group();t2.position.z=.032;t2.add(capsule(.0102,.028,skin));const tn=new THREE.Mesh(new THREE.BoxGeometry(.012,.0025,.012),nailM);tn.position.set(0,.0095,.018);t2.add(tn);t1.add(t2);t0.add(t1);root.add(t0);
+  root.userData={fingers,thumb:[t0,t1,t2],side};return root;}
+// Pose dos dedos: curl[4] por dedo (0 reto, ~1.4 fechado) e o polegar (abertura, dobra)
+function curl(hand,amounts,thumbOpen=.5,thumbBend=.5){const a=Array.isArray(amounts)?amounts:[amounts,amounts,amounts,amounts];const s=hand.userData.side;
+  hand.userData.fingers.forEach((chain,f)=>chain.forEach((j,k)=>{j.rotation.x=a[f]*(k===0?.85:k===1?1.1:.8);j.rotation.y=k===0?-s*(f-1.5)*.04:0;}));
+  const [t0,t1,t2]=hand.userData.thumb;t0.rotation.set(.35+thumbBend*.35,s*(.55-thumbOpen*.5),-s*(.5+thumbBend*.4));t1.rotation.x=thumbBend*.6;t2.rotation.x=thumbBend*.7;}
+function makeArm(look){
+  const sleeveM=new THREE.MeshStandardMaterial({color:look.shirt,roughness:.9,envMapIntensity:.35}),skinM=new THREE.MeshStandardMaterial({color:look.skin,roughness:.7,envMapIntensity:.35});
+  const tube=(r0,r1,m)=>new THREE.Mesh(new THREE.CylinderGeometry(r1,r0,1,14,1,true).translate(0,.5,0),m);
+  // braço e antebraço de pele; manga comprida cobre até o punho, manga curta só o começo do braço
+  const upper=tube(.047,.04,look.long?sleeveM:skinM),fore=tube(.037,.028,skinM);
+  const elbow=new THREE.Mesh(new THREE.SphereGeometry(.044,12,8),look.long?sleeveM:skinM);
+  const sleeve=look.long?tube(.056,.047,sleeveM):tube(.064,.058,sleeveM);
+  const cuff=look.long?new THREE.Mesh(new THREE.CylinderGeometry(.046,.046,.035,14),new THREE.MeshStandardMaterial({color:look.shirtDark,roughness:.8})):null;
+  if(!look.long){sleeve.scale.set(1,1,1);}
+  return {upper,fore,elbow,sleeve,cuff,long:!!look.long};}
 const _a=V(),_b=V(),_c=V(),_q=new THREE.Quaternion(),UP=V(0,1,0);
 function place(mesh,a,b){const d=_c.copy(b).sub(a),len=d.length();mesh.position.copy(a);mesh.quaternion.setFromUnitVectors(UP,d.multiplyScalar(1/len));mesh.scale.set(1,len,1);}
 // IK de dois ossos: ombro fixo, punho no alvo, cotovelo empurrado para o polo
@@ -150,12 +165,12 @@ export class Viewmodel {
     this.onSound=null;
   }
   setLook(look){if(this.look===look)return;this.look=look;if(this.arms)for(const s of ['L','R'])for(const m of Object.values(this.arms[s]))if(m&&m.isObject3D)this.root.remove(m);
-    this.arms={};for(const s of ['L','R']){const a=makeArm(look),hand=makeHand(look,s==='L'?1:-1);this.arms[s]={...a,hand};for(const m of [a.upper,a.fore,a.cuff,a.sleeve,hand])if(m)this.root.add(m);}this.arms.R.wrist.visible=false;}
+    this.arms={};for(const s of ['L','R']){const a=makeArm(look),hand=makeHand(look,s==='R'?1:-1);this.arms[s]={...a,hand};for(const m of [a.upper,a.fore,a.elbow,a.sleeve,a.cuff,hand])if(m){m.traverse(o=>{if(o.isMesh)o.frustumCulled=false;});this.root.add(m);}}}
   fire(){this.kick.kick(-10);this.tilt.kick(13);this.side.kick((Math.random()-.5)*6);this.flashT=0;this.flash.visible=true;this.flash.rotation.z=Math.random()*6;this.flash.scale.setScalar(.8+Math.random()*.5);this.mode='fired';this.modeT=0;}
   reload(){this.mode='reload';this.modeT=0;this.magSwapped=false;this.cycleEvents={};}
   emit(name){this.onSound?.(name);}
   update(dt,{visible,hide=false,aiming,yaw,pitch,bob,moving=0,steady=false}){
-    const show=visible&&!hide;this.gun.visible=show;if(this.arms)for(const s of ['L','R'])for(const m of Object.values(this.arms[s]))if(m&&m.isObject3D)m.visible=show;
+    this.active=visible;const show=visible&&!hide;this.gun.visible=show;if(this.arms)for(const s of ['L','R'])for(const m of Object.values(this.arms[s]))if(m&&m.isObject3D)m.visible=show;
     // a cena do viewmodel segue a câmera
     this.camera.updateMatrixWorld();this.root.position.setFromMatrixPosition(this.camera.matrixWorld);this.root.quaternion.setFromRotationMatrix(this.camera.matrixWorld);this.root.updateMatrixWorld(true);
     this.updateCasings(dt);if(!visible){this.aim=0;return;}
@@ -169,10 +184,10 @@ export class Viewmodel {
     this.swayX+=(-dy*2.4-this.swayX)*(1-Math.exp(-dt*9));this.swayY+=(dp*2.2-this.swayY)*(1-Math.exp(-dt*9));
     const k=this.kick.update(0,dt),t=this.tilt.update(0,dt),sd=this.side.update(0,dt),a=this.aim,na=1-a*.85;
     // quadril: coronha baixa à direita; mira: ocular da luneta alinhada ao olho
-    const hip=V(.19,-.235,-.4),ads=V(0,-this.gun.userData.scopeY,-.27);const pos=hip.lerp(ads,a);
-    pos.x+=this.swayX*.05*na+Math.sin(bob)*.011*(1-a)+sd*.004+rig.roll*.04;pos.y+=Math.abs(Math.cos(bob))*.01*(1-a)-rig.lower*.12-moving*.01*(1-a);pos.z+=k*.013;
+    const hip=V(.16,-.155,-.43),ads=V(0,-this.gun.userData.scopeY,-.27);const pos=hip.lerp(ads,a);
+    pos.x+=this.swayX*.05*na+Math.sin(bob)*.011*(1-a)+sd*.004-rig.roll*.09;pos.y+=Math.abs(Math.cos(bob))*.01*(1-a)+rig.roll*.02-moving*.01*(1-a);pos.z+=k*.013+rig.roll*.05;
     this.holder.position.copy(pos);
-    this.holder.rotation.set(-t*.014+this.swayY*.08*na+rig.lower*.4,this.swayX*.12*na+.05*(1-a)-rig.roll*.25,rig.roll*.75+sd*.01);
+    this.holder.rotation.set(-t*.014+this.swayY*.08*na+rig.lower*.3,this.swayX*.12*na+.04*(1-a)+rig.roll*.22,-rig.roll*.7+sd*.01+.2*(1-a));
     poseRifle(this.gun,rig);
     // carregador: cai (vira objeto solto com gravidade), outro vem na mão esquerda e entra no encaixe
     const mag=this.gun.userData.mag;
@@ -194,26 +209,58 @@ export class Viewmodel {
   updateCasings(dt){for(const c of [...this.casings]){c.t+=dt;c.v.y-=5.5*dt;c.o.position.addScaledVector(c.v,dt);c.o.rotation.x+=c.w.x*dt;c.o.rotation.y+=c.w.y*dt;if(c.t>.9){if(!c.clink){c.clink=true;this.emit('casing');}this.root.remove(c.o);this.casings.splice(this.casings.indexOf(c),1);}}}
   poseArms(rig,dt){
     const g=this.gun.userData,toLocal=o=>this.root.worldToLocal(o.getWorldPosition(V()));
-    const gunQ=this.root.quaternion.clone().invert().multiply(this.gun.getWorldQuaternion(new THREE.Quaternion()));
-    // orientação da mão a partir de uma base no espaço do rifle: x, y (costas da mão) e z (dedos)
-    const basis=(x,y,z)=>gunQ.clone().multiply(new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(V(...x).normalize(),V(...y).normalize(),V(...z).normalize())));
-    const GRIP=basis([0,.5,.85],[-1,0,0],[0,-.85,.5]),FORE=basis([0,0,1],[0,-1,0],[1,0,0]),KNOB=basis([0,1,0],[-1,0,0],[0,0,1]);
-    // mão direita (gatilho): punho ↔ bola do ferrolho
+    const inv=this.root.quaternion.clone().invert(),gunQ=inv.clone().multiply(this.gun.getWorldQuaternion(new THREE.Quaternion())),boltQ=inv.clone().multiply(g.bolt.getWorldQuaternion(new THREE.Quaternion()));
+    // orientação da mão a partir de uma base no espaço do rifle: x (lado do polegar da mão direita), y (costas da mão), z (dedos)
+    const basis=(q,y,z)=>{const Y=V(...y).normalize(),Z=V(...z).normalize();Z.addScaledVector(Y,-Z.dot(Y)).normalize();const X=V().crossVectors(Y,Z);return q.clone().multiply(new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(X,Y,Z)));};
+    // mão direita no punho de pistola: costas para fora (−x), dedos abraçando a frente do punho, polegar por cima
+    const GRIP=basis(gunQ,[-1,.08,-.05],[0,-.5,.87]);
+    // mão esquerda sob a telha: palma para cima, dedos subindo pelo lado direito, polegar pelo esquerdo
+    const FORE=basis(gunQ,[.1,-1,0],[-.86,.1,.5]);
+    // bola do ferrolho: pinça com polegar e indicador, costas da mão para fora e para cima
+    const KNOB=basis(boltQ,[-.7,.7,0],[.35,.2,1]);
+    // carregador: mão em concha por baixo, dedos à frente
+    const MAG=basis(gunQ,[.2,-1,.1],[-.2,-.1,1]);
     let rp=toLocal(g.gripW),rq=GRIP;
     if(rig.rightToBolt>0){rp.lerp(toLocal(g.knobW),rig.rightToBolt);rq=rq.clone().slerp(KNOB,rig.rightToBolt);}
-    // mão esquerda: guarda-mão ↔ carregador ↔ bolso (fora da tela) ↔ encaixe
     let lp=toLocal(g.foreW),lq=FORE;
-    if(rig.leftBlend>0){let tp;
+    if(rig.leftBlend>0){let tp,tq=MAG;
       if(rig.leftTarget==='mag')tp=toLocal(g.magW);
-      else if(rig.leftTarget==='pouch')tp=V(-.12,-.5,-.2);
+      else if(rig.leftTarget==='pouch'){tp=V(-.16,-.46,-.12);tq=basis(gunQ,[0,-1,.2],[0,.3,1]);}
       else tp=toLocal(g.magW).add(V(0,-rig.magOffset*.09,0).applyQuaternion(gunQ));
-      lp.lerp(tp,rig.leftBlend);}
+      lp.lerp(tp,rig.leftBlend);lq=lq.clone().slerp(tq,rig.leftBlend);}
     const mag=g.mag;if(rig.magState==='hand'){mag.position.copy(g.magHome).add(V(0,-rig.magOffset*.09,0));}else mag.position.copy(g.magHome);
-    const shoulders={R:V(.21,-.32,.16),L:V(-.2,-.34,.1)},poles={R:V(.7,-.8,.1),L:V(-.8,-.7,.0)};
-    for(const [s,p,q,curlAmt,thumb]of [['R',rp,rq,rig.rightToBolt>.5?.55:.95,.9],['L',lp,lq,rig.leftTarget==='pouch'&&rig.leftBlend>.6?1.1:.85,.4]]){const arm=this.arms[s];arm.hand.position.copy(p);arm.hand.quaternion.copy(q);curl(arm.hand,curlAmt,thumb);
-      const wrist=p.clone(),S=shoulders[s].clone().add(V(0,-.02*this.aim,0)),E=twoBone(S,wrist,.3,.29,S.clone().add(poles[s]));
-      place(arm.upper,S,E);place(arm.fore,E,wrist.clone().add(V(0,0,-.015).applyQuaternion(q)));if(arm.sleeve)place(arm.sleeve,S,S.clone().lerp(E,.5));if(arm.cuff){arm.cuff.position.copy(wrist.clone().lerp(E,.1));arm.cuff.quaternion.copy(arm.fore.quaternion);}}
+    const b=rig.rightToBolt,lb=rig.leftBlend;
+    const poses={R:{curl:b>.5?[.55,.6,1.1,1.25]:[.55,1.3,1.38,1.42],open:b>.5?.2:-.7,bend:b>.5?.55:.9},
+      L:{curl:rig.leftTarget==='pouch'&&lb>.6?[1.2,1.25,1.3,1.35]:lb>.5?[.8,.85,.9,.95]:[.85,.95,1.02,1.1],open:lb>.5?.3:.55,bend:.45}};
+    // ombros fora da tela; cotovelo direito para fora e para baixo, esquerdo para baixo
+    const shoulders={R:V(.22,-.36,.12),L:V(-.2,-.42,-.2)},poles={R:V(.9,-.7,.15),L:V(-.6,-1,.1)};
+    for(const s of ['R','L']){const ps=poses[s];this.placeArm(s,s==='R'?rp:lp,s==='R'?rq:lq,ps.curl,ps.open,ps.bend,shoulders[s].clone().add(V(0,-.02*this.aim,0)),poles[s]);}
   }
+  placeArm(s,p,q,curlAmt,open,bend,S,pole){const arm=this.arms[s];arm.hand.position.copy(p);arm.hand.quaternion.copy(q);curl(arm.hand,curlAmt,open,bend);
+    const wrist=p.clone().add(V(0,0,-.012).applyQuaternion(q)),E=twoBone(S,wrist,.36,.34,S.clone().add(pole));
+    place(arm.upper,S,E);place(arm.fore,E,wrist);arm.elbow.position.copy(E);
+    if(arm.long){place(arm.sleeve,E,E.clone().lerp(wrist,.86));arm.cuff.position.copy(E.clone().lerp(wrist,.86));arm.cuff.quaternion.copy(arm.fore.quaternion);}
+    else{place(arm.sleeve,S,S.clone().lerp(E,.45));}}
+  // Objetos na mão em primeira pessoa: violão (tocando), rolo de corda e balde
+  setProps(p){this.props=p;this.propRoot=new THREE.Group();this.root.add(this.propRoot);for(const o of Object.values(p)){o.visible=false;o.traverse(c=>{if(c.isMesh)c.frustumCulled=false;});this.propRoot.add(o);}}
+  updateProp(dt,kind,{strum=0,chord=0,bob=0,swing=0}={}){if(!this.props||!this.arms)return false;for(const [k,o]of Object.entries(this.props))if(o.parent===this.propRoot)o.visible=k===kind;if(!kind)return false;
+    const show=true;for(const s of ['L','R'])for(const m of Object.values(this.arms[s]))if(m&&m.isObject3D)m.visible=show;this.gun.visible=false;
+    const o=this.props[kind],e=new THREE.Euler(),q=new THREE.Quaternion(),by=Math.abs(Math.cos(bob))*.01;
+    if(kind==='guitar'){o.position.set(.1,-.31+by,-.62);o.rotation.set(-.28,-.38,Math.PI/2-.4,'YXZ');o.updateMatrixWorld(true);
+      const strumP=o.localToWorld(o.userData.strum.clone().add(V(0,strum*.06,.04)));this.root.worldToLocal(strumP);
+      const neckP=o.localToWorld(o.userData.neck.clone().add(V(0,chord*.06,-.02)));this.root.worldToLocal(neckP);
+      const gq=o.quaternion.clone();
+      const RQ=gq.clone().multiply(q.setFromEuler(e.set(-.3,.2,Math.PI*.95)));const LQ=gq.clone().multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(0,-1.3,Math.PI*.5)));
+      this.placeArm('R',strumP.add(V(0,.05,.07)),RQ,[.6,.8,1,1.1],.6,.5,V(.24,-.5,.02),V(.9,-.6,0));
+      this.placeArm('L',neckP.add(V(0,-.03,.02)),LQ,[1.1+chord*.2,1.2,1.25-chord*.2,1.3],.2,.9,V(-.24,-.44,-.05),V(-.8,-.8,0));}
+    else if(kind==='coil'){const sw=swing;o.scale.setScalar(.55);o.position.set(.25,-.36+by,-.64);o.rotation.set(1.15,0,.35);
+      const hp=o.position.clone().add(V(.01,.03,.05));this.placeArm('R',hp,q.setFromEuler(e.set(-.4,0,Math.PI*.55)),[1.3,1.35,1.4,1.45],.1,.9,V(.24,-.5,.1),V(.9,-.7,0));
+      // mão esquerda segura a sobra do rolo quando o laço gira
+      this.placeArm('L',V(-.02,-.36+sw*.05,-.46),new THREE.Quaternion().setFromEuler(new THREE.Euler(-.2,0,-Math.PI*.4)),[1.2,1.25,1.3,1.35],.3,.6,V(-.22,-.5,-.02),V(-.8,-.8,0));}
+    else if(kind==='bucket'){const sway=Math.sin(bob)*.04;o.position.set(.27+sway*.3,-.68+by,-.55);o.rotation.set(0,.4,sway);
+      this.placeArm('R',V(.27+sway*.3,-.28+by,-.55),q.setFromEuler(e.set(Math.PI*.5,0,Math.PI)),[1.4,1.45,1.5,1.5],.1,.9,V(.24,-.5,.05),V(.9,-.4,0));
+      for(const m of Object.values(this.arms.L))if(m&&m.isObject3D)m.visible=false;}
+    return true;}
 }
 // Traçante do tiro, visível para todos.
 export class ShotFX {

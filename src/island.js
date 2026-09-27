@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import {Kit,loft,limb,ellipsoid,box,sculpt,sweep,paint,tint,reseed,rand,V} from './geometry.js';
-import {ISLAND,DOCK,BERTH,SHOP,HOUSES,CHURCH,LIGHTHOUSE,terrainLocal,groundLocal,flatMask,pathMask,fbm2,shoreRadius,footprint} from './terrain.js';
+import {ISLAND,DOCK,BERTH,SHOP,HOUSES,CHURCH,LIGHTHOUSE,terrainLocal,groundLocal,flatMask,pathMask,fbm2,shoreRadius,footprint,LANE,BOLLARDS} from './terrain.js';
 import {U} from './shaders.js';
 import {buildShop} from './shop.js';
 
@@ -49,7 +49,7 @@ function terrainMesh(){
   const N=170,S=ISLAND.size,step=S/N,pos=[],col=[],c=new THREE.Color(),H=[];
   for(let j=0;j<=N;j++){H.push([]);for(let i=0;i<=N;i++){const u=-S/2+i*step,v=-S/2+j*step;H[j].push(terrainLocal(u,v));}}
   const sand=new THREE.Color(0xe6d3a1),wet=new THREE.Color(0xb99f70),grassA=new THREE.Color(0x6b9a3c),grassB=new THREE.Color(0x4f7f2e),grassC=new THREE.Color(0x8aa94a),dirt=new THREE.Color(0x9b7a4f),rock=new THREE.Color(0x8b857b),seabed=new THREE.Color(0xc9b98f),paved=new THREE.Color(0x6d6a63);
-  const paved2=(u,v)=>(Math.abs(u)<5.6&&v>-46&&v<4)||(u>-33&&u<33&&v>-51.5&&v<-45.5)||(u>-24&&u<24&&v>-11&&v<4)||(u>SHOP.u0-3&&u<SHOP.u1+3&&v>SHOP.v0-1&&v<SHOP.v1+3);
+  const paved2=(u,v)=>(Math.abs(u)<5.6&&v>-46&&v<4)||(u>-33&&u<33&&v>-51.5&&v<-45.5)||(u>-24&&u<24&&v>-11&&v<4)||(u>SHOP.u0-3&&u<SHOP.u1+3&&v>SHOP.v0-1&&v<SHOP.v1+3)||(u>LANE.u0&&u<LANE.u1&&v>LANE.v0&&v<LANE.v1);
   for(let j=0;j<N;j++)for(let i=0;i<N;i++){
     const quad=[[i,j],[i+1,j],[i+1,j+1],[i,j+1]].map(([a,b])=>V(-S/2+a*step,H[b][a],-S/2+b*step));
     for(const tri of [[0,2,1],[0,3,2]]){const [A,B,C]=tri.map(k=>quad[k]);if(A.y<-2.2&&B.y<-2.2&&C.y<-2.2)continue;
@@ -229,6 +229,7 @@ export class Island {
     // ----- pisos: rua, calçadas com meio-fio, calçadão da orla e estacionamento -----
     const cob=cobbleTextures(),cobMat=new THREE.MeshStandardMaterial({map:cob.col,bumpMap:cob.bump,bumpScale:3,roughness:.85});cob.col.repeat.set(1/3.2,1/3.2);cob.bump.repeat.copy(cob.col.repeat);
     add(texturedBox(cobMat,[7.1,.5,34.4],[0,P-.25+.02,-28.2],1),false);
+    add(texturedBox(cobMat,[LANE.u1-LANE.u0,.5,LANE.v1-LANE.v0],[LANE.u,P-.25+.015,(LANE.v0+LANE.v1)/2],1),false);
     const mos=mosaicTextures(),mosMat=new THREE.MeshStandardMaterial({map:mos.col,bumpMap:mos.bump,bumpScale:1.2,roughness:.7});mos.col.repeat.set(1/2.6,1/2.6);mos.bump.repeat.copy(mos.col.repeat);
     add(texturedBox(mosMat,[66,.6,6.2],[0,P-.3+.03,-48.5],1),false);
     const con=concreteTextures(),conMat=new THREE.MeshStandardMaterial({map:con.col,bumpMap:con.bump,bumpScale:1.5,roughness:.9});con.col.repeat.set(1/2,1/2);con.bump.repeat.copy(con.col.repeat);
@@ -284,7 +285,7 @@ export class Island {
     for(let v=v0+.3;v<DOCK.rampTo+1;v+=2.4)for(const s of [-1,1]){const base=-3.2;k.add(wood,limb(V(s*1.45,base,v),V(s*1.45,y+.55,v),.13,.12,8),0x6b5038,.06);k.add(wood,limb(V(s*1.45,-.35,v),V(s*1.45,.15,v),.141,.141,8),0x2f3a33,.1);
       k.add(wood,ellipsoid([s*1.45,y+.56,v],[.13,.04,.13],8,4),0x5a432e,.04);this.colliders.push({x:ISLAND.x+s*1.45,z:ISLAND.z+v,r:.16,dock:true});}
     // cabeços de amarração, corrimão da ponta, boia salva-vidas, caixotes, rede e lampiões
-    for(const v of [-78,-72,-66,-60])k.add(mats.metal,loft([{y:y,rx:.12,rz:.12},{y:y+.2,rx:.08,rz:.08},{y:y+.26,rx:.13,rz:.13},{y:y+.3,rx:.12,rz:.12}],{n:8}).translate(1.25,0,v),0x2b2d30,.03);
+    for(const {v} of BOLLARDS)k.add(mats.metal,loft([{y:y,rx:.12,rz:.12},{y:y+.2,rx:.08,rz:.08},{y:y+.26,rx:.13,rz:.13},{y:y+.3,rx:.12,rz:.12}],{n:8}).translate(1.25,0,v),0x2b2d30,.03);
     for(const s of [-1,1])k.add(wood,box([s*1.5,y+.55,v0+.1],[.1,1.1,.1]),0x6b5038,.04);k.add(wood,box([0,y+1.05,v0+.1],[3.2,.1,.1]),0x7a5c40,.04);
     k.add(wood,box([-1.5,y+.7,-64],[.12,1.4,.12]),0x6b5038,.04);k.add(wood,new THREE.TorusGeometry(.32,.08,6,14).rotateY(Math.PI/2).translate(-1.44,y+1.1,-64),0xf06a23,.05);
     for(let i=0;i<4;i++)k.add(wood,new THREE.TorusGeometry(.32,.083,6,3,Math.PI/4).rotateY(Math.PI/2).rotateX(i*Math.PI/2+.4).translate(-1.43,y+1.1,-64),0xf6f3ea,.02);
@@ -295,7 +296,7 @@ export class Island {
     for(const v of [-80.5,-69,-58])lampPost(k,lp,-1.3,v,y,this.dockLamps);
     // pórtico de entrada do cais
     for(const s of [-1,1])k.add(wood,box([s*1.75,P+1.5,-46.2],[.24,3,.24]),0x5a432e,.04);k.add(wood,box([0,P+3.05,-46.2],[4.2,.2,.3]),0x5a432e,.04);
-    const sign=new THREE.Mesh(new THREE.PlaneGeometry(3.2,.62),new THREE.MeshStandardMaterial({map:canvasTex(512,100,(c,w,h)=>{c.fillStyle='#2d5d7c';c.fillRect(0,0,w,h);c.strokeStyle='#f3e8cf';c.lineWidth=6;c.strokeRect(6,6,w-12,h-12);c.fillStyle='#f3e8cf';c.font='bold 46px Georgia';c.textAlign='center';c.textBaseline='middle';c.fillText('PORTO DA VILA',w/2,h/2+2);}),roughness:.6}));
+    const sign=new THREE.Mesh(new THREE.PlaneGeometry(3.2,.62),new THREE.MeshStandardMaterial({map:canvasTex(512,100,(c,w,h)=>{c.fillStyle='#2d5d7c';c.fillRect(0,0,w,h);c.strokeStyle='#f3e8cf';c.lineWidth=6;c.strokeRect(6,6,w-12,h-12);c.fillStyle='#f3e8cf';c.font='bold 46px Georgia';c.textAlign='center';c.textBaseline='middle';c.fillText('LAGUNA',w/2,h/2+2);}),roughness:.6}));
     sign.position.set(0,P+2.62,-46.33);sign.rotation.y=Math.PI;k.add(wood,box([0,P+2.62,-46.2],[3.4,.78,.2]),0x5a432e,.04);
     const g=k.build();g.add(this.dockLamps,sign);add(g);
     for(const s of [-1,1])this.colliders.push({x:ISLAND.x+s*1.75,z:ISLAND.z-46.2,r:.2});
@@ -320,8 +321,8 @@ export class Island {
     const palms=[[-30,-52],[-25,-54],[-16,-53.5],[-11,-52.5],[10,-53],[15,-52],[24,-54],[31,-52.5],[-38,-49],[37,-49],[-45,-43],[44,-44],[-51,-35],[50,-36],[6,-51.5],[-6,-52.8],[46,-20],[-47,-24],[27,-10],[-28,-12]];
     palms.forEach(([u,v],i)=>{const y=terrainLocal(u,v);palm(palmsK,mat,u,v,y,5.5+(i*37%10)/5,.8+(i%4)*.35,-Math.PI/2+((i*53)%10-5)*.12,i+1);this.colliders.push({x:ISLAND.x+u,z:ISLAND.z+v,r:.25});});
     // ipês-amarelos na praça, árvores frondosas pela vila, araucárias no morro do farol
-    [[-21,1],[20,-1],[-22,11],[22,12],[-18,32]].forEach(([u,v],i)=>{broadTree(treeK,mat,u,v,groundLocal(u,v),6.5,[0xf2c12e,0xe9b224,0xf6d04a],i+20,true);this.colliders.push({x:ISLAND.x+u,z:ISLAND.z+v,r:.3});});
-    [[-25,-27],[25,-29],[-24,-19],[27,-19],[30,-5],[-37,9],[33,22],[-36,-14],[40,4],[-44,4],[28,36],[-2,36],[14,40],[-38,30],[36,-12],[-12,33]].forEach(([u,v],i)=>{broadTree(treeK,mat,u,v,terrainLocal(u,v),5+(i%3),[0x3f7a2e,0x4d8a34,0x5c9a3a,0x356b28],i+40);this.colliders.push({x:ISLAND.x+u,z:ISLAND.z+v,r:.3});});
+    [[-21,1],[20,-1],[-22,11],[19.5,34],[-18,32]].forEach(([u,v],i)=>{broadTree(treeK,mat,u,v,groundLocal(u,v),6.5,[0xf2c12e,0xe9b224,0xf6d04a],i+20,true);this.colliders.push({x:ISLAND.x+u,z:ISLAND.z+v,r:.3});});
+    [[-25,-27],[25,-29],[-24,-19],[27,-19],[36,-8],[-37,9],[45,24],[-36,-14],[45,1],[-44,4],[28,36],[-2,36],[14,40],[-38,30],[36,-12],[-12,33]].forEach(([u,v],i)=>{broadTree(treeK,mat,u,v,terrainLocal(u,v),5+(i%3),[0x3f7a2e,0x4d8a34,0x5c9a3a,0x356b28],i+40);this.colliders.push({x:ISLAND.x+u,z:ISLAND.z+v,r:.3});});
     [[-26,44],[-2,50],[6,44],[-18,54],[-30,36],[4,56],[-14,62]].forEach(([u,v],i)=>{araucaria(treeK,mat,u,v,terrainLocal(u,v),11+(i%3)*1.5,i+70);this.colliders.push({x:ISLAND.x+u,z:ISLAND.z+v,r:.35});});
     for(let i=0;i<70;i++){const a=rand()*6.28,r=Math.sqrt(rand())*56,u=Math.cos(a)*r,v=Math.sin(a)*r,h=terrainLocal(u,v);if(h<1.2||flatMask(u,v)>.1||pathMask(u,v)>.2)continue;bush(treeK,mat,u,v,h,.5+rand()*.6,[0x3b7030,0x4c8237,0x2f6128][i%3],rand()<.35?[0xe8364f,0xf5a3c7,0xffffff,0xf2c037][i%4]:0,i+100);}
     // pedras na orla e no promontório
@@ -345,11 +346,36 @@ export class Island {
     for(let i=0;i<5;i++){const s=new THREE.Mesh(new THREE.CylinderGeometry(1.5-i*.16,1.62-i*.16,3,12),i%2?red:white);s.position.y=1.5+i*3;s.castShadow=true;lh.add(s);}
     const gal=new THREE.Mesh(new THREE.CylinderGeometry(1.35,1.35,.2,14),dark);gal.position.y=15.1;lh.add(gal);
     for(let i=0;i<14;i++){const p=new THREE.Mesh(new THREE.BoxGeometry(.05,.7,.05),dark);const a=i/14*6.283;p.position.set(Math.cos(a)*1.3,15.5,Math.sin(a)*1.3);lh.add(p);}
-    const lamp=new THREE.Mesh(new THREE.CylinderGeometry(.8,.8,1.4,10),new THREE.MeshBasicMaterial({color:new THREE.Color(4,3.2,1.8)}));lamp.position.y=16;lh.add(lamp);
     const roof=new THREE.Mesh(new THREE.ConeGeometry(1.1,1.3,10),red);roof.position.y=17.35;lh.add(roof);
-    const beamGeo=new THREE.ConeGeometry(9,110,24,1,true);beamGeo.translate(0,-55,0);beamGeo.rotateZ(Math.PI/2);
-    this.beam=new THREE.Mesh(beamGeo,new THREE.ShaderMaterial({transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,side:THREE.DoubleSide,uniforms:{uStorm:U.uStorm},vertexShader:`varying float vT;varying vec3 vN,vV;void main(){vT=-position.x/110.;vec4 w=modelViewMatrix*vec4(position,1.);vV=normalize(-w.xyz);vN=normalize(normalMatrix*normal);gl_Position=projectionMatrix*w;}`,fragmentShader:`uniform float uStorm;varying float vT;varying vec3 vN,vV;void main(){float edge=pow(abs(dot(vN,vV)),1.5);gl_FragColor=vec4(vec3(1.,.85,.55)*pow(edge,2.)*pow(1.-vT,3.)*(.035+uStorm*.16),1.);}`}));
-    this.beam.position.y=16;this.beam.frustumCulled=false;lh.add(this.beam);
+    // ----- lanterna do farol: vidraças com montantes, lente de Fresnel girando, dois fachos volumétricos,
+    // clarão que acende quando o facho passa por quem olha e um holofote que varre o mar e a vila -----
+    const room=new THREE.Group();room.position.y=16;lh.add(room);
+    room.add(new THREE.Mesh(new THREE.CylinderGeometry(.86,.86,1.5,12,1,true),new THREE.MeshStandardMaterial({color:0xd8ecff,transparent:true,opacity:.16,roughness:.04,metalness:.2,depthWrite:false,side:THREE.DoubleSide})));
+    for(let i=0;i<12;i++){const m=new THREE.Mesh(new THREE.BoxGeometry(.05,1.5,.05),dark);const a=i/12*6.283;m.position.set(Math.cos(a)*.86,0,Math.sin(a)*.86);room.add(m);}
+    for(const y of [-.75,.75]){const r=new THREE.Mesh(new THREE.TorusGeometry(.86,.04,4,24).rotateX(Math.PI/2),dark);r.position.y=y;room.add(r);}
+    const rotor=new THREE.Group();room.add(rotor);this.rotor=rotor;
+    rotor.add(new THREE.Mesh(new THREE.CylinderGeometry(.1,.14,.5,8),dark));
+    rotor.add(new THREE.Mesh(new THREE.SphereGeometry(.2,14,10),new THREE.MeshBasicMaterial({color:new THREE.Color(9,7.5,4.6)})));
+    const ringM=new THREE.MeshBasicMaterial({color:new THREE.Color(3.2,2.6,1.6),transparent:true,opacity:.85,blending:THREE.AdditiveBlending,depthWrite:false});
+    const glassM=new THREE.MeshBasicMaterial({color:new THREE.Color(1.6,1.3,.8),transparent:true,opacity:.35,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide});
+    for(const s of [-1,1]){const lens=new THREE.Group();lens.position.x=s*.42;lens.rotation.y=Math.PI/2;rotor.add(lens);lens.add(new THREE.Mesh(new THREE.CircleGeometry(.5,24),glassM));
+      for(let k=1;k<=5;k++)lens.add(new THREE.Mesh(new THREE.TorusGeometry(k*.095,.012,4,28),ringM));
+      for(let k=0;k<3;k++){const prism=new THREE.Mesh(new THREE.TorusGeometry(.56-k*.035,.018,4,28,Math.PI*.8),ringM);prism.rotation.z=Math.PI*.1;prism.position.z=(k-1)*.03;lens.add(prism);}}
+    // fachos: cone aberto com borda suave (fresnel da vista), poeira no ar e queda com a distância
+    const beamMat=new THREE.ShaderMaterial({transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,side:THREE.DoubleSide,uniforms:{uStorm:U.uStorm,uTime:U.uTime,uDim:{value:1}},
+      vertexShader:`varying float vT;varying vec3 vN,vV,vW;void main(){vT=abs(position.x)/95.;vec4 w=modelViewMatrix*vec4(position,1.);vW=(modelMatrix*vec4(position,1.)).xyz;vV=normalize(-w.xyz);vN=normalize(normalMatrix*normal);gl_Position=projectionMatrix*w;}`,
+      fragmentShader:`uniform float uStorm,uTime,uDim;varying float vT;varying vec3 vN,vV,vW;
+        void main(){float edge=pow(abs(dot(normalize(vN),normalize(vV))),2.2);float fall=pow(clamp(1.-vT,0.,1.),2.4)*smoothstep(0.,.04,vT);
+          float dust=.75+.25*sin(vW.x*.35+uTime*.6)*sin(vW.z*.31-uTime*.4)*sin(vW.y*.5+uTime*.3);
+          float k=edge*fall*dust*(.05+uStorm*.2)*uDim;gl_FragColor=vec4(vec3(1.,.87,.62)*k,1.);}`});
+    this.beamMat=beamMat;
+    for(const s of [-1,1]){const g=new THREE.ConeGeometry(7.5,95,32,1,true);g.translate(0,-47.5,0);g.rotateZ(Math.PI/2);if(s<0)g.rotateY(Math.PI);const m=new THREE.Mesh(g,beamMat);m.frustumCulled=false;rotor.add(m);}
+    // clarão (sprite) e holofote que ilumina o que o facho toca
+    const gc=document.createElement('canvas');gc.width=gc.height=128;const gx=gc.getContext('2d'),gr=gx.createRadialGradient(64,64,0,64,64,64);gr.addColorStop(0,'rgba(255,245,215,1)');gr.addColorStop(.18,'rgba(255,220,150,.7)');gr.addColorStop(.5,'rgba(255,170,80,.15)');gr.addColorStop(1,'rgba(0,0,0,0)');gx.fillStyle=gr;gx.fillRect(0,0,128,128);
+    gx.globalCompositeOperation='lighter';gx.strokeStyle='rgba(255,230,170,.5)';gx.lineWidth=2;for(const a of [0,Math.PI/2]){gx.beginPath();gx.moveTo(64+Math.cos(a)*64,64+Math.sin(a)*64);gx.lineTo(64-Math.cos(a)*64,64-Math.sin(a)*64);gx.stroke();}
+    const gt=new THREE.CanvasTexture(gc);gt.colorSpace=THREE.SRGBColorSpace;
+    this.flare=new THREE.Sprite(new THREE.SpriteMaterial({map:gt,color:new THREE.Color(2.2,1.9,1.4),transparent:true,depthWrite:false,blending:THREE.AdditiveBlending}));this.flare.scale.setScalar(4);room.add(this.flare);
+    this.sweep=new THREE.SpotLight(0xffdca8,0,170,.075,.55,0);rotor.add(this.sweep);const tgt=new THREE.Object3D();tgt.position.set(60,-14,0);rotor.add(tgt);this.sweep.target=tgt;
     const door=new THREE.Mesh(new THREE.BoxGeometry(.9,1.8,.2),new THREE.MeshStandardMaterial({color:0x2f4f6a,roughness:.6}));door.position.set(0,.9,-1.52);lh.add(door);
     const y=terrainLocal(LIGHTHOUSE.u,LIGHTHOUSE.v);lh.position.set(LIGHTHOUSE.u,y-.3,LIGHTHOUSE.v);add(lh);this.lighthouse=lh;
     this.colliders.push({x:ISLAND.x+LIGHTHOUSE.u,z:ISLAND.z+LIGHTHOUSE.v,r:1.8});
@@ -391,7 +417,10 @@ export class Island {
       if(f.obj.position.y<-1&&f.v.y<0){f.alive=false;f.obj.visible=false;this.scene.remove(f.obj);if(this.onSplash)this.onSplash(f.obj.position.clone().setY(0),f.size);}}}
   update(t,dt,camera,people){
     if(this.exploded){this.updateDebris(t,dt);return;}
-    this.beam.rotation.y=t*.9;this.beam.visible=(U.uRed.value||0)<.05;
+    // farol: gira devagar (um giro a cada ~11 s); o clarão cresce quando um dos fachos aponta para a câmera
+    const on=(U.uRed.value||0)<.05?1:0;this.rotor.rotation.y=t*.57;this.rotor.visible=!!on;this.flare.visible=!!on;
+    if(on&&camera){const lp=this.flare.getWorldPosition(this._lp||(this._lp=V())),to=camera.position.clone().sub(lp),d=to.length();to.normalize();const a=this.rotor.rotation.y,dir=V(Math.cos(a),0,-Math.sin(a));
+      const k=Math.pow(Math.abs(to.dot(dir)),24);this.flare.scale.setScalar(3.5+d*.035+k*(16+d*.12));this.flare.material.opacity=.45+.55*k;this.sweep.intensity=2.2+(U.uStorm.value||0)*3;}
     this.water.position.y=P+.5+Math.sin(t*2)*.01;this.shop.update(t,dt,camera,people);
   }
 }

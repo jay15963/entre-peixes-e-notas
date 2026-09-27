@@ -1,16 +1,19 @@
 import './style.css';
 import * as THREE from 'three';
-import {CONFIG,SPAWNS,Lobby,Fishing,newPlayer,weatherAt,waveHeight,tsunamiHeight,insideBoat,smooth,clamp,lerp,inputPacket,storyTime} from './core.js';
+import {CONFIG,SPAWNS,Lobby,Fishing,newPlayer,weatherAt,waveHeight,tsunamiHeight,insideBoat,smooth,clamp,lerp,inputPacket,storyTime,ROPE,ropeWindow,ropeAngle,ropeHit,driftAt,Shoo,DROWN_TIME} from './core.js';
 import {loadAssets,setFirstPerson} from './models.js';
 import {makeCharacter,addBakerOutfit,LOOKS} from './characters.js';
-import {makeBoat,addHelm,addLantern,addMotor} from './boat.js';
+import {makeBoat,addHelm,addLantern,addMotor,makeBucket,makeGuitar} from './boat.js';
+import {Rope,makeCoil} from './rope.js';
+import {GuitarHero,LANE_KEYS} from './guitar.js';
 import {CATCHES,TIERS,BALY,MESSAGES,catchValue,money} from './catalog.js';
 import {Animator,Spring,lookAngles} from './animation.js';
 import {FishingFX} from './fishingfx.js';
 import {GullFlock} from './gulls.js';
 import {makeRifle,addRack,RACK,Viewmodel,ShotFX,rigState,CYCLE,RELOAD} from './weapons.js';
 import {Island} from './island.js';
-import {ISLAND,BERTH,SHOP} from './terrain.js';
+import {Villagers} from './npcs.js';
+import {ISLAND,BERTH,SHOP,DOCK,BOLLARDS} from './terrain.js';
 import {Environment} from './environment.js';
 import {Cataclysm} from './cataclysm.js';
 import {FluidSim} from './fluid.js';
@@ -25,13 +28,18 @@ const $=id=>document.getElementById(id),show=(id,value=true)=>$(id).hidden=!valu
 const Y=new THREE.Vector3(0,1,0),V=(x=0,y=0,z=0)=>new THREE.Vector3(x,y,z);
 let renderer,scene,camera,environment,cataclysm,fluid,post,assets,boat,helm,lantern,motor,fx,ragdolls,gulls,rackRifles=[],viewmodel,shotFX,menuCharacters=[],island,story=45;
 let running=false,solo=false,host=true,localId=0,selected=0,elapsed=0,menuTime=0,paused=false,cinematic=false,ended=false,blackout=false,titleShown=false,engineDead=false;
-let players=[],models=[],fishing=[],remoteInputs={},netTick=0,lastPhase='sunset',world={impact:null,bucket:[],rifles:[-1,-1],money:0,trig:null,stolen:{}},pred=null,boatTarget=null,myNet=0,hitMarkT=0;
+const NEW_WORLD=()=>({impact:null,bucket:[],rifles:[-1,-1],money:0,trig:null,stolen:{},bucketAt:-1,bucketPos:null,rope:{s:'tied',h:-1,tgt:1,pid:-1,t:0,ok:true,from:null,to:null},guitar:-1,shoo:null,talk:null});
+// Balde: -1 no barco, -2 no chão (bucketPos), ou o id de quem carrega. Corda: 'boat' (rolo no convés), 'held', 'fly', 'tied' (no cabeço), 'pull' (resgate)
+let players=[],models=[],fishing=[],remoteInputs={},netTick=0,lastPhase='sunset',world=NEW_WORLD(),pred=null,boatTarget=null,myNet=0,hitMarkT=0;
 let lobby=new Lobby(),codeAction='',expectUnlock=false;
 const BERTH_STATE=()=>({x:ISLAND.x+BERTH.u,z:ISLAND.z+BERTH.v,heading:BERTH.heading,speed:0});
 let boatState=BERTH_STATE(),toastTimer=0,frameTimes=[],displayTick=0,cardTimer=0,best={};
 let stepDist=0,bobPhase=0,shockAt=Infinity,reelTick=0,hold=null,warned=false,tabArm=0,stepLag=0,lastFeetW=null,seen=new Set(),balyWas=0,moneyShown=0,shotLight=null;
 // Padeiro da padaria do mercado (NPC): trabalha no balcão, voa com o tapa e volta andando
 const baker={mode:'work',x:0,y:0,z:0,yaw:Math.PI,t:0,path:[],model:null};
+// Itens do barco: balde, corda (física de Verlet), violão; minigames locais (laço, espantar gaivota, violão)
+let villagers=null,hull=null,bucketObj=null,rope=null,guitarStand=null,ropeGame=null,shooGame=new Shoo(),gh=new GuitarHero(),ghCanvas=null,driftT=0,talkShown=null;
+const GUITAR_SPOT={x:-.62,z:-.26},ROPE_HOME={x:-.45,z:2.9},BOW_CLEAT={x:0,y:.9,z:4.55};
 // Juice: hit-stop, câmera lenta e molas de câmera (tranco, aterrissagem, soco de FOV)
 let breath=1,hitStop=0,slowMo=0,aberrPulse=0,runFov=0,strafeRoll=0,prevGrounded=true,prevSlap=0,prevHeading=0,steerVis=0,lastVy=0,lastControls={};
 const kick={x:new Spring(260,17),y:new Spring(260,17),z:new Spring(220,13),fov:new Spring(200,14),dip:new Spring(170,12)};
@@ -58,8 +66,8 @@ function event(name,p){
   const pl=players[p.id],pos=pl?deckPos(pl):null;
   if(name==='toast'&&p.id===localId)toast(p.text);
   if(name==='slap'){sound.effect(p.hit?'slap':'whoosh',{pos});if(pl)pl.slap=1;if(p.hit&&p.id===localId){hitStop=.09;jolt(-.6,0,2.2,-9);aberrPulse=.6;}else if(p.id!==localId&&!p.hit)models[localId]?.userData.anim?.flinch.kick(-4);}
-  if(name==='ragdoll'){const m=models[p.id];if(m){ragdolls.launch(p.id,m,p.velocity);sound.effect('launch',{pos});if(p.id===localId){aberrPulse=1.2;jolt(3,4,-6,14);}if(p.id===localId)toast(p.reason==='water'?'Você esqueceu que não é um peixe.':p.reason==='boom'?'A ilha explodiu. Você foi junto.':'A amizade veio com força.');}}
-  if(name==='splash'){const at=V(...p.position);environment.burst(at);sound.effect('splash',{pos:at});if(p.id===localId)toast('A água rejeitou sua presença.');}
+  if(name==='ragdoll'){const m=models[p.id];if(m){ragdolls.launch(p.id,m,p.velocity);sound.effect('launch',{pos});if(p.id===localId){aberrPulse=.25;jolt(3,4,-6,14);}if(p.id===localId)toast(p.reason==='water'?'Você esqueceu que não é um peixe.':p.reason==='boom'?'A ilha explodiu. Você foi junto.':'A amizade veio com força.');}}
+  if(name==='splash'){const at=V(...p.position);environment.burst(at);sound.effect('splash',{pos:at});if(p.id===localId)toast('Você caiu no mar! Boiando… alguém precisa te laçar com a corda do barco.');else if(typeof p.id==='number'&&p.id!==localId)toast(`Pescador ${(players[p.id]?.net??0)+1} caiu no mar! Peguem a corda (proa) e lacem!`);}
   if(name==='respawn'){ragdolls.remove(p.id);if(p.id===localId){toast(p.water?'De volta ao barco. A dignidade fica no mar.':'Você se levantou. Doeu mais no orgulho.');input.pitch=-.1;}}
   if(name==='cast')sound.effect('cast',{pos});
   if(name==='bite'){fx.event('bite',p.id);sound.effect('bite',{pos:fx.state[p.id]?.bobber.position});if(p.id===localId){pop('bite-pop');jolt(-1.5,0,.8,-3);}}
@@ -71,7 +79,7 @@ function event(name,p){
   if(name==='drive'){sound.effect('helm',{pos});if(p.id===localId){if(p.on){input.yaw=0;input.pitch=-.12;toast('Leme assumido · W/S acelera · A/D vira · E solta');}else toast('Você largou o leme.');}}
   if(name==='engine')toast('O motor apagou. Não há para onde fugir.');
   if(name==='rifle'){world.rifles[p.slot]=p.on?p.id:-1;sound.effect('rack',{pos});if(p.id===localId)toast(p.on?'Rifle na mão · botão direito mira · botão esquerdo atira · E devolve':'Rifle de volta ao suporte.');}
-  if(name==='shot'){const m=models[p.id];m?.userData.anim?.fire();const local=p.id===localId&&viewmodel.gun.visible;const muzzle=m?.userData.gun?.userData.muzzle;const from=local?camera.localToWorld(V(.12,-.1,-.9)):muzzle?muzzle.getWorldPosition(V()):pos;const to=V(...p.to);shotFX.tracer(from,to);
+  if(name==='shot'){const m=models[p.id];m?.userData.anim?.fire();const local=p.id===localId&&viewmodel.active;const muzzle=m?.userData.gun?.userData.muzzle;const from=local?camera.localToWorld(V(.12,-.1,-.9)):muzzle?muzzle.getWorldPosition(V()):pos;const to=V(...p.to);shotFX.tracer(from,to);
     sound.effect('gunshot',{pos:local?null:from,far:!local});muzzleSmoke(from,to);shotLight.position.copy(from);shotLight.intensity=30;
     if(local){viewmodel.fire();jolt(5,(Math.random()-.5)*1.8,1.4,-6);aberrPulse=.4;}else{setTimeout(()=>sound.effect('boltBack',{pos:from}),420);setTimeout(()=>sound.effect('boltFwd',{pos:from}),560);}}
   if(name==='gullHit'){const at=boat.localToWorld(V(...p.pos));fx.splash(at,26,.9,1.4);feathers(at);sound.effect('feathers',{pos:at});if(p.id===localId){hitMarkT=.45;sound.effect('hitmark');hitStop=.05;toast(p.hadFish?(p.overBoat?'Na mosca! O peixe caiu de volta no barco.':'Acertou! Mas o peixe caiu no mar.'):'Gaivota abatida!');}}
@@ -87,6 +95,24 @@ function event(name,p){
   if(name==='bakerSlap'){if(baker.model){ragdolls.launch('baker',baker.model,p.velocity);sound.effect('launch',{pos:baker.model.position});}if(p.boom)return;const b=['Ô, loco! O pão tá no forno!','O padeiro foi assar do outro lado da loja.','Pão francês voando: saiu quentinho.'];toast(b[Math.floor(Math.random()*b.length)]);}
   if(name==='bakerUp')ragdolls.remove('baker');
   if(name==='explode'&&!island.exploded){island.explode();ragdolls.removeIsland();}
+  // ----- balde, corda, violão, resgate, gaivota no cabo de guerra, padeiro -----
+  if(name==='bucket'){sound.effect('bucket',{pos});if(p.id===localId)toast(p.on?'Balde na mão · leve até a peixaria do mercado (E vende) · E larga':p.home?'Balde de volta ao barco.':'Balde no chão. E pega de novo.');}
+  if(name==='rope'){sound.effect('rack',{pos});if(p.id===localId)toast(p.on?'Corda na mão · mire num cabeço do cais ou num pescador na água e clique · E devolve':'Corda de volta ao rolo.');}
+  if(name==='untie'){sound.effect('ropeTie',{pos});if(p.id===localId)toast('Corda solta: o barco vai à deriva com o mar! Laço: clique mirando o cabeço.');}
+  if(name==='ropeThrow'){sound.effect('ropeThrow',{pos});rope&&(rope.ready=false);}
+  if(name==='ropeTied'){sound.effect('ropeTie',{pos:V(...p.at)});toast(p.id===localId?'AMARRADO! O barco não sai mais daqui.':`Pescador ${(players[p.id]?.net??0)+1} amarrou o barco no cais.`);confetti('#e5c08c',24);}
+  if(name==='ropeMiss'){sound.effect('ropeMiss',{pos:p.at?V(...p.at):pos});if(p.id===localId)toast('Errou o laço! Recolhendo a corda…');}
+  if(name==='ropeCatch'){sound.effect('ropeTie',{pos:p.at?V(...p.at):pos});if(p.target===localId)toast('Te laçaram! Segura firme, estão te puxando.');else if(p.id===localId)toast('Laçou! Puxando o pescador para o barco…');}
+  if(name==='rescued'){sound.effect('rescue');if(p.id===localId)toast('Resgatado! Nunca mais duvide da corda.');else toast(`Pescador ${(players[p.id]?.net??0)+1} foi resgatado!`);confetti('#7dff6a',50);}
+  if(name==='drowned'){if(p.id===localId)toast('Ninguém te puxou a tempo. Você acordou no cais de Laguna.');}
+  if(name==='guitar'){sound.effect('rack',{pos});if(p.id===localId){if(p.on){gh.start();toast('Você é a banda! D F J K no tempo da nota · E larga o violão');}else{gh.stop();toast('Violão de volta ao banco.');}}}
+  if(name==='strum'&&p.id!==localId){const m=models[p.id];const at=m?m.getWorldPosition(V()).add(V(0,1.1,0)):pos;sound.guitar(p.notes,at);const a=m?.userData.anim;if(a)a.strumT=0;}
+  if(name==='song'&&p.id!==localId&&pl&&worldOf(pl).distanceTo(camera.position)<30)toast(`Pescador ${(pl.net??0)+1} tocou “${p.name}” (${Math.round(p.acc*100)}%)`);
+  if(name==='shoo'){const g=gulls.gulls[p.gull];sound.effect('gull',{pos:g?boat.localToWorld(g.pos.clone()):null});if(p.id===localId){shooGame.start();toast('A GAIVOTA AGARROU O BALDE! Segure F para puxar e fique na faixa!');}else toast('Uma gaivota está brigando pelo balde! Atirem nela!');}
+  if(name==='scared'){const g=gulls.gulls[p.gull];sound.effect('shoo',{pos:g?boat.localToWorld(g.pos.clone()):null});if(p.id===localId){toast('Espantou a gaivota! Ela foi embora sem nada.');confetti('#ffffff',30);}shooGame.reset();}
+  if(name==='bakerTalk'){world.talk={at:elapsed,id:p.id};}
+  if(name==='bakerVanish'){const at=V(...p.at);sound.effect('leave',{pos:at});sound.effect('puff',{pos:at});for(let i=0;i<60;i++){const a=Math.random()*6.28,r=Math.random()*.6,h=Math.random()*1.8;fx.spray.emit(elapsed,at.x+Math.cos(a)*r*.4,at.y+h,at.z+Math.sin(a)*r*.4,Math.cos(a)*r*1.4,.3+Math.random()*.8,Math.sin(a)*r*1.4,1.4+Math.random()*1.2,1.2,-.02,.22,.55,1);}}
+  if(name==='bakerBack'){sound.effect('join',{pos:V(baker.x,baker.y+1,baker.z)});sound.effect('door',{pos:V(baker.x,baker.y+1,baker.z)});}
 }
 
 // ---------- Lobby e rede ----------
@@ -94,7 +120,7 @@ function updateLobby(){const list=lobby.snapshot(),connected=net.connected||solo
   for(let i=0;i<CONFIG.characters;i++){const p=list.find(q=>q.character===i);$('char'+i).classList.toggle('selected',(p&&p.id===myNet)||(!net.connected&&selected===i));$('char'+i).classList.toggle('taken',!!p&&p.id!==myNet);
     $('ready'+i).textContent=p?(p.id===myNet?'VOCÊ':'PESCADOR '+(p.id+1))+(p.ready?' · PRONTO ✓':' · AGUARDANDO'):'LUGAR DISPONÍVEL';}
   const mine=list.find(p=>p.id===myNet);$('ready').disabled=!net.connected;$('ready').firstChild.textContent=mine?.ready?'CANCELAR PRONTO ':'ESTOU PRONTO ';
-  $('ready-hint').textContent=!net.connected?'Aguardando outros pescadores (2 a 4).':list.length<2?'Precisa de pelo menos 2 pescadores.':`${list.length} a bordo · começa quando todos estiverem prontos.`;
+  $('ready-hint').textContent=!net.connected?'Aguardando outros pescadores (2 a 5).':list.length<2?'Precisa de pelo menos 2 pescadores.':`${list.length} a bordo · começa quando todos estiverem prontos.`;
   if(host&&net.host&&lobby.canStart&&!running){const roster=lobby.snapshot();net.send({type:'start',players:roster});start(false,roster);}}
 function broadcastLobby(){net.send({type:'lobby',players:lobby.snapshot()});updateLobby();}
 function onNetStatus(s,id){
@@ -102,7 +128,7 @@ function onNetStatus(s,id){
   else if(s==='peer-leave'&&net.host){lobby.leave(id);broadcastLobby();const idx=players.findIndex(p=>p.net===id);if(running&&idx>=0){players[idx].mode='gone';players[idx].x=99;if(models[idx])models[idx].visible=false;ragdolls.remove(idx);world.rifles=world.rifles.map(r=>r===idx?-1:r);toast(`Pescador ${id+1} saiu do barco.`);}else status(net.connected?`${lobby.players.size} pescadores na sala.`:'Aguardando outros pescadores.');}
   else if(s==='trying'&&id==='ponte')status('A conexão direta com o anfitrião não abriu. Tentando entrar pela ponte de outro pescador da sala…');
   else if(s==='connected'&&!net.host){host=false;status(net.via==='ponte'?'Conectado pela ponte de outro pescador (sua rede não alcança o anfitrião direto). Escolha seu personagem e marque “Estou pronto”.':'Conectado! Escolha seu personagem e marque “Estou pronto”.');net.send({type:'hello',character:selected});$('ready').disabled=false;show('connection',false);}
-  else if(s==='full')status('Esse barco já está cheio (4 pescadores).');
+  else if(s==='full')status('Esse barco já está cheio (5 pescadores).');
   else if(s==='disconnected'){status('A conexão caiu. Entre em uma nova sala para jogar de novo.');$('ready').disabled=true;if(running&&!ended){paused=true;input.enabled=false;expectUnlock=true;input.unlock();show('lobby');toast('O anfitrião desconectou. A partida foi pausada.');}}
   else if(s==='error')status('A conexão não abriu. Tente de novo ou use a conexão manual.');
 }
@@ -112,7 +138,8 @@ function receive(p,from){
     if(p.type==='hello'){const pref=Number.isInteger(p.character)?p.character:0,cur=lobby.players.get(from);if(!cur){const c=lobby.freeCharacter(pref);if(c>=0)lobby.join(from,c);}else if(cur.character!==pref&&lobby.freeCharacter(pref)===pref){try{lobby.join(from,pref);}catch{}}broadcastLobby();}
     if(p.type==='pick'&&!running){try{lobby.join(from,p.character);}catch{}broadcastLobby();}
     if(p.type==='ready'){lobby.ready(from,p.ready);broadcastLobby();}
-    if(p.type==='input'){const i=inputPacket(p),prev=remoteInputs[from]||{};remoteInputs[from]={...i,interact:i.interact||prev.interact,cast:i.cast||prev.cast,slap:i.slap||prev.slap,jump:i.jump||prev.jump,fall:i.fall||prev.fall,fire:i.fire||prev.fire,gull:i.fire?i.gull:prev.fire?prev.gull:-1,ray:i.fire?i.ray:prev.ray};}
+    if(p.type==='input'){const i=inputPacket(p),prev=remoteInputs[from]||{};remoteInputs[from]={...i,interact:i.interact||prev.interact,cast:i.cast||prev.cast,slap:i.slap||prev.slap,jump:i.jump||prev.jump,fall:i.fall||prev.fall,fire:i.fire||prev.fire,gull:i.fire?i.gull:prev.fire?prev.gull:-1,ray:i.fire?i.ray:prev.ray,throwAt:i.throwAt>=0?i.throwAt:prev.throwAt??-1,throwOk:i.throwAt>=0?i.throwOk:prev.throwOk,shoo:i.shoo||prev.shoo||0,strum:i.strum?[...(prev.strum||[]),...i.strum].slice(-12):prev.strum||null};}
+    if(p.type==='song'){const idx=players.findIndex(q=>q.net===from);if(idx>=0&&typeof p.name==='string'&&players[idx].mode==='guitar')stateEvent('song',{id:idx,name:p.name.slice(0,60),acc:clamp(Number(p.acc)||0)});}
     if(p.type==='bye')net.dropPeer(from);
     return;
   }
@@ -125,37 +152,60 @@ function receive(p,from){
 }
 function applySnapshot(p){
   const drift=p.time-elapsed;if(Math.abs(drift)>.6)elapsed=p.time;else elapsed+=drift*.15;
-  boatTarget=p.boat;boatState.heading=p.boat.heading;boatState.speed=p.boat.speed;if(p.bucket)world.bucket=p.bucket;if(p.rifles)world.rifles=p.rifles;world.money=p.money??world.money;world.trig=p.trig||null;if(p.baker)Object.assign(baker,{mode:p.baker[0],x:p.baker[1],y:p.baker[2],z:p.baker[3],yaw:p.baker[4]});
+  boatTarget=p.boat;boatState.heading=p.boat.heading;boatState.speed=p.boat.speed;if(p.bucket)world.bucket=p.bucket;if(p.rifles)world.rifles=p.rifles;world.bucketAt=p.bucketAt??-1;world.bucketPos=p.bucketPos||null;if(p.rope)world.rope=p.rope;world.guitar=p.guitar??-1;world.shoo=p.shoo||null;world.talk=p.talk||null;world.money=p.money??world.money;world.trig=p.trig||null;if(p.baker)Object.assign(baker,{mode:p.baker[0],x:p.baker[1],y:p.baker[2],z:p.baker[3],yaw:p.baker[4]});
   if(p.impact){if(!world.impact||world.impact.d!==p.impact.d){world.impact={...p.impact};cataclysm.setImpact(world.impact);}}
   for(const sp of p.players){const q=players[sp.id];if(!q)continue;
-    if(sp.id===localId){const {x,z,height,yaw,pitch,speed,...rest}=sp;Object.assign(q,rest,{x,z,height});pred.mode=sp.mode;pred.fish=sp.fish;pred.slap=sp.slap;pred.rifle=sp.rifle;pred.ammo=sp.ammo;pred.reload=sp.reload;pred.baly=sp.baly;if(sp.mode!=='walk'||sp.tp!==pred.tp){if(pred.land!==sp.land)input.yaw+=(sp.land?1:-1)*boatState.heading;pred.x=x;pred.z=z;pred.height=height;pred.land=sp.land;pred.vy=0;pred.tp=sp.tp;}}
+    if(sp.id===localId){const {x,z,height,yaw,pitch,speed,...rest}=sp;Object.assign(q,rest,{x,z,height});pred.mode=sp.mode;pred.fish=sp.fish;pred.slap=sp.slap;pred.rifle=sp.rifle;pred.ammo=sp.ammo;pred.reload=sp.reload;pred.baly=sp.baly;pred.water=sp.water;pred.drown=sp.drown;if(sp.mode!=='walk'||sp.tp!==pred.tp){if(pred.land!==sp.land)input.yaw+=(sp.land?1:-1)*boatState.heading;pred.x=x;pred.z=z;pred.height=height;pred.land=sp.land;pred.vy=0;pred.tp=sp.tp;}}
     else Object.assign(q,sp);
     if(sp.mode==='gone'&&models[sp.id])models[sp.id].visible=false;}
   for(let i=0;i<p.fishing.length;i++)if(fishing[i])Object.assign(fishing[i],p.fishing[i]);
   if(p.ragdolls)ragdolls.sync(p.ragdolls,id=>id==='baker'?baker.model:models[id]);
   gulls.apply(p.gulls);
 }
-function snapshot(){return {type:'snapshot',time:elapsed,boat:boatState,impact:world.impact,bucket:world.bucket,money:world.money,trig:world.trig,baker:[baker.mode,+baker.x.toFixed(2),+baker.y.toFixed(2),+baker.z.toFixed(2),+baker.yaw.toFixed(2)],rifles:world.rifles,gulls:gulls.snapshot(),players,ragdolls:ragdolls.active.size?ragdolls.snapshot():null,fishing:fishing.map(f=>({phase:f.phase,progress:f.progress,tension:f.tension,target:f.target,needle:f.needle,vel:f.vel,run:f.run,species:f.species,caught:f.caught,combo:f.combo}))};}
+function snapshot(){return {type:'snapshot',time:elapsed,boat:boatState,impact:world.impact,bucket:world.bucket,money:world.money,trig:world.trig,bucketAt:world.bucketAt,bucketPos:world.bucketPos,rope:world.rope,guitar:world.guitar,shoo:world.shoo,talk:world.talk,baker:[baker.mode,+baker.x.toFixed(2),+baker.y.toFixed(2),+baker.z.toFixed(2),+baker.yaw.toFixed(2)],rifles:world.rifles,gulls:gulls.snapshot(),players,ragdolls:ragdolls.active.size?ragdolls.snapshot():null,fishing:fishing.map(f=>({phase:f.phase,progress:f.progress,tension:f.tension,target:f.target,needle:f.needle,vel:f.vel,run:f.run,species:f.species,caught:f.caught,combo:f.combo}))};}
 function changeCharacter(i){selected=i;if(net.connected){if(net.host){try{lobby.join(0,i);}catch{toast('Esse personagem já foi escolhido.');}broadcastLobby();}else net.send({type:'pick',character:i});return;}lobby=new Lobby();lobby.join(0,i);updateLobby();}
 
 // ---------- Partida ----------
 function start(isSolo,roster){
   if(running)return;solo=isSolo;host=isSolo||net.host;const ros=[...roster].sort((a,b)=>a.id-b.id);localId=isSolo?0:Math.max(0,ros.findIndex(r=>r.id===(host?0:myNet)));roster=ros;running=true;paused=false;elapsed=0;ended=false;cinematic=false;boatState=BERTH_STATE();
-  players=roster.map((p,i)=>({...newPlayer(i,p.character),net:p.id}));world={impact:null,bucket:[],rifles:[-1,-1],money:0,trig:null,stolen:{}};fishing=players.map(()=>new Fishing());models=players.map(p=>spawn(p.character));menuCharacters.forEach(m=>m.visible=false);
+  players=roster.map((p,i)=>({...newPlayer(i,p.character),net:p.id}));world=NEW_WORLD();gh.stop();ropeGame=null;fishing=players.map(()=>new Fishing());models=players.map(p=>spawn(p.character));menuCharacters.forEach(m=>m.visible=false);
   pred=host?null:{...players[localId]};setFirstPerson(models[localId],true);viewmodel.setLook(LOOKS[players[localId].character]);
   input.enabled=true;input.yaw=Math.PI;input.pitch=-.06;input.lock();show('lock-hint',!input.locked);sound.start();show('home',false);show('lobby',false);show('settings',false);show('hud');show('test-tools',isSolo);document.body.classList.add('playing');
-  toast(isSolo?'Teste solo · atracados no cais da vila · F pesca · E leme/rifle · TAB chama o meteoro':`${players.length} a bordo, atracados no cais da vila. Pesquem, vendam no mercado e cuidado com as gaivotas!`);
+  toast(isSolo?'Teste solo · atracados no cais de Laguna · F pesca · E pega itens · TAB chama o meteoro':`${players.length} a bordo, amarrados no cais de Laguna. Pesquem, levem o balde ao mercado e cuidado com as gaivotas!`);
 }
 function dropRifle(p){if(p.rifle<0)return;const slot=p.rifle;p.rifle=-1;world.rifles[slot]=-1;stateEvent('rifle',{id:p.id,slot,on:false});}
-function rag(id,reason,velocity){const p=players[id];if(p.mode==='ragdoll'||p.mode==='gone')return;dropRifle(p);p.mode='ragdoll';p.ragTime=0;fishing[id].reset();stateEvent('ragdoll',{id,reason,velocity:velocity||[(Math.random()-.5)*3,-1,(Math.random()-.5)*3]});}
+function rag(id,reason,velocity){const p=players[id];if(p.mode==='ragdoll'||p.mode==='gone')return;dropRifle(p);dropAll(p);p.mode='ragdoll';p.ragTime=0;fishing[id].reset();stateEvent('ragdoll',{id,reason,velocity:velocity||[(Math.random()-.5)*3,-1,(Math.random()-.5)*3]});}
+// Larga balde, corda e violão (tapa, queda, meteoro)
+function dropAll(p){
+  if(world.bucketAt===p.id){const w=worldOf(p),g=island.ground(w.x,w.z);if(!p.land){world.bucketAt=-1;}else if(g>-.3){world.bucketAt=-2;world.bucketPos=[+w.x.toFixed(2),g,+w.z.toFixed(2)];}else world.bucketAt=-1;stateEvent('bucket',{id:p.id,on:false,home:world.bucketAt===-1});}
+  if(world.rope.h===p.id&&(world.rope.s==='held'||world.rope.s==='pull')){if(world.rope.s==='pull')ragdolls.pull.delete(world.rope.pid);world.rope={s:'boat',h:-1,tgt:-1,pid:-1,t:0};stateEvent('rope',{id:p.id,on:false});}
+  if(world.guitar===p.id){world.guitar=-1;if(p.mode==='guitar')p.mode='walk';stateEvent('guitar',{id:p.id,on:false});}
+  if(world.shoo&&world.shoo.pid===p.id)resolveShoo(true);
+}
+function bucketWorld(){if(world.bucketAt===-2&&world.bucketPos)return V(...world.bucketPos);if(world.bucketAt>=0&&players[world.bucketAt]){const q=players[world.bucketAt];return worldOf(q.id===localId?me():q,.35);}return boat.localToWorld(boat.userData.bucketLocal.clone());}
+const handsFree=p=>p.rifle<0&&world.bucketAt!==p.id&&!(world.rope.h===p.id&&world.rope.s!=='tied')&&world.guitar!==p.id;
+// Posição de cada cabeço (mundo) e da corda nas mãos
+const bollardPos=i=>{const b=BOLLARDS[i];return V(ISLAND.x+b.u,b.y,ISLAND.z+b.v);};
+function handPos(id){const m=models[id];if(id===localId&&!window.__peixesThirdPerson&&!cinematic)return camera.localToWorld(V(.22,-.28,-.5));return m?m.userData.joints.foreL.localToWorld(V(-.08,-.3,.05)):V();}
 // Fim do ragdoll: quem caiu na água volta para o barco; quem caiu no convés, no cais ou na ilha levanta ali mesmo
 function standUp(p){const r=ragdolls.active.get(p.id),local=p.id===localId,was=p.land;let spot=null;
   if(r&&!r.launched){const T=r.bodies.torso.position,l=boat.worldToLocal(V(T.x,T.y,T.z));
     if(insideBoat(l.x,l.z))spot={land:0,x:l.x,z:l.z,h:floorAt(l.x,l.z)};
     else if(!island.exploded){const [x,z]=island.collide(T.x,T.z,.3),g=island.ground(x,z);if(g>-.35){if(T.y>g+2&&p.ragTime<CONFIG.respawnAfter+4)return;spot={land:1,x,z,h:g};}}}
-  const water=!spot;if(water){const sp=SPAWNS[p.id%SPAWNS.length];spot={land:0,x:sp[0],z:sp[1],h:0};}
+  const water=!spot;if(water){if(p.water&&!p.rescued)return;const sp=SPAWNS[p.id%SPAWNS.length];spot={land:0,x:sp[0],z:sp[1],h:0};}
   if(was!==spot.land){p.yaw+=(spot.land?1:-1)*boatState.heading;if(local)input.yaw+=(spot.land?1:-1)*boatState.heading;}
-  p.mode='walk';p.land=spot.land;p.x=spot.x;p.z=spot.z;p.height=spot.h;p.vy=0;p.tp++;stateEvent('respawn',{id:p.id,water});}
+  p.mode='walk';p.land=spot.land;p.x=spot.x;p.z=spot.z;p.height=spot.h;p.vy=0;p.tp++;p.water=0;p.drown=0;p.rescued=0;stateEvent('respawn',{id:p.id,water});}
+// Na água: 20 s boiando para alguém laçar. Resgatado = levanta no barco (ou no cais, ao lado de quem puxou); senão acorda no cais.
+function rescueTo(p,holder){const r=world.rope;ragdolls.pull.delete(p.id);world.rope={s:'held',h:holder.id,tgt:-1,pid:-1,t:0};
+  const hp=worldOf(holder),was=p.land;ragdolls.remove(p.id);p.mode='walk';p.water=0;p.drown=0;p.rescued=0;p.vy=0;p.tp++;
+  if(holder.land){const [x,z]=island.collide(hp.x+.8,hp.z,.3);p.land=1;p.x=x;p.z=z;p.height=island.ground(x,z);}else{const l=boat.worldToLocal(hp.clone());let x=clamp(l.x+(l.x>0?-.7:.7),-.55,.55),z=clamp(l.z,-3,3);if(!insideBoat(x,z))x=0;p.land=0;p.x=x;p.z=z;p.height=floorAt(x,z);}
+  if(was!==p.land){p.yaw+=(p.land?1:-1)*boatState.heading;if(p.id===localId)input.yaw+=(p.land?1:-1)*boatState.heading;}
+  stateEvent('rescued',{id:p.id});stateEvent('respawn',{id:p.id,water:false});}
+function drownRespawn(p){ragdolls.pull.delete(p.id);if(world.rope.pid===p.id)world.rope={s:'held',h:world.rope.h,tgt:-1,pid:-1,t:0};ragdolls.remove(p.id);
+  if(p.land===0){p.yaw+=boatState.heading;if(p.id===localId)input.yaw+=boatState.heading;}
+  p.mode='walk';p.land=1;p.x=ISLAND.x+(p.id%3-1)*.7;p.z=ISLAND.z+DOCK.v0+10+(p.id%2)*.8;p.height=island.exploded?0:island.ground(p.x,p.z);p.vy=0;p.tp++;p.water=0;p.drown=0;
+  if(island.exploded){p.land=0;const sp=SPAWNS[p.id%SPAWNS.length];p.x=sp[0];p.z=sp[1];p.height=0;}
+  stateEvent('drowned',{id:p.id});stateEvent('respawn',{id:p.id,water:true});}
 function floorAt(x,z){const benches=[[-2.84,1.29],[-.258,1.48],[2.279,1.225]];for(const [bz,w]of benches)if(Math.abs(z-bz)<.32&&Math.abs(x)<w)return .79;return 0;}
 // Movimento com autoridade local (anfitrião para si; convidado com predição e envio da posição).
 function moveLocal(p,i,dt,t){
@@ -169,7 +219,7 @@ function moveLocal(p,i,dt,t){
     if(moved)p.speed=speed;else if(!p.land&&displayTick%90===0&&floorAt(p.x+mx*.5,p.z+mz*.5)>.1)toast('ESPAÇO para pular o banco.');}
   p.vy-=10*dt;p.height+=p.vy*dt;const floor=floorHere();if(p.height<floor){if(p.vy<-3.2)sound.effect('land');p.height=floor;p.vy=0;}
   const w=weatherAt(story);if(!p.land&&w.storm>.25){const ox=p.x,oz=p.z;p.x+=Math.sin(t*2.1)*w.storm*.17*dt;p.z+=Math.cos(t*1.7)*w.storm*.13*dt;if(!insideBoat(p.x,p.z)){p.x=ox;p.z=oz;}}
-  if(p.speed&&grounded){stepDist+=p.speed*dt;if(stepDist>(i.run?1.15:.78)){stepDist=0;sound.effect('step');}}
+  if(p.speed&&grounded){stepDist+=p.speed*dt;if(stepDist>(i.run?1.55:.8)){stepDist=0;sound.effect('step');}}
 }
 // No barco: a borda é parede (ninguém cai por andar). Só passa se do outro lado houver chão firme na altura de um passo (cais, praia).
 function boatMove(p,dx,dz){
@@ -184,7 +234,7 @@ function boatMove(p,dx,dz){
 }
 // Em terra: colide com paredes, balcões, casas e árvores; não entra no mar; volta ao barco pisando no convés
 function landMove(p,dx,dz){
-  const [nx,nz]=island.collide(p.x+dx,p.z+dz,.3);
+  let [nx,nz]=island.collide(p.x+dx,p.z+dz,.3);if(villagers&&!island.exploded)[nx,nz]=villagers.push(nx,nz);
   // do cais para o barco: o convés pode estar a ~60 cm (vão entre a borda do cais e a borda caminhável)
   const dl=Math.hypot(dx,dz)||1;let l=null;for(const k of [0,.25,.5,.75,1]){const c=boat.worldToLocal(V(nx+dx/dl*k,p.height,nz+dz/dl*k));if(insideBoat(c.x,c.z)){l=c;break;}}
   if(l){const f=floorAt(l.x,l.z),deck=boat.localToWorld(V(l.x,CONFIG.deckY+f,l.z)).y;if(p.height-deck<1.4&&p.height-deck>-.6){const wy=p.yaw;p.land=0;p.x=l.x;p.z=l.z;p.height=Math.max(f,p.height-deck+f);p.vy=Math.min(p.vy,0);p.yaw=wy-boatState.heading;if(p===me())input.yaw-=boatState.heading;return true;}}
@@ -194,38 +244,60 @@ function landMove(p,dx,dz){
 function doSlap(p){p.slap=1;const wy=worldYaw(p),fx=Math.sin(wy),fz=Math.cos(wy),pw=worldOf(p);let hit=false;
   const facing=(w,range)=>{const dx=w.x-pw.x,dz=w.z-pw.z,d=Math.hypot(dx,dz);return d<range&&Math.abs(w.y-pw.y)<1.3&&(dx*fx+dz*fz)/(d||1)>.3?[dx/(d||1),dz/(d||1)]:null;};
   for(const q of players){if(q.id===p.id||q.mode==='ragdoll'||q.mode==='gone')continue;const dir=facing(worldOf(q),CONFIG.slapRange);if(dir){rag(q.id,'slap',[dir[0]*7.5,3.4,dir[1]*7.5]);hit=true;}}
-  if(baker.mode!=='ragdoll'){const dir=facing(V(baker.x,baker.y,baker.z),CONFIG.slapRange+.55);if(dir){bakerRag([dir[0]*7,4,dir[1]*7]);hit=true;}}
+  if(baker.mode==='work'||baker.mode==='walk'){const dir=facing(V(baker.x,baker.y,baker.z),CONFIG.slapRange+.55);if(dir){bakerRag([dir[0]*7,4,dir[1]*7]);hit=true;}}
   stateEvent('slap',{id:p.id,hit});}
 // ---------- Padeiro ----------
 function bakerHome(){const b=island.shop.points.baker;return V(ISLAND.x+b.u,SHOP.floor,ISLAND.z+b.v);}
-function bakerRag(vel){if(baker.mode==='ragdoll'||island.exploded)return;baker.mode='ragdoll';baker.t=0;stateEvent('bakerSlap',{velocity:vel});}
+function bakerRag(vel){if(baker.mode==='ragdoll'||baker.mode==='gone'||baker.mode==='talk'||island.exploded)return;baker.mode='ragdoll';baker.t=0;stateEvent('bakerSlap',{velocity:vel});}
 function bakerPath(){const L=(u,v)=>V(ISLAND.x+u,0,ISLAND.z+v),u=baker.x-ISLAND.x,v=baker.z-ISLAND.z,h=island.shop.points.baker;
   if(v>23.2&&u>3.9&&u<15.8)return [L(h.u,h.v)];
   const pts=[];if(u<SHOP.u0||u>SHOP.u1||v<SHOP.v0||v>SHOP.v1)pts.push(L(0,1.5),L(0,6),L(0,21.3));else if(v<21)pts.push(L(Math.max(-2.5,Math.min(2.5,u)),v),L(Math.max(-2.5,Math.min(2.5,u)),21.3));
   pts.push(L(15,21.3),L(15,23.7),L(h.u,h.v));return pts;}
+// "É... Tenho que sair aqui": digitando, pausa dramática, 1 s de silêncio e o padeiro some (volta 10 s depois pela porta)
+const TALK={first:'É...',rest:' Tenho que sair aqui',dots:.54,pause:2.05,char:.055,hold:1};TALK.end=TALK.pause+TALK.rest.length*TALK.char+TALK.hold;
+function talkText(k){if(k<0)return '';if(k<TALK.pause)return TALK.first.slice(0,Math.min(TALK.first.length,1+Math.floor(k/(TALK.dots/3))));return TALK.first+TALK.rest.slice(0,Math.floor((k-TALK.pause)/TALK.char));}
+function bakerStartTalk(p){baker.mode='talk';baker.t=0;baker.talkTo=p.id;world.talk={at:elapsed,id:p.id};stateEvent('bakerTalk',{id:p.id});}
 function bakerTick(dt){
   if(island.exploded)return;
-  if(baker.mode==='ragdoll'){baker.t+=dt;if(baker.t>CONFIG.respawnAfter){const r=ragdolls.active.get('baker'),tp=r?r.bodies.torso.position:baker;[baker.x,baker.z]=island.collide(tp.x,tp.z,.3);baker.y=island.ground(baker.x,baker.z);baker.mode='walk';baker.path=bakerPath();stateEvent('bakerUp',{});}}
+  if(baker.mode==='talk'){baker.t+=dt;if(baker.t>=TALK.end){baker.mode='gone';baker.t=0;world.talk=null;stateEvent('bakerVanish',{at:[baker.x,baker.y,baker.z]});}return;}
+  if(baker.mode==='gone'){baker.t+=dt;if(baker.t>=10){baker.x=ISLAND.x;baker.z=ISLAND.z+SHOP.v0-3;baker.y=island.ground(baker.x,baker.z);baker.yaw=0;baker.mode='walk';baker.path=bakerPath();stateEvent('bakerBack',{});}return;}
+  if(baker.mode==='ragdoll'){baker.t+=dt;if(baker.water&&baker.t>12){baker.water=0;ragdolls.remove('baker');baker.mode='gone';baker.t=5;stateEvent('bakerUp',{});return;}if(!baker.water&&baker.t>CONFIG.respawnAfter){const r=ragdolls.active.get('baker'),tp=r?r.bodies.torso.position:baker;[baker.x,baker.z]=island.collide(tp.x,tp.z,.3);baker.y=island.ground(baker.x,baker.z);baker.mode='walk';baker.path=bakerPath();stateEvent('bakerUp',{});}}
   else if(baker.mode==='walk'){const goal=baker.path[0];if(!goal){baker.mode='work';baker.yaw=Math.PI;const h=bakerHome();baker.x=h.x;baker.z=h.z;baker.y=h.y;return;}
     const dx=goal.x-baker.x,dz=goal.z-baker.z,d=Math.hypot(dx,dz);if(d<.12){baker.path.shift();return;}const sp=Math.min(d,1.25*dt);baker.x+=dx/d*sp;baker.z+=dz/d*sp;baker.yaw=Math.atan2(dx,dz);baker.y=island.ground(baker.x,baker.z);}
 }
-function renderBaker(t,dt){const m=baker.model;if(!m)return;if(island.exploded){m.visible=false;return;}if(baker.mode==='ragdoll'){if(!ragdolls.active.has('baker')&&!host)ragdolls.launch('baker',m,[0,3,0]);return;}if(ragdolls.active.has('baker'))ragdolls.remove('baker');
-  if(baker.mode==='work'){const h=bakerHome();baker.x=h.x;baker.y=h.y;baker.z=h.z;}
+function renderBaker(t,dt){const m=baker.model;if(!m)return;if(island.exploded||baker.mode==='gone'){m.visible=false;if(ragdolls.active.has('baker')&&baker.mode==='gone')ragdolls.remove('baker');return;}if(baker.mode==='ragdoll'){if(!ragdolls.active.has('baker')&&!host)ragdolls.launch('baker',m,[0,3,0]);return;}if(ragdolls.active.has('baker'))ragdolls.remove('baker');
+  if(baker.mode==='work'||baker.mode==='talk'){const h=bakerHome();baker.x=h.x;baker.y=h.y;baker.z=h.z;}
   const d=m.userData.disp||(m.userData.disp={x:baker.x,z:baker.z,y:baker.y,yaw:baker.yaw}),k=Math.min(1,dt*10),px=d.x,pz=d.z;d.x+=(baker.x-d.x)*k;d.z+=(baker.z-d.z)*k;d.y+=(baker.y-d.y)*k;let dy=baker.yaw-d.yaw;dy=Math.atan2(Math.sin(dy),Math.cos(dy));d.yaw+=dy*Math.min(1,dt*8);
   m.visible=true;m.position.set(d.x,d.y,d.z);m.rotation.set(0,d.yaw,0);const sp=Math.hypot(d.x-px,d.z-pz)/Math.max(dt,1e-4);
   // olha para quem chega no balcão
   let look=null,bd=6;for(const p of players){if(p.mode==='gone')continue;const w=worldOf(p===players[localId]?me():p,1.6);const dd=Math.hypot(w.x-d.x,w.z-d.z);if(dd<bd){const l=lookAngles(V(d.x,d.y+1.6,d.z),d.yaw,w);if(l){bd=dd;look=l;}}}
   m.userData.anim.update(dt,{time:t,speed:baker.mode==='walk'?Math.min(sp,1.6):0,yaw:d.yaw,grounded:true,look});}
 function interact(p){
-  // Rifle: devolve de qualquer lugar; pega perto do suporte (antes do leme, que fica ao lado)
+  const w=worldOf(p),near=(x,z,r)=>Math.hypot(w.x-x,w.z-z)<r,sell=island.shop.points.sell,sellW=V(ISLAND.x+sell.u,0,ISLAND.z+sell.v);
+  // o que está na mão sai primeiro
+  if(p.mode==='guitar'){world.guitar=-1;p.mode='walk';stateEvent('guitar',{id:p.id,on:false});return;}
   if(p.rifle>=0){dropRifle(p);return;}
+  if(world.bucketAt===p.id){if(p.land&&near(sellW.x,sellW.z,2.6)&&world.bucket.length){sellBucket(p);return;}
+    if(!p.land){world.bucketAt=-1;}else{const g=island.ground(w.x+Math.sin(p.yaw)*.6,w.z+Math.cos(p.yaw)*.6);world.bucketAt=-2;world.bucketPos=[+(w.x+Math.sin(p.yaw)*.6).toFixed(2),g,+(w.z+Math.cos(p.yaw)*.6).toFixed(2)];}
+    stateEvent('bucket',{id:p.id,on:false,home:world.bucketAt===-1});return;}
+  if(world.rope.h===p.id&&world.rope.s==='held'){world.rope={s:'boat',h:-1,tgt:-1,pid:-1,t:0};stateEvent('rope',{id:p.id,on:false});return;}
+  const bucketW=world.bucketAt===-1?boat.localToWorld(boat.userData.bucketLocal.clone()):world.bucketAt===-2&&world.bucketPos?V(...world.bucketPos):null;
+  if(bucketW&&handsFree(p)&&Math.hypot(w.x-bucketW.x,w.z-bucketW.z)<1.3&&Math.abs(w.y-bucketW.y)<1.4){fishing[p.id].reset();if(p.mode==='fish')p.mode='walk';world.bucketAt=p.id;world.bucketPos=null;stateEvent('bucket',{id:p.id,on:true});return;}
+  // corda amarrada: solta no cunho da proa (no barco) ou no cabeço (no cais)
+  if(world.rope.s==='tied'&&handsFree(p)){const cleat=boat.localToWorld(V(BOW_CLEAT.x,BOW_CLEAT.y,BOW_CLEAT.z)),bp=bollardPos(world.rope.tgt);if(Math.hypot(w.x-cleat.x,w.z-cleat.z)<1.5||Math.hypot(w.x-bp.x,w.z-bp.z)<1.5){world.rope={s:'held',h:p.id,tgt:-1,pid:-1,t:0};stateEvent('untie',{id:p.id});return;}}
   if(p.land){
-    const sell=island.shop.points.sell;if(Math.hypot(p.x-(ISLAND.x+sell.u),p.z-(ISLAND.z+sell.v))<2.4){sellBucket(p);return;}
+    if(near(sellW.x,sellW.z,2.4)){sellBucket(p);return;}
+    if(baker.mode==='work'&&!world.talk&&Math.hypot(w.x-baker.x,w.z-baker.z)<2.6){bakerStartTalk(p);return;}
     if(island.shop.points.lanes.some(l=>Math.hypot(p.x-(ISLAND.x+l.u),p.z-(ISLAND.z+l.v))<1.9)){toastFor(p.id,'Caixa de autoatendimento: logo mais é aqui que você passa as suas compras.');return;}
     return;}
-  if(p.mode==='walk'&&Math.hypot(p.x-RACK.x,p.z-RACK.z)<1.15){const slot=world.rifles.findIndex(r=>r<0);if(slot<0){toastFor(p.id,'Os dois rifles já estão em uso.');return;}fishing[p.id].reset();p.rifle=slot;world.rifles[slot]=p.id;stateEvent('rifle',{id:p.id,slot,on:true});return;}
+  // no convés: pega o item mais perto (corda, violão ou rifle)
+  const dRope=world.rope.s==='boat'?Math.hypot(p.x-ROPE_HOME.x,p.z-ROPE_HOME.z):9,dGuitar=world.guitar<0?Math.hypot(p.x-GUITAR_SPOT.x,p.z-GUITAR_SPOT.z):9,dRack=Math.hypot(p.x-RACK.x,p.z-RACK.z),nearest=Math.min(dRope,dGuitar,dRack);
+  if(p.mode==='walk'&&handsFree(p)&&dRope<1.2&&dRope===nearest){world.rope={s:'held',h:p.id,tgt:-1,pid:-1,t:0};stateEvent('rope',{id:p.id,on:true});return;}
+  if(p.mode==='walk'&&handsFree(p)&&dGuitar<1.2&&dGuitar===nearest){fishing[p.id].reset();world.guitar=p.id;p.mode='guitar';p.speed=0;stateEvent('guitar',{id:p.id,on:true});return;}
+  if(p.mode==='walk'&&dRack<1.15){if(!handsFree(p)){toastFor(p.id,'Mãos ocupadas: largue o que está segurando (E).');return;}const slot=world.rifles.findIndex(r=>r<0);if(slot<0){toastFor(p.id,'Os dois rifles já estão em uso.');return;}fishing[p.id].reset();p.rifle=slot;world.rifles[slot]=p.id;stateEvent('rifle',{id:p.id,slot,on:true});return;}
   if(p.mode==='drive'){p.mode='walk';p.x=0;p.z=-2.65;p.tp++;stateEvent('drive',{id:p.id,on:false});return;}
   if(Math.hypot(p.x,p.z+2.8)>1.8){toastFor(p.id,'Chegue perto do leme, na popa do barco.');return;}
+  if(!handsFree(p)){toastFor(p.id,'Mãos ocupadas: largue o que está segurando (E).');return;}
   if(engineDead){toastFor(p.id,'O motor morreu. Não há para onde fugir.');return;}
   if(players.some(q=>q.mode==='drive')){toastFor(p.id,'Outro pescador já está no leme.');return;}
   fishing[p.id].reset();p.mode='drive';p.x=0;p.z=-3.3;p.height=0;p.vy=0;p.tp++;stateEvent('drive',{id:p.id,on:true});
@@ -233,7 +305,8 @@ function interact(p){
 // Peixaria do mercado: vende o balde inteiro (o balde fica no barco, então o barco precisa estar atracado)
 function sellBucket(p){
   if(!world.bucket.length){toastFor(p.id,'O balde está vazio. Vá pescar primeiro!');return;}
-  if(!docked()){toastFor(p.id,'O balde ficou no barco: atraque no cais da vila para vender o pescado.');return;}
+  const sell=island.shop.points.sell,sx=ISLAND.x+sell.u,sz=ISLAND.z+sell.v,here=world.bucketAt>=0?(()=>{const q=players[world.bucketAt];const w=worldOf(q.id===localId?me():q);return q.land&&Math.hypot(w.x-sx,w.z-sz)<3;})():world.bucketAt===-2&&world.bucketPos&&Math.hypot(world.bucketPos[0]-sx,world.bucketPos[2]-sz)<3;
+  if(!here){toastFor(p.id,'Traga o balde até aqui! Pegue o balde no barco (E) e carregue até a peixaria.');return;}
   let total=0,top=null;for(const [sp,kg]of world.bucket){const v=catchValue(sp,kg);total+=v;if(!top||v>top[2])top=[sp,kg,v];}
   total=Math.round(total*100)/100;world.money=Math.round((world.money+total)*100)/100;const count=world.bucket.length;world.bucket=[];
   stateEvent('sold',{id:p.id,total,count,best:top,money:world.money});}
@@ -245,7 +318,12 @@ function tickPlayer(p,i,dt,t,isLocal){
   const f=fishing[p.id];p.slap=Math.max(0,p.slap-dt*2.2);
   if(p.mode==='gone')return;
   p.reload=Math.max(0,(p.reload||0)-dt);p.cool=Math.max(0,(p.cool||0)-dt);p.baly=Math.max(0,(p.baly||0)-dt);if(p.reload===0&&p.ammo<=0)p.ammo=5;
-  if(p.mode==='ragdoll'){p.ragTime+=dt;if(p.ragTime>CONFIG.respawnAfter)standUp(p);return;}
+  if(p.mode==='ragdoll'){p.ragTime+=dt;if(p.water){p.drown=Math.max(0,(p.drown??DROWN_TIME)-dt);if(p.drown<=0&&world.rope.pid!==p.id)drownRespawn(p);return;}if(p.ragTime>CONFIG.respawnAfter)standUp(p);return;}
+  if(i.strum&&p.mode==='guitar')stateEvent('strum',{id:p.id,notes:i.strum.slice(0,8)});
+  if(i.song&&p.mode==='guitar')stateEvent('song',{id:p.id,...i.song});
+  if(i.throwAt>=0)throwRope(p,i.throwAt,!!i.throwOk);
+  if(i.shoo&&world.shoo&&world.shoo.pid===p.id)resolveShoo(i.shoo===2);
+  p.swing=!!i.swing;
   if(i.yaw!==undefined){p.yaw=i.yaw;p.pitch=i.pitch;}
   if(p.rifle>=0){
     // Tiro: o atirador informa o raio e a gaivota que viu na mira; o anfitrião confirma se ela ainda está viva
@@ -254,21 +332,40 @@ function tickPlayer(p,i,dt,t,isLocal){
       if(hitPos){const w=boat.localToWorld(V(...hitPos));to[0]=w.x;to[1]=w.y;to[2]=w.z;}stateEvent('shot',{id:p.id,to});if(p.ammo<=0){p.reload=RELOAD;stateEvent('reload',{id:p.id});}}
   }else if(i.slap&&p.slap===0)doSlap(p);
   if(i.interact)interact(p);
-  if(p.mode==='drive'){p.speed=0;return;}
-  if(i.cast&&p.rifle>=0)toastFor(p.id,'Devolva o rifle (E) para pescar.');else if(i.cast){if(f.phase==='idle')castLine(p,f);else if(f.phase==='bite')f.reel();else if(f.phase==='waiting'){f.reset();p.mode='walk';}}
+  if(p.mode==='drive'||p.mode==='guitar'){p.speed=0;return;}
+  if(i.cast&&p.rifle>=0)toastFor(p.id,'Devolva o rifle (E) para pescar.');else if(i.cast&&!handsFree(p)&&p.mode!=='guitar')toastFor(p.id,'Mãos ocupadas: largue o que está segurando (E) para pescar.');else if(i.cast&&p.mode!=='guitar'){if(f.phase==='idle')castLine(p,f);else if(f.phase==='bite')f.reel();else if(f.phase==='waiting'){f.reset();p.mode='walk';}}
   const result=f.step(dt,!!i.reel,t,p.baly>0);if(result){if(result==='caught')world.bucket.push([f.lastSpecies,f.lastWeight]);stateEvent(result,{id:p.id,fish:f.caught,species:f.lastSpecies,weight:f.lastWeight});if(result==='caught'&&f.lastSpecies===BALY){p.baly=CONFIG.balyTime;stateEvent('baly',{id:p.id});}if(result==='caught'||result==='escaped'){p.mode='walk';p.fish=f.caught;}}
   if(p.mode==='fish'&&(i.x||i.z)){f.reset();p.mode='walk';}
   if(p.mode==='walk'){if(isLocal)moveLocal(p,i,dt,t);else if(i.px!==undefined&&i.tp===p.tp){p.x=i.px;p.z=i.pz;p.height=i.ph;p.speed=i.speed;p.land=i.land?1:0;}}else p.speed=0;
 }
+// Corda: o cliente de quem arremessa resolve o minigame e manda o alvo e se acertou; o anfitrião valida a distância
+function throwRope(p,code,ok){const r=world.rope;if(r.h!==p.id||r.s!=='held')return;const from=handPos(p.id);let to=null,target=null;
+  if(code<100&&BOLLARDS[code]){to=bollardPos(code);target={kind:'b',i:code};}
+  else{const q=players[code-100];const rg=q&&ragdolls.active.get(q.id);if(q&&q.water&&rg){const t=rg.bodies.torso.position;to=V(t.x,t.y,t.z);target={kind:'p',id:q.id};}}
+  if(!to||from.distanceTo(to)>ROPE.max+2)return;
+  world.rope={s:'fly',h:p.id,tgt:target.kind==='b'?target.i:-1,pid:target.kind==='p'?target.id:-1,t:elapsed,ok,from:from.toArray().map(v=>+v.toFixed(2)),to:to.toArray().map(v=>+v.toFixed(2))};stateEvent('ropeThrow',{id:p.id});}
+function ropeTick(dt){const r=world.rope;
+  if(r.s==='fly'&&elapsed-r.t>=ROPE.flight){const h=players[r.h];
+    if(!r.ok||!h||h.mode==='ragdoll'){world.rope={s:'held',h:r.h,tgt:-1,pid:-1,t:0};stateEvent('ropeMiss',{id:r.h,at:r.to});return;}
+    if(r.tgt>=0){world.rope={s:'tied',h:-1,tgt:r.tgt,pid:-1,t:elapsed};boatState.speed*=.3;stateEvent('ropeTied',{id:r.h,at:r.to});}
+    else{const q=players[r.pid];if(!q||!q.water){world.rope={s:'held',h:r.h,tgt:-1,pid:-1,t:0};return;}world.rope={s:'pull',h:r.h,tgt:-1,pid:r.pid,t:elapsed};q.rescued=1;stateEvent('ropeCatch',{id:r.h,target:r.pid,at:r.to});}}
+  if(r.s==='pull'){const h=players[r.h],q=players[r.pid],rg=q&&ragdolls.active.get(q.id);if(!h||!q||!rg||q.mode!=='ragdoll'){if(q)ragdolls.pull.delete(q.id);world.rope={s:'held',h:r.h,tgt:-1,pid:-1,t:0};return;}
+    const hp=worldOf(h),t=rg.bodies.torso.position,d=Math.hypot(hp.x-t.x,hp.z-t.z);ragdolls.pull.set(q.id,{x:hp.x,z:hp.z,speed:3.4});if(d<2.3||elapsed-r.t>14)rescueTo(q,h);}
+}
+// Espantar a gaivota: o anfitrião dá 8 s; o cliente de quem segura o balde joga e manda o resultado
+function resolveShoo(stole){const sh=world.shoo;if(!sh)return;world.shoo=null;const took=stole&&world.bucket.length>0;if(took){const item=world.bucket.pop();world.stolen[sh.gull]=item;}gulls.resolve(sh.gull,took);}
 const HULL_PTS=[[0,4.5],[0,-3.9],[1.55,0],[-1.55,0],[1.25,2.6],[-1.25,2.6],[1.25,-2.6],[-1.25,-2.6]];
 function boatHits(){if(island.exploded)return false;const h=boatState.heading,c=Math.cos(h),s=Math.sin(h);for(const [lx,lz]of HULL_PTS){if(island.ground(boatState.x+lx*c+lz*s,boatState.z-lx*s+lz*c)>-.85)return true;}return false;}
 function hostTick(dt,local){
   elapsed+=dt;const t=elapsed;story=storyTime(t,world.trig);const inputs=players.map(p=>p.id===localId?local:remoteInputs[p.net]||{});
   for(const p of players)tickPlayer(p,inputs[p.id]||{},dt,t,p.id===localId);
-  for(const k of Object.keys(remoteInputs))remoteInputs[k]={...remoteInputs[k],slap:false,interact:false,cast:false,jump:false,fall:false,fire:false,gull:-1};
+  for(const k of Object.keys(remoteInputs))remoteInputs[k]={...remoteInputs[k],slap:false,interact:false,cast:false,jump:false,fall:false,fire:false,gull:-1,throwAt:-1,shoo:0,strum:null};
   // Gaivotas ladras: só atacam com peixe no balde, mar calmo (na tempestade elas somem) e antes do meteoro
-  const w=weatherAt(story),n0=world.bucket.length,n1=gulls.simulate(dt,{active:story<CONFIG.asteroidAt-4&&!cinematic&&w.storm<.35,bucketCount:n0,time:t,water:()=>-.2});
-  for(const e of gulls.events.splice(0)){if(e.name==='stolen'){const item=world.bucket.pop();if(item)world.stolen[e.gull]=item;}stateEvent(e.name,e);}
+  const w=weatherAt(story),n0=world.bucket.length,held=world.bucketAt>=0&&players[world.bucketAt]?.mode!=='ragdoll';
+  gulls.simulate(dt,{active:story<CONFIG.asteroidAt-4&&!cinematic&&w.storm<.35,bucketCount:n0,time:t,water:()=>-.2,bucket:boat.worldToLocal(bucketWorld().setY(bucketWorld().y)),held});
+  for(const e of gulls.events.splice(0)){if(e.name==='stolen'){const item=world.bucket.pop();if(item)world.stolen[e.gull]=item;}if(e.name==='shoo'){if(!held||world.shoo){gulls.resolve(e.gull,true);continue;}world.shoo={gull:e.gull,pid:world.bucketAt,until:elapsed+9};stateEvent('shoo',{gull:e.gull,id:world.bucketAt});continue;}stateEvent(e.name,e);}
+  if(world.shoo&&elapsed>world.shoo.until)resolveShoo(true);
+  ropeTick(dt);
   // Barco (com colisão contra a ilha e o cais)
   const driver=players.find(p=>p.mode==='drive');
   if(story>=CONFIG.impactAt&&!engineDead){engineDead=true;if(driver){driver.mode='walk';driver.z=-2.65;driver.tp++;}stateEvent('engine');}
@@ -276,20 +373,25 @@ function hostTick(dt,local){
   if(driver&&!engineDead){const i=inputs[driver.id]||{};boatState.speed=clamp(boatState.speed+((i.z||0)*2.2-boatState.speed*.24)*dt,-1.4,5);boatState.heading-=(i.x||0)*dt*(.25+Math.abs(boatState.speed)*.16);}
   else boatState.speed*=Math.exp(-dt*(engineDead?2.5:.3));
   boatState.x+=Math.sin(boatState.heading)*boatState.speed*dt;boatState.z+=Math.cos(boatState.heading)*boatState.speed*dt;
+  // solto, o barco anda com o mar (na tempestade vai longe); amarrado, a corda segura a proa perto do cabeço
+  if(!driver&&world.rope.s!=='tied'&&!cinematic){const dr=driftAt(t,w.storm);boatState.x+=dr.x*dt;boatState.z+=dr.z*dt;boatState.heading+=dr.yaw*dt;}
+  if(world.rope.s==='tied'){const h=boatState.heading,c=Math.cos(h),sn=Math.sin(h),cx=boatState.x+BOW_CLEAT.z*sn,cz=boatState.z+BOW_CLEAT.z*c,bp=bollardPos(world.rope.tgt),dx=cx-bp.x,dz=cz-bp.z,d=Math.hypot(dx,dz);
+    if(d>ROPE.length){const k=(d-ROPE.length)/d;boatState.x-=dx*k;boatState.z-=dz*k;if(driver&&Math.abs(boatState.speed)>1.2&&d>ROPE.length+.6)stateEvent('thud',{});boatState.speed*=.6;}
+    const dr=driftAt(t,w.storm);if(!driver){boatState.x+=dr.x*dt*.4;boatState.z+=dr.z*dt*.4;}}
   if(boatHits()){boatState.x=prev.x;boatState.z=prev.z;boatState.heading=prev.h;if(Math.abs(boatState.speed)>.7)stateEvent('thud',{});boatState.speed*=-.25;}
   // O meteoro cai no meio da ilha e vem por cima do barco
   if(story>=CONFIG.asteroidAt&&!world.impact){const dx=boatState.x-ISLAND.x,dz=boatState.z-ISLAND.z,l=Math.hypot(dx,dz)||1;world.impact={x:ISLAND.x,z:ISLAND.z,d:0,dir:[dx/l*.75,dz/l*.75]};cataclysm.setImpact(world.impact);}
   if(story>=CONFIG.impactAt&&world.impact&&!world.impact.d){world.impact.d=Math.max(35,Math.hypot(world.impact.x-boatState.x,world.impact.z-boatState.z));
     // quem estava em terra vai junto com a ilha
     for(const p of players)if(p.land&&p.mode!=='gone'){const a=Math.random()*6.28;rag(p.id,'boom',[Math.cos(a)*18,26+Math.random()*14,Math.sin(a)*18]);}
-    if(baker.mode!=='ragdoll'){baker.mode='ragdoll';baker.t=-99;stateEvent('bakerSlap',{velocity:[8,34,-6],boom:true});}
+    if(baker.mode!=='ragdoll'&&baker.mode!=='gone'){baker.mode='ragdoll';baker.t=-99;stateEvent('bakerSlap',{velocity:[8,34,-6],boom:true});}
     stateEvent('explode',{});}
   bakerTick(dt);
   netTick+=dt;if(!solo&&netTick>.05){netTick=0;net.send(snapshot());}
 }
 function guestTick(dt,local){
   elapsed+=dt;story=storyTime(elapsed,world.trig);if(pred){moveLocal(pred,local,dt,elapsed);}
-  net.send(inputPacket({...local,px:pred.x,pz:pred.z,ph:pred.height,speed:pred.speed,tp:pred.tp,land:pred.land}));if(local.fire)local.fire=false;pred.fall=false;
+  net.send(inputPacket({...local,px:pred.x,pz:pred.z,ph:pred.height,speed:pred.speed,tp:pred.tp,land:pred.land}));if(local.song)net.send({type:'song',v:CONFIG.protocol,...local.song});if(local.fire)local.fire=false;pred.fall=false;
   boatState.x+=Math.sin(boatState.heading)*boatState.speed*dt;boatState.z+=Math.cos(boatState.heading)*boatState.speed*dt;
   if(boatTarget){const k=Math.min(1,dt*5);boatState.x+=(boatTarget.x-boatState.x)*k;boatState.z+=(boatTarget.z-boatState.z)*k;}
 }
@@ -335,7 +437,7 @@ function fpCamera(t,dt){
   prevGrounded=grounded;
   // tapa local: tranco horizontal no instante do golpe
   if(prevSlap>.66&&p.slap<=.66)jolt(-.4,3.4,2,-5);prevSlap=p.slap;
-  bobPhase+=dt*(moving?p.speed*4.2:0);const amp=moving?(p.speed>3?1.35:1):0;
+  bobPhase+=dt*(moving?p.speed*(p.speed>3?3.1:4.2):0);const amp=moving?(p.speed>3?1.35:1):0;
   const bob=Math.abs(Math.sin(bobPhase))*.045*amp,sway=Math.sin(bobPhase)*.018*amp;
   const yaw=p.mode==='drive'||p.mode==='walk'||p.mode==='fish'?input.yaw:p.yaw;
   for(const k of Object.values(kick))k.update(0,dt);
@@ -349,7 +451,7 @@ function fpCamera(t,dt){
   const f=fishing[localId];if(f?.phase==='reeling'){const s=f.tension*.004+(f.run>0?.004:0);camera.rotateX(Math.sin(t*43)*s);camera.rotateY(Math.sin(t*37+1)*s);}
   // Rifle: quadril → mira → luneta (acima de ~90% da mira a lente ocupa a tela, zoom 5x e sensibilidade reduzida)
   const holding=(p.rifle??-1)>=0&&p.mode==='walk',vm=viewmodel;camera.updateMatrixWorld();
-  vm.hemi.color.copy(environment.ambient.color);vm.hemi.groundColor.copy(environment.ambient.groundColor);vm.hemi.intensity=environment.ambient.intensity;vm.sun.color.copy(environment.sun.color);vm.sun.intensity=environment.sun.intensity*.8;vm.sun.position.copy(U.uSunDir.value).multiplyScalar(5);vm.scene.environment=scene.environment;
+  vm.hemi.color.copy(environment.ambient.color);vm.hemi.groundColor.copy(environment.ambient.groundColor);vm.hemi.intensity=environment.ambient.intensity*.72;vm.sun.color.copy(environment.sun.color);vm.sun.intensity=environment.sun.intensity*.7;vm.sun.position.copy(U.uSunDir.value).multiplyScalar(5);vm.scene.environment=scene.environment;
   const scopeK=smooth(.62,.95,vm.aim);vm.update(dt,{visible:holding&&!window.__peixesThirdPerson&&!cinematic,hide:scopeK>=.98,aiming:holding&&!!lastControls.aim,yaw:input.yaw,pitch:input.pitch,bob:bobPhase,moving:moving?1:0});
   const baly=p.baly>0?Math.min(1,p.baly/2):0;
   camera.fov=lerp(lerp(60+runFov*7,34,vm.aim),11.5,scopeK)+kick.fov.x+baly*(8+Math.sin(t*16.3)*3)*(1-scopeK);
@@ -357,7 +459,7 @@ function fpCamera(t,dt){
   input.aimScale=lerp(1,.2,scopeK);document.body.classList.toggle("scoped",scopeK>.5);$("scope").style.opacity=scopeK;show('scope',scopeK>.02);
   if(scopeK>0){const steady=!!lastControls.run;breath=lerp(breath,steady?.18:1,1-Math.exp(-dt*3));camera.rotateX((Math.sin(t*1.3)*.0035+Math.sin(t*2.9)*.0012)*breath*scopeK);camera.rotateY((Math.sin(t*.9+1)*.004+Math.sin(t*2.3)*.0015)*breath*scopeK);}
   // diagnóstico: câmera orbital de terceira pessoa para inspecionar as animações do próprio personagem
-  const tp=window.__peixesThirdPerson;setFirstPerson(models[localId],!tp,holding);if(tp){const a=tp.yaw??(yaw+2.4),d=tp.dist||2.6,W=v=>p.land?v:boat.localToWorld(v);const focus=V(p.x,(p.land?0:CONFIG.deckY)+p.height+1.1,p.z);camera.position.copy(W(focus.clone().add(V(Math.sin(a)*d,tp.h??.5,Math.cos(a)*d))));camera.lookAt(W(focus));camera.fov=tp.fov||50;}
+  const tp=window.__peixesThirdPerson,busy=holding||world.bucketAt===localId||(world.rope.h===localId&&world.rope.s!=='tied')||p.mode==='guitar';setFirstPerson(models[localId],!tp,busy);if(tp){const a=tp.yaw??(yaw+2.4),d=tp.dist||2.6,W=v=>p.land?v:boat.localToWorld(v);const focus=V(p.x,(p.land?0:CONFIG.deckY)+p.height+1.1,p.z);camera.position.copy(W(focus.clone().add(V(Math.sin(a)*d,tp.h??.5,Math.cos(a)*d))));camera.lookAt(W(focus));camera.fov=tp.fov||50;}
 }
 // Assistência de olhar, zoom e tremores do impacto
 function cameraDrama(t,dt){
@@ -416,8 +518,8 @@ function renderPlayers(t,dt){
     const hasRifle=(p.id===localId?me().rifle:p.rifle)>=0,since=(p.baly>0?.62:.85)-(p.cool||0)-.14;
     const rig=!hasRifle?null:p.reload>0?rigState('reload',RELOAD-p.reload):since>0&&since<CYCLE&&(p.cool||0)>0?rigState('cycle',since):rigState('idle',0);
     const floorH=src.land?island.ground(src.x,src.z):floorAt(src.x,src.z),boost=src.baly>0?1.6:1;
-    anim.update(dt*boost,{time:t+p.id*1.3,speed:p.id===localId?src.speed||0:Math.min(sp,5),strafe:sp>.1?(vx*Math.cos(bodyYaw)-vz*Math.sin(bodyYaw))/sp:0,yaw:bodyYaw,grounded:src.height<=floorH+.04,
-      fishing:phase,tension:f?.tension||0,reelHeld:p.id===localId?!!lastControls.reel:(f?.vel||0)>0,slap:p.slap,drive:p.mode==='drive',steer:steerVis,pitch:p.id===localId?input.pitch:p.pitch,look,roll:src.land?0:boat.userData.roll||0,rifle:hasRifle,aim:p.id===localId?!!lastControls.aim:false,rig,hideGun:p.id===localId&&!window.__peixesThirdPerson});}
+    anim.update(dt*boost,{time:t+p.id*1.3,speed:p.id===localId?src.speed||0:Math.min(sp,8),strafe:sp>.1?(vx*Math.cos(bodyYaw)-vz*Math.sin(bodyYaw))/sp:0,yaw:bodyYaw,grounded:src.height<=floorH+.04,
+      fishing:phase,tension:f?.tension||0,reelHeld:p.id===localId?!!lastControls.reel:(f?.vel||0)>0,slap:p.slap,drive:p.mode==='drive',steer:steerVis,pitch:p.id===localId?input.pitch:p.pitch,look,roll:src.land?0:boat.userData.roll||0,rifle:hasRifle,aim:p.id===localId?!!lastControls.aim:false,rig,hideGun:p.id===localId&&!window.__peixesThirdPerson,carry:world.bucketAt===p.id,rope:world.rope.h===p.id&&world.rope.s!=='tied'?((p.id===localId?!!ropeGame:p.swing)?'swing':'hold'):null,guitar:p.mode==='guitar'?(model.userData.guitarProp||null):null,strum:p.id===localId?strumT:(anim.strumT=(anim.strumT??9)+dt)});}
 }
 const RANK={lixo:0,comum:0,incomum:1,raro:2,epico:3,lendario:4,especial:3};
 function showCard(species,weight){const sp=CATCHES[species]||CATCHES[0],tier=TIERS[sp.tier],value=catchValue(species,weight),record=sp.kind==='fish'&&(!best[species]||weight>best[species]);if(record)best[species]=weight;const first=!seen.has(species);seen.add(species);
@@ -444,10 +546,13 @@ function updateHUD(t){const p=me(),f=fishing[localId];if(!p||!f)return;
   const lfx=Math.sin(p.yaw),lfz=Math.cos(p.yaw),nearHelm=!p.land&&Math.hypot(p.x,p.z+2.8)<1.8,nearRack=!p.land&&Math.hypot(p.x-RACK.x,p.z-RACK.z)<1.15;
   const castW=p.land?V(p.x+lfx*7,0,p.z+lfz*7):boat.localToWorld(V(p.x+lfx*7,0,p.z+lfz*7)),outward=(p.land||!insideBoat(p.x+lfx*7,p.z+lfz*7))&&(island.exploded||island.ground(castW.x,castW.z)<-.8);
   const sell=island.shop.points.sell,nearSell=p.land&&Math.hypot(p.x-(ISLAND.x+sell.u),p.z-(ISLAND.z+sell.v))<2.4,nearLane=p.land&&island.shop.points.lanes.some(l=>Math.hypot(p.x-(ISLAND.x+l.u),p.z-(ISLAND.z+l.v))<1.9);
-  const bucketValue=world.bucket.reduce((s,[sp,kg])=>s+catchValue(sp,kg),0);
-  $('context').textContent=holding?'RIFLE · botão direito mira (luneta) · botão esquerdo atira · SHIFT segura a respiração · E devolve':p.mode==='drive'?`NO LEME · W/S acelerar · A/D virar · E soltar · ${Math.abs(boatState.speed*1.94).toFixed(1)} nós`:p.mode==='ragdoll'?'RETORNO AÉREO EM ANDAMENTO…':p.mode==='fish'?'F pescar · WASD cancelar':
-    target?'BOTÃO DIREITO · dar um tapa':bakerNear?'BOTÃO DIREITO · dar um tapa no padeiro (por quê?)':nearSell?(world.bucket.length?`E · vender o balde na peixaria (≈ ${money(bucketValue)})`:'PEIXARIA · traga o balde cheio para vender'):nearLane?'CAIXA DE AUTOATENDIMENTO · em breve':
-    nearRack&&world.rifles.some(r=>r<0)?'E · pegar um rifle (as gaivotas estão de olho no balde)':nearHelm&&!engineDead?'E · assumir o leme':outward?'F · lançar a linha na direção da mira':p.land?'Rua do Porto · o mercado Althoff fica no fim da rua':'Olhe para o mar para lançar · ESPAÇO pula bancos';
+  const bucketValue=world.bucket.reduce((s,[sp,kg])=>s+catchValue(sp,kg),0),pw2=worldOf(p),bw=bucketWorld(),free=handsFree(p);
+  const nearBucket=free&&world.bucketAt<0&&Math.hypot(pw2.x-bw.x,pw2.z-bw.z)<1.3&&Math.abs(pw2.y-bw.y)<1.4,nearCoil=!p.land&&free&&world.rope.s==='boat'&&Math.hypot(p.x-ROPE_HOME.x,p.z-ROPE_HOME.z)<1.2,nearGuitar=!p.land&&free&&world.guitar<0&&Math.hypot(p.x-GUITAR_SPOT.x,p.z-GUITAR_SPOT.z)<1.2;
+  const cleatW=boat.localToWorld(V(BOW_CLEAT.x,BOW_CLEAT.y,BOW_CLEAT.z)),nearTie=free&&world.rope.s==='tied'&&(Math.hypot(pw2.x-cleatW.x,pw2.z-cleatW.z)<1.5||Math.hypot(pw2.x-bollardPos(world.rope.tgt).x,pw2.z-bollardPos(world.rope.tgt).z)<1.5);
+  const nearBaker=p.land&&baker.mode==='work'&&!world.talk&&Math.hypot(pw2.x-baker.x,pw2.z-baker.z)<2.6,holdBucket=world.bucketAt===localId,holdRope=world.rope.h===localId&&world.rope.s==='held';
+  $('context').textContent=p.mode==='guitar'?'VIOLÃO · D F J K no tempo das notas · E larga':holdBucket?(nearSell?`E · vender o balde (≈ ${money(bucketValue)})`:'BALDE NA MÃO · leve até a peixaria do mercado · E larga'):holdRope?'CORDA · mire num cabeço do cais ou num pescador na água e clique · E devolve':holding?'RIFLE · botão direito mira (luneta) · botão esquerdo atira · SHIFT segura a respiração · E devolve':p.mode==='drive'?`NO LEME · W/S acelerar · A/D virar · E soltar · ${Math.abs(boatState.speed*1.94).toFixed(1)} nós`:p.mode==='ragdoll'?'RETORNO AÉREO EM ANDAMENTO…':p.mode==='fish'?'F pescar · WASD cancelar':
+    target?'BOTÃO DIREITO · dar um tapa':nearBaker?'E · falar com o padeiro · BOTÃO DIREITO · tapa (por quê?)':nearBucket?'E · pegar o balde':nearCoil?'E · pegar a corda':nearGuitar?'E · tocar o violão':nearTie?'E · soltar a corda (o barco fica à deriva!)':bakerNear?'BOTÃO DIREITO · dar um tapa no padeiro (por quê?)':nearSell?(world.bucket.length?'PEIXARIA · traga o balde até aqui para vender':'PEIXARIA · traga o balde cheio para vender'):nearLane?'CAIXA DE AUTOATENDIMENTO · em breve':
+    nearRack&&world.rifles.some(r=>r<0)?'E · pegar um rifle (as gaivotas estão de olho no balde)':nearHelm&&!engineDead?'E · assumir o leme':outward?'F · lançar a linha na direção da mira':p.land?'Laguna · o mercado Althoff fica no fim da rua':'Olhe para o mar para lançar · ESPAÇO pula bancos';
   $('tab-hint').hidden=!(host&&!world.trig&&!ended);
   show('fishing',f.phase!=='idle');const fz2=$('fishing');
   if(f.phase!=='idle'){const sp=CATCHES[f.species],z=f.zone??.18,reeling=f.phase==='reeling',tier=sp?TIERS[sp.tier]:TIERS.comum,rank=sp?RANK[sp.tier]:0,combo=f.combo||0;
@@ -462,6 +567,67 @@ function updateHUD(t){const p=me(),f=fishing[localId];if(!p||!f)return;
   const bl=p.baly||0;show('baly-hud',bl>0);if(bl>0)$('baly-bar').style.width=(bl/CONFIG.balyTime*100)+'%';document.body.classList.toggle('baly',bl>0);
   $('ping').textContent=!solo&&net.ping?`${Math.round(net.ping)} ms`:'';
 }
+// ---------- itens: minigames locais (laço, violão, gaivota no balde) e o visual de balde, corda e violão ----------
+let ropeWas='',coilHand=null,swingSound=0,strumT=9;
+function ropeTargets(){const out=[];if(!island.exploded)BOLLARDS.forEach((b,i)=>out.push({code:i,pos:bollardPos(i).add(V(0,.1,0)),kind:'b'}));
+  for(const q of players){if(q.id===localId||!q.water||q.mode!=='ragdoll')continue;const rg=ragdolls.active.get(q.id);if(!rg)continue;const t=rg.bodies.torso.position;out.push({code:100+q.id,pos:V(t.x,t.y,t.z),kind:'p',id:q.id});}return out;}
+function pickRopeTarget(){const dir=camera.getWorldDirection(V()),o=camera.position;let best=null,bs=-1;for(const t of ropeTargets()){const d=t.pos.clone().sub(o),dist=d.length();if(dist>ROPE.max)continue;const c=d.normalize().dot(dir);if(c>.94&&c>bs){bs=c;best={...t};}}return best;}
+function localItems(controls,dt){const p=me();if(!p||!running||cinematic)return;
+  const holding=world.rope.h===localId&&world.rope.s==='held'&&p.mode==='walk';if(!holding)ropeGame=null;
+  if(holding&&controls.fire){if(!ropeGame){const t=pickRopeTarget();if(t){ropeGame={...t,t0:elapsed};sound.effect('swing');}else toast('Mire num cabeço do cais ou num pescador na água (até '+ROPE.max+' m).');}
+    else{const k=elapsed-ropeGame.t0,dist=ropeGame.pos.distanceTo(camera.position);controls.throwAt=ropeGame.code;controls.throwOk=ropeHit(k,dist);ropeGame=null;}controls.fire=false;}
+  if(ropeGame){const t=ropeTargets().find(q=>q.code===ropeGame.code);if(!t||t.pos.distanceTo(camera.position)>ROPE.max+1){ropeGame=null;toast('O alvo saiu do alcance da corda.');}else ropeGame.pos=t.pos;if(controls.interact||controls.aim){ropeGame=null;controls.interact=false;}}
+  controls.swing=!!ropeGame;
+  if(p.mode==='guitar'&&gh.active){const out=gh.update(dt,controls.lanes||[]),at=worldOf(p,1.1);if(out.play.length){sound.guitar(out.play,at);controls.strum=out.play;strumT=0;}if(out.ghost||out.miss)sound.deadNote(at);
+    if(out.finished){controls.song={name:out.finished.name,acc:out.finished.acc};sound.effect('song');toast(`“${out.finished.name}” · ${Math.round(out.finished.acc*100)}% de acerto · maior combo ${out.finished.best}`);confetti('#ffd23c',30+Math.round(out.finished.acc*50));}
+    controls.cast=false;}
+  if(world.shoo&&world.shoo.pid===localId){controls.cast=false;if(!shooGame.active&&!shooGame.sent)shooGame.start();const r=shooGame.step(dt,!!controls.reel);if(r){controls.shoo=r==='win'?1:2;shooGame.sent=true;}}else{shooGame.sent=false;if(shooGame.active)shooGame.reset();}
+}
+function ropeFloor(x,z){const l=boat.worldToLocal(V(x,0,z));if(insideBoat(l.x,l.z))return boat.localToWorld(V(l.x,CONFIG.deckY+floorAt(l.x,l.z),l.z)).y+.02;const g=island.exploded?-99:island.ground(x,z);if(g>-.3)return g+.02;return waveHeight(x,z,elapsed,weatherAt(story).storm)-.05;}
+function renderItems(t,dt){
+  const fp=!window.__peixesThirdPerson&&!cinematic,mine=me();
+  // balde: no convés, no chão, na mão (primeira pessoa: vai para a cena do viewmodel com os peixes dentro)
+  const b=world.bucketAt;let prop=null;
+  if(b===-1){if(bucketObj.parent!==boat)boat.add(bucketObj);bucketObj.position.copy(boat.userData.bucketLocal);bucketObj.rotation.set(0,0,0);}
+  else if(b===-2&&world.bucketPos){if(bucketObj.parent!==scene)scene.add(bucketObj);bucketObj.position.set(...world.bucketPos);bucketObj.rotation.set(0,0,0);}
+  else if(b>=0){const m=models[b];if(b===localId&&fp&&mine?.mode!=='ragdoll'){if(bucketObj.parent!==viewmodel.propRoot)viewmodel.propRoot.add(bucketObj);prop='bucket';}
+    else if(m){if(bucketObj.parent!==scene)scene.add(bucketObj);const hand=m.userData.joints.foreL.localToWorld(V(-.08,-.31,.04));bucketObj.position.copy(hand).add(V(0,-.4,0));bucketObj.rotation.set(Math.sin(t*3.1)*.06,m.rotation.y+(m.parent===boat?boatState.heading:0),Math.sin(t*2.3)*.05);}}
+  bucketObj.visible=true;bucketObj.userData.handle.rotation.x=b>=0?0:-1.2;
+  // violão no banco da proa (ou nas mãos de quem toca)
+  guitarStand.visible=world.guitar<0;
+  models.forEach((m,i)=>{const on=world.guitar===i&&players[i]?.mode==='guitar';if(on&&!m.userData.guitarProp){const g=makeGuitar();g.position.set(-.02,.2,.19);g.rotation.set(-.12,.1,-Math.PI/2+.42);m.userData.joints.torso.add(g);m.userData.guitarProp=g;}if(m.userData.guitarProp)m.userData.guitarProp.visible=on&&!(i===localId&&fp);});
+  if(mine?.mode==='guitar'&&fp)prop='guitar';
+  // corda
+  const r=world.rope;hull.userData.coil.visible=r.s==='boat';if(r.s!==ropeWas){rope.ready=false;ropeWas=r.s;}
+  const holdCoil=r.h>=0&&(r.s==='held'||r.s==='pull'||r.s==='fly');if(holdCoil&&r.h===localId&&fp&&mine?.mode==='walk')prop=prop||'coil';
+  coilHand.visible=holdCoil&&!(r.h===localId&&fp)&&!!models[r.h];if(coilHand.visible){coilHand.position.copy(models[r.h].userData.joints.foreL.localToWorld(V(-.06,-.3,.12)));coilHand.rotation.set(1.2,0,.3);}
+  const hand=r.h>=0?handPos(r.h):null;
+  if(r.s==='tied'){const a=boat.localToWorld(V(BOW_CLEAT.x,BOW_CLEAT.y,BOW_CLEAT.z)),e=bollardPos(r.tgt).add(V(0,.12,0)),d=a.distanceTo(e);rope.visible=true;rope.step(dt,a,e,Math.max(d*1.04,Math.min(ROPE.length,d+2.2)),ropeFloor,{loopDir:V(0,1,0),loopR:.15});}
+  else if(r.s==='fly'&&r.from){const k=clamp((elapsed-r.t)/ROPE.flight),from=V(...r.from),to=V(...r.to),end=from.clone().lerp(to,k);end.y+=Math.sin(k*Math.PI)*(1.8+from.distanceTo(to)*.13);rope.visible=true;rope.step(dt,hand||from,end,from.distanceTo(to)*1.1+.6,ropeFloor,{loopR:.36});}
+  else if(r.s==='pull'&&hand){const q=players[r.pid],rg=q&&ragdolls.active.get(q.id);if(rg){const tp=rg.bodies.torso.position,e=V(tp.x,tp.y+.1,tp.z);rope.visible=true;rope.step(dt,hand,e,hand.distanceTo(e)*1.03,ropeFloor,{loopR:.3});}else rope.visible=false;}
+  else if(r.s==='held'&&hand&&(r.h===localId?!!ropeGame:!!players[r.h]?.swing)){const m=models[r.h],yaw=r.h===localId?worldYaw(me())+(me().land?0:0):m?m.getWorldQuaternion(new THREE.Quaternion()):0;
+    const fwd=r.h===localId?camera.getWorldDirection(V()).setY(0).normalize():V(0,0,1).applyQuaternion(yaw),right=V().crossVectors(fwd,V(0,1,0)).normalize(),th=r.h===localId?ropeAngle(elapsed-ropeGame.t0):elapsed*ROPE.omega;
+    const center=hand.clone().add(V(0,.7,0)).addScaledVector(fwd,.15),end=center.clone().addScaledVector(fwd,Math.cos(th)*.85).addScaledVector(right,Math.sin(th)*.85);rope.visible=true;rope.step(dt,hand,end,1.35,ropeFloor,{loopR:.42,loopDir:V(0,1,0)});
+    swingSound-=dt;if(swingSound<=0){swingSound=Math.PI*2/ROPE.omega;sound.effect('swing',{pos:hand,k:r.h===localId?1:0});}}
+  else rope.visible=false;
+  strumT+=dt;const cur=gh.active?gh.notes?.find(n=>!n.hit&&!n.missed):null;
+  viewmodel.updateProp(dt,prop,{strum:Math.exp(-strumT*12)*(Math.floor(strumT*0)+1)*(strumT<.25?Math.sin(strumT*25):0),chord:cur?cur.lane/3:0,bob:bobPhase,swing:ropeGame?Math.sin((elapsed-ropeGame.t0)*ROPE.omega):0});
+}
+// HUD quadro a quadro: laço, gaivota no balde, contagem à deriva, violão e o diálogo do padeiro
+let lastTyped=0;
+function hudItems(){const p=me();if(!p||!running)return;
+  show('rope-ui',!!ropeGame);if(ropeGame){const c=$('rope-dial').getContext('2d'),W=200,k=elapsed-ropeGame.t0,dist=ropeGame.pos.distanceTo(camera.position),win=ropeWindow(dist),a=ropeAngle(k),hit=Math.abs(a)<win/2;
+    c.clearRect(0,0,W,W);c.lineWidth=14;c.strokeStyle='#ffffff22';c.beginPath();c.arc(W/2,W/2,72,0,Math.PI*2);c.stroke();
+    c.strokeStyle='#7dff6a';c.shadowColor='#7dff6a';c.shadowBlur=14;c.beginPath();c.arc(W/2,W/2,72,-Math.PI/2-win/2,-Math.PI/2+win/2);c.stroke();c.shadowBlur=0;
+    const x=W/2+Math.sin(a)*72,y=W/2-Math.cos(a)*72;c.fillStyle=hit?'#7dff6a':'#fff';c.beginPath();c.arc(x,y,11,0,Math.PI*2);c.fill();c.strokeStyle='#1b2b30';c.lineWidth=3;c.stroke();
+    c.fillStyle='#f6ead6';c.font='700 26px Georgia';c.textAlign='center';c.textBaseline='middle';c.fillText(ropeGame.kind==='p'?'🛟':'⚓',W/2,W/2);
+    $('rope-label').textContent=hit?'AGORA!':'CLIQUE COM O LAÇO NA FRENTE';$('rope-dist').textContent=`${dist.toFixed(1)} m · ${dist>16?'DIFÍCIL':dist>9?'MÉDIO':'FÁCIL'} · E cancela`;}
+  const shooing=!!(world.shoo&&world.shoo.pid===localId&&shooGame.active);show('shoo-ui',shooing);if(shooing){const z=shooGame.zone;$('shoo-zone').style.left=(shooGame.target-z)*100+'%';$('shoo-zone').style.width=z*200+'%';$('shoo-needle').style.left=shooGame.needle*100+'%';$('shoo-prog').style.width=shooGame.progress*100+'%';$('shoo-grip').style.width=shooGame.grip*100+'%';}
+  const drowning=p.mode==='ragdoll'&&p.water&&!(world.rope.s==='pull'&&world.rope.pid===localId);show('drown-ui',drowning);if(drowning){const d=p.drown??DROWN_TIME;$('drown-bar').style.width=(d/DROWN_TIME*100)+'%';$('drown-text').textContent=Math.ceil(d)+' s';}
+  const playing=p.mode==='guitar'&&gh.active;show('gh',playing);if(playing)gh.draw(ghCanvas,520,380);
+  // diálogo: só para quem está perto do padeiro
+  const tk=world.talk,near=tk&&worldOf(p).distanceTo(V(baker.x,baker.y,baker.z))<14;show('talk',!!near);
+  if(near){const txt=talkText(elapsed-tk.at);if(txt.length!==lastTyped){if(txt.length>lastTyped)sound.effect('blip');lastTyped=txt.length;}$('talk-text').textContent=txt;}else lastTyped=0;}
 // marcadores das gaivotas ladras (com seta na borda da tela quando estão fora de vista)
 const markerEls=[];function updateMarkers(){const box=$('markers');const list=running&&!cinematic?gulls.thieves(v=>boat.localToWorld(v)):[];
   while(markerEls.length<list.length){const m=document.createElement('div');m.className='marker';m.innerHTML='<b>!</b><span></span>';box.appendChild(m);markerEls.push(m);}
@@ -474,25 +640,27 @@ function animate(){
   // mira local: raio da câmera (com dispersão se não estiver mirando) e a gaivota na linha de tiro
   if(controls.fire&&running&&(me()?.rifle??-1)>=0){const spread=(1-viewmodel.aim)*.018+.002,dir=camera.getWorldDirection(V()).add(V((Math.random()-.5)*spread,(Math.random()-.5)*spread,(Math.random()-.5)*spread)).normalize();const ray=new THREE.Ray(camera.position.clone(),dir);controls.ray=[...ray.origin.toArray(),...dir.toArray()];controls.gull=gulls.pick(ray,v=>boat.localToWorld(v));}
   const live=running&&!paused&&!ended;
+  if(live&&!cinematic)localItems(controls,dt);
   if(live&&!cinematic){if(host)hostTick(dt,controls);else guestTick(dt,controls);}
   else if(live&&cinematic){elapsed+=dt;story=storyTime(elapsed,world.trig);if(host&&!solo){netTick+=dt;if(netTick>.1){netTick=0;net.send(snapshot());}}}
   if(hold!==null&&solo)elapsed=hold;
   if(!running)story=45;else if(ended)story=storyTime(elapsed,world.trig);
   const t=running?elapsed:menuTime*.5;
   updateBoat(t,dt);
-  if(!running){menuCharacters.forEach((m,i)=>{const sp=SPAWNS[i];m.position.set(sp[0]*1.4,CONFIG.deckY,sp[1]);m.rotation.y=i<2?.55:2.6;const o=menuCharacters[i^1].position;m.userData.anim.update(dt,{time:menuTime+i*2,fishing:'waiting',grounded:true,yaw:.55,look:lookAngles(m.position.clone().setY(1.6),.55,o.clone().setY(1.6))});});const yaw=Math.PI+.62+Math.sin(menuTime*.045)*.05;camera.position.set(Math.sin(yaw)*13.8+boat.position.x,3.6,Math.cos(yaw)*13.8+boat.position.z);camera.lookAt(boat.position.x-3.2,2.1,boat.position.z+1);camera.fov=48;camera.updateProjectionMatrix();}
+  if(!running){menuCharacters.forEach((m,i)=>{const sp=SPAWNS[i];m.position.set(sp[0]*1.4,CONFIG.deckY,sp[1]);m.rotation.y=i<2?.55:2.6;const o=(menuCharacters[i^1]||menuCharacters[0]).position;m.userData.anim.update(dt,{time:menuTime+i*2,fishing:'waiting',grounded:true,yaw:.55,look:lookAngles(m.position.clone().setY(1.6),.55,o.clone().setY(1.6))});});const yaw=Math.PI+.62+Math.sin(menuTime*.045)*.05;camera.position.set(Math.sin(yaw)*13.8+boat.position.x,3.6,Math.cos(yaw)*13.8+boat.position.z);camera.lookAt(boat.position.x-3.2,2.1,boat.position.z+1);camera.fov=48;camera.updateProjectionMatrix();}
   else{
     phaseEffects(story);if(story>=CONFIG.impactAt+.6&&!island.exploded){island.explode();ragdolls.removeIsland();}
-    if(cinematic)cinematicUpdate(story,vdt);else{renderPlayers(t,vdt);fpCamera(t,vdt);}
+    if(cinematic)cinematicUpdate(story,vdt);else{renderPlayers(t,vdt);fpCamera(t,vdt);renderItems(t,vdt);}
     renderBaker(t,vdt);cameraDrama(story,dt);
-    ragdolls.moveDeck(boat);if(!paused)ragdolls.update(dt,(x,z)=>{const l=boat.worldToLocal(V(x,0,z));if(insideBoat(l.x,l.z))return -100;if(!island.exploded&&island.ground(x,z)>-.3)return -100;return waveHeight(x,z,t,weatherAt(story).storm)+tsuAt(x,z,t);},(id,pos,velocity)=>{if(host)stateEvent('splash',{id,position:pos.toArray(),velocity});});
-    if(displayTick%4===0)updateHUD(t);fx.update(t,vdt,{players:players.map(p=>p.id===localId?{...p,land:me().land,x:me().x,z:me().z}:p),fishing,models,boat,camera,localId,cinematic,story});fx.syncBucket(world.bucket,boat);
+    ragdolls.moveDeck(boat);if(!paused)ragdolls.update(dt,(x,z)=>{const l=boat.worldToLocal(V(x,0,z));if(insideBoat(l.x,l.z))return -100;if(!island.exploded&&island.ground(x,z)>-.3)return -100;return waveHeight(x,z,t,weatherAt(story).storm)+tsuAt(x,z,t);},(id,pos,velocity)=>{if(!host)return;if(typeof id==='number'&&players[id]){players[id].water=1;players[id].drown=DROWN_TIME;}if(id==='baker')baker.water=1;stateEvent('splash',{id,position:pos.toArray(),velocity});});
+    if(displayTick%4===0)updateHUD(t);fx.update(t,vdt,{players:players.map(p=>p.id===localId?{...p,land:me().land,x:me().x,z:me().z}:p),fishing,models,boat,camera,localId,cinematic,story});fx.syncBucket(world.bucket,bucketObj);
     world.rifles.forEach((h,i)=>{if(rackRifles[i])rackRifles[i].visible=h<0;});
     // tique do molinete enquanto recolhe
     const f=fishing[localId];if(f?.phase==='reeling'&&controls.reel){reelTick+=dt;if(reelTick>.07){reelTick=0;sound.effect('tick');}}
   }
-  if(running)gulls.render(vdt,t,host);shotFX.update(vdt);updateMarkers();shotLight.intensity*=Math.exp(-dt*30);
-  island.update(t,dt,camera,running?players.filter(p=>p.mode!=='gone').map(p=>worldOf(p.id===localId?me():p)):[]);
+  if(running)gulls.render(vdt,t,host);shotFX.update(vdt);updateMarkers();if(running&&!cinematic)hudItems();shotLight.intensity*=Math.exp(-dt*30);
+  villagers.update(running?elapsed:menuTime,dt,camera,island.exploded,displayTick);
+  island.update(t,dt,camera,running?players.filter(p=>p.mode!=='gone').map(p=>worldOf(p.id===localId?me():p)).concat(baker.mode==='walk'?[V(baker.x,baker.y,baker.z)]:[]):[]);
   const w=environment.update(t,paused?0:dt,boat,camera,{paused,story,focus:running&&!cinematic?camera.position:boat.position});
   if(!paused)fluid.update(dt);cataclysm.update(story,paused?0:dt,boat,camera,t);
   const age=story-CONFIG.impactAt;
@@ -509,22 +677,30 @@ async function init(){
   scene=new THREE.Scene();camera=new THREE.PerspectiveCamera(48,innerWidth/innerHeight,.06,2600);assets=await loadAssets();
   fluid=new FluidSim(renderer,{resolution:quality==='low'?192:256,size:620});environment=new Environment(scene,renderer,fluid,quality);cataclysm=new Cataclysm(scene,fluid,quality);
   cataclysm.onShock=()=>{shockAt=elapsed;sound.effect('shock');};cataclysm.onDebrisSplash=p=>sound.effect('debris',{pos:p});environment.onThunder=d=>sound.effect('thunder',{distance:d});
-  boat=new THREE.Group();const hull=makeBoat();boat.add(hull);boat.userData.bucketLocal=hull.userData.bucket.clone();helm=addHelm(boat);lantern=addLantern(boat);motor=addMotor(boat);scene.add(boat);ragdolls=new Ragdolls(scene);menuCharacters=[0,1,2,3].map(spawn);rackRifles=addRack(boat);gulls=new GullFlock(boat,boat.userData.bucketLocal,4);viewmodel=new Viewmodel(camera);viewmodel.onSound=n=>sound.effect(n);shotFX=new ShotFX(scene);if(!camera.parent)scene.add(camera);
+  boat=new THREE.Group();hull=makeBoat();boat.add(hull);boat.userData.bucketLocal=hull.userData.bucket.clone();helm=addHelm(boat);lantern=addLantern(boat);motor=addMotor(boat);scene.add(boat);ragdolls=new Ragdolls(scene);menuCharacters=[0,1,2,3,4].map(spawn);rackRifles=addRack(boat);gulls=new GullFlock(boat,boat.userData.bucketLocal,4);viewmodel=new Viewmodel(camera);viewmodel.onSound=n=>sound.effect(n);shotFX=new ShotFX(scene);if(!camera.parent)scene.add(camera);
   shotLight=new THREE.PointLight(0xffb060,0,25,2);scene.add(shotLight);
   // Ilha central com a vila, o cais e o mercado; o fundo dela entra no shader do mar (água rasa e arrebentação)
   $('loading-text').textContent='Construindo a vila…';island=new Island(scene,quality);U.uIslandMap.value=island.heightTex;U.uIsland.value.set(ISLAND.x,ISLAND.z,ISLAND.size);
   island.onSplash=(p,size)=>{fx.splash(p,20+size*6,2.5+size*.4,4+size);if(size>2)fluid.drop(p.x,p.z,3+size,3+size,1);sound.effect('debris',{pos:p});};
   ragdolls.addIsland((x,z)=>island.ground(x,z),{x0:ISLAND.x-ISLAND.size/2,z0:ISLAND.z-ISLAND.size/2,size:ISLAND.size,n:115},island.colliders.filter(c=>!c.dock));
+  $('loading-text').textContent='Chamando os moradores de Laguna…';villagers=new Villagers(scene,assets,{quality});
   baker.model=addBakerOutfit(spawn(0));scene.add(baker.model);{const h=bakerHome();baker.x=h.x;baker.y=h.y;baker.z=h.z;}
   fx=new FishingFX(scene);fx.onCard=showCard;fx.onBucket=pos=>sound.effect('bucket',{pos});
+  // itens do barco: balde solto, corda (Verlet) com rolo na mão, violão no banco da proa
+  bucketObj=makeBucket();bucketObj.position.copy(boat.userData.bucketLocal);boat.add(bucketObj);fx.bucketRoot=bucketObj;
+  rope=new Rope(scene);coilHand=makeCoil();coilHand.scale.setScalar(.8);coilHand.visible=false;scene.add(coilHand);
+  guitarStand=makeGuitar();guitarStand.position.set(GUITAR_SPOT.x,.83,GUITAR_SPOT.z);guitarStand.rotation.set(-Math.PI/2,0,Math.PI/2+.25);boat.add(guitarStand);
+  viewmodel.setProps({guitar:makeGuitar(),coil:makeCoil(),bucket:bucketObj});boat.add(bucketObj);ghCanvas=$('gh').getContext('2d');
   post=new Post(renderer,scene,camera,quality);post.setOverlay(viewmodel.scene);post.setSize(innerWidth,innerHeight);
   lobby.join(0,selected);updateLobby();setupUI();
   // Compila também o que só aparece no final (meteoro, impacto, tsunami) para não travar no clímax
   $('loading-text').textContent='Afinando as ondas e o céu…';const hidden=[];scene.traverse(o=>{if(!o.visible){hidden.push(o);o.visible=true;}});U.uImpactAge.value=0;
   updateBoat(0,0);environment.update(0,0,boat,camera);await renderer.compileAsync(scene,camera);post.render(0);hidden.forEach(o=>o.visible=false);U.uImpactAge.value=-1;
   environment.updateEnvMap();show('loading',false);animate();
+  // ?teste: entra direto no teste solo (diagnóstico no painel do navegador, sem pausar ao perder o foco)
+  if(new URLSearchParams(location.search).has('teste')){window.__peixesNoPause=true;start(true,[{id:0,character:Number(new URLSearchParams(location.search).get('teste'))||0}]);input.locked=true;show('lock-hint',false);}
   // Diagnóstico somente leitura; o salto de tempo funciona apenas no teste solo.
-  window.__peixes={get state(){return {running,solo,host,localId,time:elapsed,phase:weatherAt(elapsed).phase,players:structuredClone(players),fishing:fishing.map(f=>({phase:f.phase,caught:f.caught,progress:f.progress})),lobby:lobby.snapshot(),impact:world.impact,drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles,meanFps:1/(frameTimes.reduce((a,b)=>a+b,0)/(frameTimes.length||1))}},get renderer(){return renderer;},get scene(){return scene;},get post(){return post;},get input(){return input;},get camera(){return camera;},get environment(){return environment;},get cataclysm(){return cataclysm;},get sound(){return sound;},get fx(){return fx;},get models(){return models;},get fishing(){return fishing;},get gulls(){return gulls;},get world(){return world;},get players(){return players;},get boat(){return boat;},get island(){return island;},get boatState(){return boatState;},get baker(){return baker;},get viewmodel(){return viewmodel;},get story(){return story;},testRag(v){if(solo)rag(0,"slap",v||[1,2,0]);},setStory(v){if(solo)world.trig={at:elapsed-(v-CONFIG.asteroidAt+CONFIG.rampTime),from:CONFIG.asteroidAt};},me,jump(t){if(solo){elapsed=t;hold=null;}},hold(t){if(solo){hold=t;elapsed=t;}},look(yaw,pitch){input.yaw=yaw;input.pitch=pitch;}};
+  window.__peixes={get state(){return {running,solo,host,localId,time:elapsed,phase:weatherAt(elapsed).phase,players:structuredClone(players),fishing:fishing.map(f=>({phase:f.phase,caught:f.caught,progress:f.progress})),lobby:lobby.snapshot(),impact:world.impact,drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles,meanFps:1/(frameTimes.reduce((a,b)=>a+b,0)/(frameTimes.length||1))}},get renderer(){return renderer;},get scene(){return scene;},get post(){return post;},get input(){return input;},get camera(){return camera;},get environment(){return environment;},get cataclysm(){return cataclysm;},get sound(){return sound;},get fx(){return fx;},get models(){return models;},get fishing(){return fishing;},get gulls(){return gulls;},get world(){return world;},get players(){return players;},get boat(){return boat;},get island(){return island;},get boatState(){return boatState;},get baker(){return baker;},get ragdolls(){return ragdolls;},get items(){return {bucketObj,rope,gh,ropeGame,shooGame,guitarStand,coilHand,hull};},get viewmodel(){return viewmodel;},get story(){return story;},testRag(v){if(solo)rag(0,"slap",v||[1,2,0]);},testDummy(){if(!solo||players.length>1)return;const q={...newPlayer(1,1),net:1};players.push(q);fishing.push(new Fishing());models.push(spawn(1));return q;},testRagOf(id,v){if(solo)rag(id,'slap',v);},setStory(v){if(solo)world.trig={at:elapsed-(v-CONFIG.asteroidAt+CONFIG.rampTime),from:CONFIG.asteroidAt};},me,jump(t){if(solo){elapsed=t;hold=null;}},hold(t){if(solo){hold=t;elapsed=t;}},look(yaw,pitch){input.yaw=yaw;input.pitch=pitch;}};
 }
 function triggerMeteor(){if(world.trig||!running)return;world.trig={at:elapsed,from:story};stateEvent('trigger',{});}
 function setupUI(){
@@ -545,7 +721,9 @@ function setupUI(){
   input.onLockChange=locked=>{const wasExpected=expectUnlock;expectUnlock=false;if(!running||cinematic||ended)return;if(locked){show('lock-hint',false);return;}if(!wasExpected&&$('settings').hidden)settings(true);else show('lock-hint',$('settings').hidden);};
   $('world').addEventListener('click',()=>{if(running&&!cinematic&&!ended&&!input.locked&&$('settings').hidden&&!paused)input.lock();});
   $('settings-open').onclick=()=>settings(true);$('settings-close').onclick=()=>settings(false);$('resume').onclick=()=>settings(false);
-  $('quality').onchange=e=>{localStorage.setItem('peixes-quality',e.target.value);toast('Qualidade aplicada ao recarregar a página.');};$('sensitivity').oninput=e=>{input.sensitivity=Number(e.target.value);localStorage.setItem('peixes-sens',e.target.value);};
+  $('quality').onchange=e=>{localStorage.setItem('peixes-quality',e.target.value);toast('Qualidade aplicada ao recarregar a página.');};const sensLabel=()=>$('sensitivity-value').textContent=input.sensitivity.toFixed(2).replace('.',',')+'×',volLabel=()=>{$('volume-value').textContent=Math.round(sound.volume*100)+'%';$('music-value').textContent=Math.round(sound.musicLevel*100)+'%';};
+  $('volume').value=sound.volume;$('music-volume').value=sound.musicLevel;sensLabel();volLabel();
+  $('sensitivity').oninput=e=>{input.sensitivity=Number(e.target.value);localStorage.setItem('peixes-sens',e.target.value);sensLabel();};$('volume').oninput=e=>{sound.setVolume(Number(e.target.value));volLabel();};$('music-volume').oninput=e=>{sound.setMusic(Number(e.target.value));volLabel();};
   window.addEventListener('keydown',e=>{if(e.code==='Escape'&&running&&!cinematic&&!ended&&!input.locked)settings($('settings').hidden);});
   $('skip-storm').onclick=()=>{if(!solo)return;elapsed=212;toast('Teste: tempestade chegando.');settings(false);};
   $('skip-ending').onclick=()=>{if(!solo)return;settings(false);triggerMeteor();};

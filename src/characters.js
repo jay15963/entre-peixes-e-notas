@@ -12,6 +12,8 @@ const LOOKS=[
   {name:'Pescador de boné',skin:0xb47b58,hair:0x17110e,shirt:0xe9e7e1,shirtDark:0xc9c6bd,trim:0xf4f2ec,pants:0x44587a,sock:0xefede6,shoe:0x26282c,sole:0xf2f0ea,top:'tee',print:true,cap:{color:0x15171b,back:true},earphones:true},
   // Boné trucker branco com emblema, camisa jeans de manga longa lavada, calça escura
   {name:'Pescador do trucker',skin:0xc7987a,hair:0x2a1d16,shirt:0x2a3a58,shirtDark:0x1d2940,trim:0xcfc4ae,pants:0x26282e,sock:0x2b2d31,shoe:0xe7e3da,sole:0x2a2c30,top:'denim',long:true,longPants:true,cap:{color:0xf1efe9,mesh:0x16181c,patch:true}},
+  // Óculos sem aro, cavanhaque, camiseta preta lisa, bermuda cargo cáqui
+  {name:'Pescador de óculos',skin:0xd2a189,hair:0x2b1d15,shirt:0x1b1c1f,shirtDark:0x121315,trim:0x0f1012,pants:0x7a6c52,sock:0xefede6,shoe:0x2b2d31,sole:0xf2f0ea,top:'tee',glasses:true},
 ];
 const S=v=>new THREE.Vector3(...v);
 function mirror(fn){return [fn(-1),fn(1)];}
@@ -22,7 +24,7 @@ function hairShell(look,index){
   const R=[.134,.176,.152],C=[0,1.645,-.012];
   for(let i=0;i<p.count;i+=3){let cy=0,cz=0,cx=0;const tri=[];for(let j=0;j<3;j++){const x=p.getX(i+j)*R[0],y=p.getY(i+j)*R[1],z=p.getZ(i+j)*R[2];const k=clump(x,y,z);tri.push([C[0]+x*k,C[1]+y*k,C[2]+z*k]);cx+=C[0]+x;cy+=C[1]+y;cz+=C[2]+z;}
     cx/=3;cy/=3;cz/=3;
-    const hairline=[1.735,1.742,1.725,1.73][index]??1.74,face=cz>.015&&cy<hairline+(Math.abs(cx)>.07?-.05:0),ear=Math.abs(cx)>.09&&cy<1.655&&cz>-.07,nape=cy<(cz<0?1.515:1.6);
+    const hairline=[1.735,1.742,1.725,1.73,1.738][index]??1.74,face=cz>.015&&cy<hairline+(Math.abs(cx)>.07?-.05:0),ear=Math.abs(cx)>.09&&cy<1.655&&cz>-.07,nape=cy<(cz<0?1.515:1.6);
     if(face||ear||nape)continue;keep.push(...tri.flat());}
   const out=new THREE.BufferGeometry();out.setAttribute('position',new THREE.Float32BufferAttribute(keep,3));out.computeVertexNormals();return out;
 }
@@ -53,8 +55,26 @@ function shoe(kit,mat,look,side){
   kit.add(mat,loft([{z:-.055,cx:x,cy:.07,rx:.042,rz:.045,pow:2.6},{z:.02,cx:x,cy:.075,rx:.05,rz:.05,pow:2.6},{z:.11,cx:x,cy:.052,rx:.048,rz:.03,pow:2.6},{z:.18,cx:x,cy:.04,rx:.033,rz:.02,pow:2.2}],{axis:'z',n:12}),look.shoe);
   for(let i=0;i<3;i++)kit.add(mat,box([x,.086-i*.009,.035+i*.025],[.05,.006,.008],[-.5,0,0]),look.sole,.02);
 }
-export function makeCharacter(assets,index){
-  const look=LOOKS[index],root=new THREE.Group(),joints={};root.name=look.name;reseed(index+1);
+const T0=kits=>kits.torso;
+// Cabelos, chapéus, saia e acessórios dos moradores (os pescadores usam só parte disso)
+function hairExtras(H,T,mat,look){
+  const hair=look.hair,st=look.hairStyle;
+  if(st==='long'){H.add(mat,sculpt(ellipsoid([0,1.56,-.07],[.15,.2,.1],12,10),v=>{v.z-=Math.max(0,1.6-v.y)*.25;}),hair,.08);for(const s of [-1,1])H.add(mat,ellipsoid([s*.12,1.54,-.01],[.045,.14,.07],8,8),hair,.08);}
+  if(st==='bun'){H.add(mat,ellipsoid([0,1.8,-.1],[.07,.065,.07],10,8),hair,.08);}
+  if(st==='curly'){for(let i=0;i<22;i++){const a=i*2.4,b=.3+(i%5)*.12;H.add(mat,ellipsoid([Math.cos(a)*.12*Math.sin(b*2.2),1.72+Math.cos(b*2)*.06,Math.sin(a)*.1*Math.sin(b*2.2)-.02],[.045,.04,.045],6,5),hair,.12);}}
+  if(st==='bald'){H.add(mat,sculpt(ellipsoid([0,1.62,-.05],[.13,.06,.12],12,6),v=>{if(v.z>.03)v.y-=.5;}),hair,.1);}
+  const hat=look.hat;
+  if(hat==='straw'){H.add(mat,new THREE.CylinderGeometry(.27,.29,.02,20).translate(0,1.76,0),0xd9c27a,.08);H.add(mat,loft([{y:1.76,rx:.145,rz:.16},{y:1.86,rx:.13,rz:.145},{y:1.88,rx:.1,rz:.11}],{n:14}),0xe0cb86,.08);H.add(mat,loft([{y:1.765,rx:.148,rz:.163},{y:1.8,rx:.143,rz:.158}],{n:14,capStart:false,capEnd:false}),0x7a3b2a,.04);}
+  if(hat==='bucket'){H.add(mat,loft([{y:1.7,rx:.2,rz:.21},{y:1.74,rx:.15,rz:.165},{y:1.83,rx:.135,rz:.15},{y:1.85,rx:.1,rz:.11}],{n:16}),look.hatColor||0x5f7a4a,.06);}
+  if(hat==='beanie'){H.add(mat,sculpt(new THREE.SphereGeometry(1,16,10,0,Math.PI*2,0,Math.PI*.55).scale(.145,.14,.16).translate(0,1.67,-.01),()=>{}),look.hatColor||0x2f4f7a,.06);H.add(mat,loft([{y:1.66,rx:.15,rz:.165},{y:1.7,rx:.15,rz:.165}],{n:16,capStart:false,capEnd:false}),new THREE.Color(look.hatColor||0x2f4f7a).multiplyScalar(.8).getHex(),.04);}
+  if(hat==='panama'){H.add(mat,new THREE.CylinderGeometry(.22,.23,.015,20).translate(0,1.75,0),0xf1ead8,.04);H.add(mat,loft([{y:1.75,rx:.14,rz:.155},{y:1.86,rx:.125,rz:.14},{y:1.87,rx:.08,rz:.09}],{n:14}),0xf1ead8,.04);H.add(mat,loft([{y:1.755,rx:.143,rz:.158},{y:1.79,rx:.138,rz:.153}],{n:14,capStart:false,capEnd:false}),0x1b1c1f,.02);}
+  if(look.sunglasses){H.add(mat,box([0,1.645,.142],[.2,.035,.012]),0x0c0d10,.02);for(const s of [-1,1])H.add(mat,box([s*.115,1.648,.07],[.008,.01,.14]),0x0c0d10,.02);}
+  if(look.skirt){T.add(mat,loft([{y:.98,rx:.17,rz:.115},{y:.8,rx:.22,rz:.17},{y:.58,rx:.28,rz:.22}],{n:18,capStart:false,capEnd:false}),look.skirt,.05);}
+  if(look.necklace)T.add(mat,new THREE.TorusGeometry(.085,.006,4,18).rotateX(Math.PI/2+.5).translate(0,1.35,.05),look.necklace,.02);
+  if(look.bag){T.add(mat,sweep([V(-.12,1.37,.07),V(0,1.22,.13),V(.13,1.02,.14)],.012,.004),0x5a3a22,.03);T.add(mat,box([.19,.98,.05],[.07,.18,.22]),look.bag,.05);}
+}
+export function makeCharacter(assets,index,custom=null){
+  const look=custom?.look||LOOKS[index],root=new THREE.Group(),joints={};root.name=look.name;reseed(index+1);
   const mat=new THREE.MeshStandardMaterial({vertexColors:true,roughness:.78,metalness:0,flatShading:true});
   const kits=Object.fromEntries(Object.keys(JOINTS).map(k=>[k,new Kit()]));
   const shirt=look.shirt,jacket=look.top==='jacket',longSleeve=!!look.long,longPants=!!look.longPants;
@@ -82,10 +102,15 @@ export function makeCharacter(assets,index){
   const H=kits.head;
   for(const s of [-1,1]){H.add(mat,sculpt(ellipsoid([s*.123,1.625,-.012],[.018,.04,.028],8,6),v=>{v.z+=(v.y-1.625)*-.15;}),look.skin);
     H.add(mat,ellipsoid([s*.127,1.622,-.008],[.008,.022,.014],6,4),new THREE.Color(look.skin).multiplyScalar(.75));}
-  H.add(mat,paint(hairShell(look,index),v=>new THREE.Color(look.hair).multiplyScalar(.85+.3*Math.max(0,(v.y-1.6)*3)),.08));
+  if(look.hairStyle!=='bald')H.add(mat,paint(hairShell(look,index),v=>new THREE.Color(look.hair).multiplyScalar(.85+.3*Math.max(0,(v.y-1.6)*3)),.08));
+  hairExtras(H,T0(kits),mat,look);
   if(index===0){
     H.add(mat,sculpt(ellipsoid([-.015,1.785,.06],[.115,.052,.085],12,8),v=>{v.y+=Math.max(0,v.z-.06)*.5;v.x+=Math.max(0,v.z-.06)*-.4;}),look.hair,.1);
     for(const s of [-1,1])H.add(mat,box([s*.124,1.6,.03],[.012,.06,.022]),look.hair,.05);
+  }else if(index===4){
+    // cabelo curto repartido de lado, com volume na frente
+    H.add(mat,sculpt(ellipsoid([.01,1.775,.07],[.11,.04,.07],12,8),v=>{v.y+=Math.max(0,v.z-.07)*.35;v.x+=Math.max(0,v.z-.07)*.3;}),look.hair,.1);
+    for(const s of [-1,1])H.add(mat,box([s*.123,1.61,.035],[.01,.05,.02]),look.hair,.05);
   }else if(index===1){
     for(let i=0;i<6;i++){const x=-.085+i*.034;H.add(mat,sculpt(ellipsoid([x,1.748-Math.abs(x)*.25,.1-Math.abs(x)*.25],[.026,.034,.03],6,5),v=>{v.y-=Math.max(0,v.z-.1)*.6;}),look.hair,.1);}
   }
@@ -100,6 +125,11 @@ export function makeCharacter(assets,index){
     if(c.patch){H.add(mat,new THREE.CircleGeometry(.045,16).translate(0,1.765,.142).rotateX(-.35),0xf4f2ec,.02);H.add(mat,new THREE.TorusGeometry(.04,.005,4,18).rotateX(-.35).translate(0,1.765,.143),0x121316,.02);H.add(mat,box([0,1.765,.147],[.028,.028,.004],[-.35,0,Math.PI/4]),0x121316,.02);}
     if(c.back){H.add(mat,box([0,1.695,.135],[.07,.018,.012],[-.2,0,0]),0x0d0e10,.02);for(let i=0;i<4;i++)H.add(mat,ellipsoid([-.024+i*.016,1.725,.13],[.012,.022,.014],5,4),look.hair,.1);}
   }
+  if(look.glasses){
+    // armação sem aro: ponte, plaquetas e hastes finas até as orelhas (as lentes já estão na foto)
+    const metal=0xc9ccd0;H.add(mat,box([0,1.648,.142],[.024,.004,.004]),metal,.01);
+    for(const s of [-1,1]){H.add(mat,sweep([V(s*.1,1.652,.128),V(s*.12,1.652,.07),V(s*.126,1.645,.0),V(s*.124,1.62,-.03)],.0022,.0022),metal,.01);H.add(mat,box([s*.098,1.652,.13],[.006,.006,.012]),metal,.01);}
+  }
   if(look.earphones){
     // fones intra-auriculares brancos com fio descendo pelo pescoço até o peito
     for(const s of [-1,1])H.add(mat,ellipsoid([s*.128,1.61,.01],[.012,.012,.012],6,4),0xf2f2f0,.02);
@@ -109,9 +139,9 @@ export function makeCharacter(assets,index){
   // ---------- Braços ----------
   for(const s of [-1,1]){const k=s<0?'L':'R',A=kits['arm'+k],F=kits['fore'+k];
     const sh=V(s*.215,1.31,0),el=V(s*.33,1.083,0),wr=V(s*.405,.855,.02),down=wr.clone().sub(el).normalize();
-    A.add(mat,ellipsoid([s*.2,1.3,0],[.074,.068,.074],10,8),shirt);
+    A.add(mat,ellipsoid([s*.2,1.3,0],[.074,.068,.074],10,8),look.top==='tank'?look.skin:shirt);
     A.add(mat,limb(sh,el,.064,.052,9),look.skin);
-    if(longSleeve)A.add(mat,limb(sh,el,.078,.068,9),shirt,look.top==='denim'?.14:.06);else{A.add(mat,limb(sh,sh.clone().lerp(el,.55),.08,.074,9),shirt);A.add(mat,limb(sh.clone().lerp(el,.52),sh.clone().lerp(el,.58),.076,.076,9),look.shirtDark);}
+    if(look.top==='tank'){}else if(longSleeve)A.add(mat,limb(sh,el,.078,.068,9),shirt,look.top==='denim'?.14:.06);else{A.add(mat,limb(sh,sh.clone().lerp(el,.55),.08,.074,9),shirt);A.add(mat,limb(sh.clone().lerp(el,.52),sh.clone().lerp(el,.58),.076,.076,9),look.shirtDark);}
     F.add(mat,ellipsoid([el.x,el.y,el.z],[.053,.053,.053],8,6),longSleeve?shirt:look.skin);
     F.add(mat,limb(el,wr,.051,.039,9),look.skin);
     if(longSleeve){F.add(mat,limb(el,el.clone().lerp(wr,.82),.068,.06,9),shirt,look.top==='denim'?.14:.06);F.add(mat,limb(el.clone().lerp(wr,.8),el.clone().lerp(wr,.9),.056,.056,9),look.shirtDark);}
@@ -132,7 +162,7 @@ export function makeCharacter(assets,index){
   for(const [key,d]of Object.entries(JOINTS)){const g=kits[key].build({origin:d.origin});g.name=key;const parent=d.parent?JOINTS[d.parent].origin:[0,0,0];g.position.fromArray(d.origin.map((v,i)=>v-parent[i]));joints[key]=g;(d.parent?joints[d.parent]:root).add(g);}
   // Rosto: crânio suavizado com a foto projetada
   const skinMat=new THREE.MeshStandardMaterial({color:look.skin});skinMat.color.set(look.skin);
-  const face=new THREE.Mesh(headGeometry(),faceMaterial(assets,index,skinMat));face.name='Rosto fotografico';face.castShadow=true;face.receiveShadow=true;joints.head.add(face);
+  const face=new THREE.Mesh(headGeometry(),faceMaterial(assets,index,skinMat,custom?.face));face.name='Rosto fotografico';face.castShadow=true;face.receiveShadow=true;joints.head.add(face);
   // Vara articulada em segmentos: dobra de verdade com a tensão da linha
   const rod=new THREE.Group(),segs=[],rodMat=new THREE.MeshStandardMaterial({color:0x1d2320,roughness:.35,metalness:.4,flatShading:true});
   const handle=new THREE.Mesh(new THREE.CylinderGeometry(.016,.018,.3,7),new THREE.MeshStandardMaterial({color:0x8a6a45,roughness:.9,flatShading:true}));handle.position.y=.02;rod.add(handle);

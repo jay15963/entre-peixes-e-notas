@@ -8,7 +8,9 @@ const CHORDS={
 };
 const MELODY=[74,76,79,81,79,76,74,71,74,76,78,79,81,83,86];
 export class Sound {
-  constructor(){this.ctx=null;this.muted=false;this.nextBeat=0;this.beat=0;this.plucks=new Map();this.cut=false;this.lastStep=0;this.meteorStage=0;this.volume=.8;}
+  constructor(){this.ctx=null;this.muted=false;this.nextBeat=0;this.beat=0;this.plucks=new Map();this.cut=false;this.lastStep=0;this.meteorStage=0;this.volume=Number(localStorage.getItem('peixes-vol')??.8);if(!Number.isFinite(this.volume))this.volume=.8;this.musicLevel=Number(localStorage.getItem('peixes-music')??1);if(!Number.isFinite(this.musicLevel))this.musicLevel=1;}
+  setVolume(v){this.volume=v;try{localStorage.setItem('peixes-vol',v);}catch{}if(this.master&&!this.cut)this.master.gain.setTargetAtTime(this.muted?0:v,this.ctx.currentTime,.05);}
+  setMusic(v){this.musicLevel=v;try{localStorage.setItem('peixes-music',v);}catch{}if(this.guitarBus)this.guitarBus.gain.setTargetAtTime(v,this.ctx.currentTime,.05);}
   start(){
     if(this.ctx){this.ctx.resume();return;}
     const ctx=this.ctx=new AudioContext({latencyHint:'interactive'});
@@ -31,6 +33,8 @@ export class Sound {
     // Pad sustentado da música
     this.pad=[];for(let i=0;i<5;i++){const o1=ctx.createOscillator(),o2=ctx.createOscillator(),f=ctx.createBiquadFilter(),g=ctx.createGain();o1.type='sawtooth';o2.type='sawtooth';o2.detune.value=9;o1.detune.value=-7;f.type='lowpass';f.frequency.value=700;f.Q.value=.4;g.gain.value=0;o1.connect(f);o2.connect(f);f.connect(g).connect(this.music);o1.start();o2.start();this.pad.push({o1,o2,f,g});}
     this.tinnitus=ctx.createOscillator();this.tinnitus.frequency.value=3700;this.tinnitusGain=ctx.createGain();this.tinnitusGain.gain.value=0;this.tinnitus.connect(this.tinnitusGain).connect(this.master);this.tinnitus.start();
+    // violão tocado pelos jogadores: barramento próprio (volume da música) e som posicional
+    this.guitarBus=ctx.createGain();this.guitarBus.gain.value=this.musicLevel;this.guitarBus.connect(this.bus);const gr=ctx.createGain();gr.gain.value=.35;this.guitarBus.connect(gr).connect(this.revSend);
     this.nextBeat=ctx.currentTime+.2;
   }
   impulse(seconds,decay){const ctx=this.ctx,len=Math.floor(ctx.sampleRate*seconds),b=ctx.createBuffer(2,len,ctx.sampleRate);for(let c=0;c<2;c++){const d=b.getChannelData(c);for(let i=0;i<len;i++){const t=i/len;d[i]=(Math.random()*2-1)*Math.pow(1-t,decay)*(i<ctx.sampleRate*.012?.4:1);}}return b;}
@@ -52,6 +56,13 @@ export class Sound {
     // corpo do violão: leve realce de graves
     this.plucks.set(midi,b);return b;}
   pluck(midi,when,gain=.22,pan=0){const ctx=this.ctx,s=ctx.createBufferSource(),g=ctx.createGain(),f=ctx.createBiquadFilter(),p=ctx.createStereoPanner();s.buffer=this.pluckBuffer(midi);f.type='lowpass';f.frequency.value=2600+Math.random()*800;g.gain.value=gain;p.pan.value=pan;s.connect(f).connect(g).connect(p).connect(this.music);s.start(when);}
+  // Violão: nota da melodia + acorde dedilhado, saindo do violão de quem toca (mais longe = mais baixo)
+  guitar(notes,pos,{gain=.34}={}){if(!this.ctx||this.cut||!notes?.length)return;const ctx=this.ctx,now=ctx.currentTime,p=ctx.createPanner();p.panningModel='HRTF';p.distanceModel='inverse';p.refDistance=2.5;p.rolloffFactor=1.35;p.maxDistance=120;
+    if(pos){p.positionX.value=pos.x;p.positionY.value=pos.y;p.positionZ.value=pos.z;}p.connect(this.guitarBus);
+    const body=ctx.createBiquadFilter();body.type='peaking';body.frequency.value=220;body.gain.value=5;body.Q.value=.9;body.connect(p);
+    notes.forEach((n,i)=>{const s=ctx.createBufferSource(),g=ctx.createGain(),f=ctx.createBiquadFilter();s.buffer=this.pluckBuffer(n);f.type='lowpass';f.frequency.value=i===0?3400:2200;g.gain.value=i===0?gain:gain*.42;s.connect(f).connect(g).connect(body);s.start(now+(i===0?0:.012+i*.022));s.stop(now+3.4);});
+    setTimeout(()=>{try{p.disconnect();}catch{}},4000);}
+  deadNote(pos){if(!this.ctx||this.cut)return;this.burst(this.brown,{type:'bandpass',freq:180,q:2,dur:.09,attack:.002,gain:.5,pos,reverb:.05});this.burst(this.white,{type:'bandpass',freq:2400,q:3,dur:.04,gain:.18,pos});}
   padChord(notes,when,level,bright=700,glide=1.6){notes.forEach((n,i)=>{const v=this.pad[i];if(!v)return;const f=NOTE(n+12*(n<45?1:0));v.o1.frequency.setTargetAtTime(f,when,.05);v.o2.frequency.setTargetAtTime(f*1.003,when,.05);v.g.gain.setTargetAtTime(level/(1+i*.25),when,glide);v.f.frequency.setTargetAtTime(bright,when,1);});for(let i=notes.length;i<this.pad.length;i++)this.pad[i].g.gain.setTargetAtTime(0,when,.8);}
   scheduleMusic(t,phase){
     const ctx=this.ctx;if(this.cut)return;
@@ -72,7 +83,8 @@ export class Sound {
     if(!this.ctx)return;const now=this.ctx.currentTime;
     if(s.phase!==this.phase){this.phase=s.phase;this.beat=0;this.nextBeat=Math.max(this.nextBeat,now+.05);}
     if(this.cut){return;}
-    if(s.running)this.scheduleMusic(t,s.phase);else this.scheduleMusic(t,'sunset');
+    // em jogo não há trilha automática: a música é o violão que algum pescador toca; só o cataclismo mantém a trilha
+    if(!s.running)this.scheduleMusic(t,'sunset');else if(['asteroid','wave','farewell','blackout','title'].includes(s.phase))this.scheduleMusic(t,s.phase);else if(this.pad)this.padChord([],now,0);
     const storm=s.storm,swell=.5+.5*Math.sin(t*.42)*Math.sin(t*.13+1),heave=Math.min(1,Math.abs(s.heave||0));
     this.set(this.oceanL.gain,'gain',.16+swell*.12+storm*.35+s.tsu*.2,.4);this.set(this.oceanR.gain,'gain',.16+(1-swell)*.12+storm*.35,.4);
     this.set(this.oceanL.filter,'frequency',320+storm*500+heave*200,.5);this.set(this.foam.gain,'gain',.035+swell*.03+storm*.12,.5);
@@ -134,6 +146,18 @@ export class Sound {
     if(name==='gull'){const now=this.ctx.currentTime,g=this.out(pos,.4);for(let i=0;i<3;i++){const t=now+i*.22,o=this.ctx.createOscillator(),a=this.ctx.createGain(),base=1250+Math.random()*300;o.type='sawtooth';o.frequency.setValueAtTime(base,t);o.frequency.linearRampToValueAtTime(base*1.7,t+.05);o.frequency.exponentialRampToValueAtTime(base*.6,t+.2);const f=this.ctx.createBiquadFilter();f.type='bandpass';f.frequency.value=2200;f.Q.value=2;o.connect(f).connect(a).connect(g);this.env(a,t,.01,.12,.2);o.start(t);o.stop(t+.25);}}
     if(name==='feathers'){this.burst(this.pink,{type:'bandpass',freq:1200,q:.7,dur:.25,attack:.005,gain:.5,pos});this.gull&&this.effect('gull',{pos});}
     if(name==='hitmark')this.tone(1800,{type:'square',dur:.05,gain:.08,reverb:0});
+    // saída de chamada (o padeiro some): dois tons descendo, bem arredondados
+    if(name==='leave'){[[659.3,0],[440,.13]].forEach(([f,w])=>{this.tone(f,{type:'sine',dur:.16,attack:.008,gain:.22,when:w,reverb:.1,pos});this.tone(f*2,{type:'sine',dur:.08,attack:.005,gain:.03,when:w,reverb:.1,pos});});}
+    if(name==='join'){[[440,0],[659.3,.13]].forEach(([f,w])=>this.tone(f,{type:'sine',dur:.16,attack:.008,gain:.2,when:w,reverb:.1,pos}));}
+    if(name==='puff'){this.burst(this.pink,{type:'lowpass',freq:900,to:200,dur:.5,attack:.01,gain:.35,pos,reverb:.2});}
+    if(name==='blip')this.tone(520+Math.random()*120,{type:'square',dur:.025,attack:.002,gain:.025,reverb:0});
+    if(name==='swing')this.burst(this.pink,{type:'bandpass',freq:500+(o.k||0)*400,to:900,q:3,dur:.18,attack:.05,gain:.12,pos});
+    if(name==='ropeThrow')this.burst(this.pink,{type:'bandpass',freq:300,to:1600,q:2,dur:.5,attack:.03,gain:.3,pos});
+    if(name==='ropeTie'){this.burst(this.brown,{type:'lowpass',freq:700,dur:.12,attack:.002,gain:.5,pos,reverb:.1});this.creak();this.tone(180,{type:'triangle',dur:.12,gain:.15,pos});}
+    if(name==='ropeMiss')this.burst(this.white,{type:'bandpass',freq:1400,to:400,q:.8,dur:.5,gain:.4,pos,reverb:.3});
+    if(name==='rescue'){const now=this.ctx.currentTime;[60,64,67,72].forEach((n,i)=>this.pluck(n,now+i*.08,.26,i%2?.3:-.3));}
+    if(name==='shoo'){this.burst(this.pink,{type:'bandpass',freq:700,to:300,q:1.5,dur:.12,attack:.01,gain:.35,pos});}
+    if(name==='song'){const now=this.ctx.currentTime;[67,71,74,79].forEach((n,i)=>this.pluck(n,now+i*.06,.25,0));}
     if(name==='rack'){this.burst(this.white,{type:'bandpass',freq:1500,q:3,dur:.08,gain:.35,pos});this.tone(220,{type:'triangle',dur:.1,gain:.2,pos});}
     if(name==='plop')this.tone(700,{type:'sine',dur:.12,gain:.25,to:180,pos});
     if(name==='bite'){this.tone(620,{type:'sine',dur:.1,gain:.3,to:160,pos});this.tone(520,{type:'sine',dur:.1,gain:.25,to:140,pos,when:.14});this.tone(1318,{type:'triangle',dur:.25,gain:.12,when:.02});}

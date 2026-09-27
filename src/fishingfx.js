@@ -74,18 +74,18 @@ export class FishingFX {
         if(a>=1){fl.kind='show';fl.t=0;fl.dur=1.9;if(this.onCard&&local)this.onCard(fl.species,fl.weight);}}
       else if(fl.kind==='show'){fish.position.copy(show);if(local){fish.quaternion.copy(camera.quaternion);fish.rotateY(Math.PI/2+Math.sin(fl.t*2)*.3);fish.rotateX(Math.sin(fl.t*13)*.35);}else{fish.rotation.set(Math.sin(fl.t*13)*.4,fl.t,0);}
         if(a>=1){fl.kind='bucket';fl.t=0;fl.dur=.55;fl.from=fish.position.clone();}}
-      else if(fl.kind==='bucket'){const b=boat.localToWorld(boat.userData.bucketLocal.clone().add(V(0,.3,0)));fish.position.lerpVectors(fl.from,b,a);fish.position.y+=Math.sin(a*Math.PI)*.8;fish.scale.setScalar(lerp(1,.75,a));
-        if(a>=1){this.flights.splice(this.flights.indexOf(fl),1);this.scene.remove(fish);this.toBucket(fish,boat);if(this.onBucket)this.onBucket(b);}}
+      else if(fl.kind==='bucket'){const b=(this.bucketRoot||boat).localToWorld(V(0,.3,0));fish.position.lerpVectors(fl.from,b,a);fish.position.y+=Math.sin(a*Math.PI)*.8;fish.scale.setScalar(lerp(1,.75,a));
+        if(a>=1){this.flights.splice(this.flights.indexOf(fl),1);this.scene.remove(fish);this.toBucket(fish,this.bucketRoot||boat);if(this.onBucket)this.onBucket(b);}}
     }
     // peixes no balde: se debatem de vez em quando
     this.bucket.forEach((f,i)=>{const u=f.userData;u.next=(u.next??Math.random()*3)-dt;if(u.next<0){u.flop=.5;u.next=2+Math.random()*5;}u.flop=Math.max(0,(u.flop||0)-dt);flop(f,dt,u.flop>0?1:.05);f.position.y=u.baseY+(u.flop>0?Math.abs(Math.sin(u.flop*20))*.04:0);});
     this.spray.flush();
   }
   // Gaivota leva o peixe de cima do balde (o visual volta a bater com a contagem via syncBucket)
-  steal(boat){const f=this.bucket.pop();if(f)boat.remove(f);return !!f;}
+  steal(){const f=this.bucket.pop();if(f)f.removeFromParent();return !!f;}
   pendingToBucket(){return this.flights.filter(f=>f.kind!=='dive').length;}
   // o balde mostra os últimos itens de verdade (lista de [espécie, kg])
-  syncBucket(list,boat){const count=list.length,target=Math.min(12,Math.max(0,count-this.pendingToBucket()));while(this.bucket.length>target){boat.remove(this.bucket.pop());}while(this.bucket.length<target){const item=list[this.bucket.length+Math.max(0,count-12)];const f=makeFish(item?item[0]:0);this.toBucket(f,boat);}}
-  toBucket(fish,boat){const L=fish.userData.len||.3;fish.scale.setScalar(Math.min(.72,.3/L));const n=this.bucket.length,a=n*2.4;fish.position.copy(boat.userData.bucketLocal).add(V(Math.cos(a)*.07,.14+Math.min(n,10)*.022,Math.sin(a)*.07));fish.rotation.set(-1.2+Math.random()*.4,a,Math.random()*.6);fish.userData.baseY=fish.position.y;boat.add(fish);this.bucket.push(fish);
-    if(this.bucket.length>12){const old=this.bucket.shift();boat.remove(old);}}
+  syncBucket(list,boat){const count=list.length,target=Math.min(12,Math.max(0,count-this.pendingToBucket()));while(this.bucket.length>target){this.bucket.pop().removeFromParent();}while(this.bucket.length<target){const item=list[this.bucket.length+Math.max(0,count-12)];const f=makeFish(item?item[0]:0);this.toBucket(f,boat);}}
+  toBucket(fish,boat){const L=fish.userData.len||.3;fish.scale.setScalar(Math.min(.72,.3/L));const n=this.bucket.length,a=n*2.4;fish.position.set(Math.cos(a)*.07,.14+Math.min(n,10)*.022,Math.sin(a)*.07);fish.rotation.set(-1.2+Math.random()*.4,a,Math.random()*.6);fish.userData.baseY=fish.position.y;boat.add(fish);this.bucket.push(fish);
+    if(this.bucket.length>12){this.bucket.shift().removeFromParent();}}
 }

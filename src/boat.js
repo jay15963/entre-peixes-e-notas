@@ -40,7 +40,7 @@ export function makeBoat(){
   kit.add(wood,sweep(keel,.07,.07),WOOD_DARK,.05);
   // Espelho de popa
   {const zq=-2,pts=[];for(let i=0;i<=8;i++)pts.push(hullPoint(1,zq,i/8,.02));const pos=[],c=V(0,hullPoint(1,zq,.5).y,zq*HS);const all=[...pts.map(p=>V(-p.x,p.y,p.z)).reverse(),V(0,pts[0].y-.07,pts[0].z),...pts];
-   for(let i=0;i<all.length-1;i++){pos.push(c,all[i+1],all[i]);}const g=new THREE.BufferGeometry().setFromPoints(pos);g.translate(0,0,-.012);g.computeVertexNormals();kit.add(paintM,g,TEAL,.05);
+   for(let i=0;i<all.length-1;i++){pos.push(c,all[i+1],all[i]);}pos.push(c,all[0],all[all.length-1]);/* fecha o topo do espelho, entre as duas bordas */const g=new THREE.BufferGeometry().setFromPoints(pos);g.translate(0,0,-.012);g.computeVertexNormals();kit.add(paintM,g,TEAL,.05);
    const gi=g.clone();gi.translate(0,0,.05);const p=gi.attributes.position;for(let i=0;i<p.count;i+=3){const x=p.getX(i+1),y=p.getY(i+1),z=p.getZ(i+1);p.setXYZ(i+1,p.getX(i+2),p.getY(i+2),p.getZ(i+2));p.setXYZ(i+2,x,y,z);}gi.computeVertexNormals();kit.add(wood,gi,WOOD,.05);}
   // Alcatrate (borda envernizada), verdugo e cantoneiras
   for(const s of [-1,1]){
@@ -64,12 +64,9 @@ export function makeBoat(){
   // Remos deitados sobre os bancos
   for(const s of [-1,1]){const x=s*.78;kit.add(wood,limb(V(x,.83,-2.6),V(x+s*.05,.83,2.1),.022,.022,6),VARNISH,.05);kit.add(wood,box([x+s*.06,.83,2.35],[.14,.018,.5]),VARNISH,.05);kit.add(wood,box([x,.83,-2.75],[.035,.035,.18]),WOOD_DARK,.05);}
   // Balde de alumínio, caixa de pesca, rede com boias e cabo enrolado
-  const bucket=new THREE.LatheGeometry([V(.0,0),V(.17,0),V(.2,.34),V(.215,.35),V(.2,.36)],12);bucket.translate(.62,DECK,1.2);kit.add(metal,bucket,0xa7adb1,.06);
-  kit.add(metal,new THREE.TorusGeometry(.2,.006,4,16,Math.PI).rotateY(Math.PI/2).translate(.62,DECK+.36,1.2),METAL,.02);
   kit.add(paintM,box([-.62,DECK+.1,1.35],[.42,.2,.26]),0x3f6b3a,.04);kit.add(paintM,box([-.62,DECK+.215,1.35],[.44,.04,.28]),0x2f5230,.04);kit.add(metal,sweep([V(-.72,DECK+.24,1.35),V(-.72,DECK+.29,1.35),V(-.52,DECK+.29,1.35),V(-.52,DECK+.24,1.35)],.018,.012),METAL,.02);
   kit.add(rope,sculpt(ellipsoid([.15,DECK+.1,3.35],[.42,.16,.55],14,8),v=>{v.y+=Math.sin(v.x*23)*Math.sin(v.z*19)*.035;v.x+=Math.sin(v.z*17)*.02;}),0x2f4d3b,.18);
   for(let i=0;i<5;i++)kit.add(paintM,ellipsoid([-.1+i*.11,DECK+.22+Math.sin(i)*.03,3.1+Math.cos(i*2)*.12],[.04,.03,.04],8,6),0xe86a24,.04);
-  {const pts=[];for(let i=0;i<150;i++){const a=i*.4,r=.08+i*.0012;pts.push(V(-.45+Math.cos(a)*r,DECK+.02+Math.floor(i/16)*.012,2.9+Math.sin(a)*r));}kit.add(rope,tube(pts,.012,5),0xc9a86c,.12);}
   // Defensas penduradas por fora
   for(const z of [-1.2,1.1]){const top=hullPoint(1,z/HS,1,.03),h=V(top.x+.06,top.y-.45,z);kit.add(rope,limb(top,h.clone().add(V(0,.2,0)),.006,.006,4),0xc9a86c,.1);kit.add(paintM,loft([{y:h.y-.13,cx:h.x,cz:z,rx:.05,rz:.05},{y:h.y-.1,cx:h.x,cz:z,rx:.075,rz:.075},{y:h.y+.1,cx:h.x,cz:z,rx:.075,rz:.075},{y:h.y+.13,cx:h.x,cz:z,rx:.05,rz:.05}],{n:10}),0xf0ece3,.04);}
   // Cunhos de amarração
@@ -79,6 +76,8 @@ export function makeBoat(){
   const tex=nameTexture();if(tex){const m=new THREE.MeshStandardMaterial({map:tex,transparent:true,roughness:.6,depthWrite:false});const back=new THREE.Mesh(new THREE.PlaneGeometry(1.1,.28),m);back.position.set(0,.72,-2*HS-.03);back.rotation.y=Math.PI;group.add(back);
     for(const s of [-1,1]){const p=hullPoint(s,1.55,.72,.035),q=new THREE.Mesh(new THREE.PlaneGeometry(.8,.2),m);q.position.copy(p);q.rotation.y=s*(Math.PI/2-.35);q.rotation.z=0;group.add(q);}}
   group.userData.bucket=V(.62,DECK,1.2);
+  // cabo enrolado no convés (a corda de atracar/resgatar): some quando alguém pega
+  {const ck=new Kit(),pts=[];for(let i=0;i<150;i++){const a=i*.4,r=.08+i*.0012;pts.push(V(Math.cos(a)*r,.02+Math.floor(i/16)*.012,Math.sin(a)*r));}ck.add(rope,tube(pts,.012,5),0xc9a86c,.12);const coil=ck.build();coil.position.set(-.45,DECK,2.9);group.add(coil);group.userData.coil=coil;}
   return group;
 }
 // Console do leme com roda de seis raios e manetes
@@ -118,4 +117,35 @@ export function addLantern(parent){
   const cap=new THREE.Mesh(new THREE.ConeGeometry(.1,.07,6),iron);cap.position.y=-.03;hang.add(cap);const ring=new THREE.Mesh(new THREE.TorusGeometry(.02,.005,4,8),iron);ring.position.y=.01;hang.add(ring);
   const light=new THREE.PointLight(0xffa148,3.5,11,1.6);light.position.y=-.26;hang.add(light);
   g.position.set(-1.12,.55,-3.28);g.rotation.y=-.5;parent.add(g);g.userData={hang,light,glass};return g;
+}
+
+// Balde de alumínio com alça: peça solta (fica no barco, na mão de alguém ou no chão)
+export function makeBucket(){
+  const kit=new Kit(),metal=new THREE.MeshStandardMaterial({vertexColors:true,roughness:.35,metalness:.75,flatShading:true,side:THREE.DoubleSide});
+  kit.add(metal,new THREE.LatheGeometry([V(.0,0),V(.17,0),V(.2,.34),V(.215,.35),V(.2,.36)],14),0xa7adb1,.06);
+  for(const y of [.1,.24])kit.add(metal,new THREE.TorusGeometry(.19+y*.08,.005,4,18).rotateX(Math.PI/2).translate(0,y,0),0x8d9397,.02);
+  const g=kit.build();const handle=new THREE.Group(),hk=new Kit();hk.add(metal,new THREE.TorusGeometry(.2,.006,4,16,Math.PI).rotateY(Math.PI/2),METAL,.02);hk.add(metal,limb(V(-.05,.2,0),V(.05,.2,0),.012,.012,6),0x2a2d31,.02);handle.add(hk.build());handle.position.y=.36;g.add(handle);
+  g.userData.handle=handle;g.traverse(o=>{if(o.isMesh)o.castShadow=true;});return g;
+}
+// Violão: tampo com boca e roseta, braço com trastes, mão com tarraxas e seis cordas
+export function makeGuitar(){
+  const kit=new Kit(),wood=new THREE.MeshStandardMaterial({vertexColors:true,roughness:.45,flatShading:true}),dark=new THREE.MeshStandardMaterial({vertexColors:true,roughness:.6,flatShading:true}),metal=new THREE.MeshStandardMaterial({vertexColors:true,roughness:.25,metalness:.9});
+  // corpo em "8": duas elipses (bojo inferior e superior) com cintura
+  const outline=[];for(let i=0;i<=48;i++){const a=i/48*Math.PI*2,y=Math.sin(a),w=.19+.03*Math.cos(2*a)*0+(y<0?.035:0)-.045*Math.exp(-Math.pow((y-.15)/.25,2));outline.push(new THREE.Vector2(Math.cos(a)*w,y*.24));}
+  const shape=new THREE.Shape(outline);const hole=new THREE.Path();hole.absarc(0,.05,.055,0,Math.PI*2,true);shape.holes.push(hole);
+  const top=new THREE.ExtrudeGeometry(shape,{depth:.09,bevelEnabled:true,bevelSize:.008,bevelThickness:.008,bevelSegments:2,curveSegments:6});top.translate(0,0,-.045);
+  kit.add(wood,paint(top,(v,c)=>c.z>.04?0xd9a45a:c.z<-.04?0x6b3a1e:0x7a4424,.03));
+  kit.add(dark,new THREE.CylinderGeometry(.052,.052,.01,20).rotateX(Math.PI/2).translate(0,.05,.0),0x1a120c,.02);
+  kit.add(wood,new THREE.TorusGeometry(.066,.007,4,24).translate(0,.05,.048),0x3a2414,.02);
+  kit.add(dark,box([0,-.15,.05],[.13,.022,.012]),0x2a1a10,.02);// cavalete
+  // braço e escala com trastes
+  kit.add(wood,box([0,.43,.02],[.052,.42,.035]),0x8a5a30,.03);kit.add(dark,box([0,.43,.04],[.048,.42,.006]),0x2b1b12,.02);
+  for(let i=0;i<12;i++)kit.add(metal,box([0,.25+i*.032,.044],[.05,.003,.003]),0xd8d8d0,.01);
+  // mão com tarraxas
+  kit.add(wood,box([0,.7,.012],[.075,.13,.02],[-.15,0,0]),0x5a3a20,.03);
+  for(let i=0;i<3;i++)for(const s of [-1,1])kit.add(metal,limb(V(s*.037,.66+i*.035,.015),V(s*.06,.66+i*.035,.015),.006,.006,5),0xd8d8d0,.01);
+  const g=kit.build();
+  // cordas (linhas finas brilhantes)
+  const sm=new THREE.MeshStandardMaterial({color:0xe8e2cf,metalness:.9,roughness:.3});for(let i=0;i<6;i++){const x=-.017+i*.0068,c=new THREE.Mesh(new THREE.CylinderGeometry(.0012,.0012,.8,4),sm);c.position.set(x,.25,.05);g.add(c);}
+  g.traverse(o=>{if(o.isMesh)o.castShadow=true;});g.userData.strum=V(0,.02,.06);g.userData.neck=V(0,.5,.04);return g;
 }

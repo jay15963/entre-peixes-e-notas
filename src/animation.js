@@ -17,7 +17,7 @@ export class Animator{
     // ----- velocidade, aceleração e curva -----
     const prev=this.speed;this.speed=damp(this.speed,o.speed||0,9,dt);this.accel=damp(this.accel,(this.speed-prev)/Math.max(dt,1e-3),6,dt);
     if(this.prevYaw===null)this.prevYaw=o.yaw||0;let dy=(o.yaw||0)-this.prevYaw;dy=Math.atan2(Math.sin(dy),Math.cos(dy));this.prevYaw=o.yaw||0;this.turn=damp(this.turn,clamp(dy/Math.max(dt,1e-3),-8,8),8,dt);
-    const run=this.speed>3,w=clamp(this.speed/2.2,0,1.35),cycle=run?3.4:2.1;this.phase+=dt*Math.PI*2*this.speed/cycle;const p=this.phase;
+    const run=this.speed>3,w=clamp(this.speed/2.2,0,1.35),cycle=run?3.9:2.1;this.phase+=dt*Math.PI*2*this.speed/cycle;const p=this.phase;
     const strafe=clamp(o.strafe||0,-1,1),fwd=1-Math.abs(strafe)*.6,A=(run?.7:.5)*Math.min(w,1.2);
     // ----- pernas: balanço, joelho na fase aérea, passo lateral -----
     // passada assimétrica: a coxa sobe mais à frente do que estende atrás; joelho dobra na fase aérea
@@ -79,6 +79,15 @@ export class Animator{
       let tL=g.fore.getWorldPosition(new THREE.Vector3());if(rig.leftBlend>0){const m=g.magBottom.getWorldPosition(new THREE.Vector3());if(rig.leftTarget==='pouch')m.copy(j.torso.localToWorld(new THREE.Vector3(.12,-.05,.12)));tL.lerp(m,rig.leftBlend);}
       armIK(j.armL,j.foreL,HAND_L,tR,new THREE.Vector3(-.5,-.35,-.25));armIK(j.armR,j.foreR,HAND_R,tL,new THREE.Vector3(.45,-.5,.1));}
     else if(gun)gun.visible=false;
+    // ----- balde pendurado na mão direita (armL no modelo), corpo compensando o peso -----
+    if(o.carry&&!o.rifle){j.armL.rotation.set(.04,0,.16);j.foreL.rotation.set(-.08,0,0);j.torso.rotation.z-=.07;j.armR.rotation.z+=.12;}
+    // ----- corda: rolo na mão, ou laço girando acima da cabeça -----
+    if(o.rope==='hold'){j.armL.rotation.set(-.55,0,.1);j.foreL.rotation.set(-1,0,0);}
+    if(o.rope==='swing'){const a=t*5.6;j.armL.rotation.set(-2.7+Math.sin(a)*.18,Math.cos(a)*.25,-.25+Math.cos(a)*.15);j.foreL.rotation.set(-.35+Math.sin(a)*.2,0,0);j.torso.rotation.y+=Math.sin(a)*.06;j.armR.rotation.set(-.4,0,.2);j.foreR.rotation.set(-1.1,0,0);}
+    // ----- violão: mão direita dedilha na boca, esquerda no braço do violão (IK) -----
+    if(o.guitar){this.root.updateMatrixWorld(true);const g=o.guitar,st=o.strum??9,hit=st<.3?Math.sin(st*22)*Math.exp(-st*6):0;
+      const sp=g.localToWorld(g.userData.strum.clone().add(new THREE.Vector3(0,hit*.08+Math.sin(t*6)*.01,.05))),np=g.localToWorld(g.userData.neck.clone().add(new THREE.Vector3(0,Math.sin(t*.9)*.04,.03)));
+      armIK(j.armL,j.foreL,HAND_L,sp,new THREE.Vector3(-.5,-.4,-.3));armIK(j.armR,j.foreR,HAND_R,np,new THREE.Vector3(.5,-.5,-.2));j.head.rotation.x+=.25;j.head.rotation.y+=.2;}
     // ----- tapa: antecipação, golpe rápido, acompanhamento com sobra -----
     if(o.slap>0){const k=1-o.slap;
       // mão do tapa: o braço que aparece à direita da tela em primeira pessoa (esquerdo do modelo)

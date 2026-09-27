@@ -1,6 +1,6 @@
 # Entre peixes e Notas
 
-Pescaria cooperativa em **primeira pessoa** para **2 a 4 jogadores**, em WebGL/Three.js. A partida começa atracada no cais de uma vila de pescadores. A tripulação pesca, vende o pescado no supermercado da ilha e defende o balde das gaivotas ladras. O jogo não acaba sozinho: o fim do mundo só começa quando o anfitrião aperta **TAB**. O modo de um jogador existe para testar os sistemas. Os rostos usam as fotos originais como textura projetada na malha da cabeça.
+Pescaria cooperativa em **primeira pessoa** para **2 a 5 jogadores**, em WebGL/Three.js. A partida começa com o barco amarrado no cais de Laguna, uma vila de pescadores. A tripulação pesca, carrega o balde até o supermercado para vender, defende o pescado das gaivotas ladras, toca violão e resgata quem cai no mar com a corda do barco. O jogo não acaba sozinho: o fim do mundo só começa quando o anfitrião aperta **TAB**. O modo de um jogador existe para testar os sistemas. Os rostos usam as fotos originais como textura projetada na malha da cabeça.
 
 ## Rodar
 
@@ -11,7 +11,7 @@ npm ci
 npm run dev
 ```
 
-Abra o endereço informado pelo Vite. **Testar sozinho** inicia o teste solo. O jogo precisa de servidor HTTP: abrir `index.html` direto como arquivo não funciona. `atelier.html` é o visualizador dos modelos: personagens, barco, rifle, gaivota, padeiro, todos os pescados e uma prévia da primeira pessoa (com botões de atirar, recarregar e mirar).
+Abra o endereço informado pelo Vite. **Testar sozinho** inicia o teste solo. O jogo precisa de servidor HTTP: abrir `index.html` direto como arquivo não funciona. `atelier.html` é o visualizador dos modelos: os cinco personagens, barco, rifle, gaivota, padeiro, todos os pescados, os 20 moradores e uma prévia da primeira pessoa (com botões de atirar, recarregar e mirar). Para testar direto no jogo, abra `/?teste` (teste solo sem menu).
 
 ## Controles
 
@@ -23,32 +23,43 @@ Abra o endereço informado pelo Vite. **Testar sozinho** inicia o teste solo. O 
 | Pular | Espaço |
 | Dar um tapa · mirar com a luneta (com rifle) | Botão direito |
 | Atirar (com rifle) | Botão esquerdo |
-| Leme · pegar/devolver rifle · vender na peixaria | E |
+| Leme · rifle · balde · corda · violão · vender · falar com o padeiro · largar o que está na mão | E |
+| Girar o laço e soltar (com a corda) | Botão esquerdo, duas vezes |
+| Tocar o violão | D F J K |
+| Espantar a gaivota que agarrou o balde (segurar) | F |
 | Lançar, fisgar e recolher (segurar) | F |
 | Chamar o meteoro (só o anfitrião, duas vezes seguidas) | TAB |
 | Liberar o cursor e abrir as opções | Esc |
 
 ## A ilha
 
-No centro do mapa há uma vila no estilo açoriano do litoral catarinense:
+No centro do mapa fica **Laguna**, uma vila no estilo açoriano do litoral catarinense:
 
-- cais de madeira com estacas, cabeços de amarração, lampiões, boia salva-vidas e o pórtico "Porto da Vila";
+- cais de madeira com estacas, cabeços de amarração, lampiões, boia salva-vidas e o pórtico "Laguna";
 - calçadão de pedra portuguesa com guarda-corpo, escadas para a areia e quiosque de água de coco;
-- rua de paralelepípedo com calçadas, orelhão, postes coloniais e dez casas coloridas, com venezianas, floreiras, cercas e buganvílias;
+- rua de paralelepípedo com calçadas, orelhão, postes coloniais e casas coloridas, com venezianas, floreiras, cercas e buganvílias;
+- a travessa da Figueira, à esquerda do mercado, com mais cinco casas;
 - praça com chafariz e ipês-amarelos, e uma igrejinha com torre sineira;
 - praia com coqueiros, guarda-sóis, canoas e ranchos de pesca;
-- morro com araucárias e o farol.
+- morro com araucárias e o farol, com lente de Fresnel girando, dois fachos com poeira no ar, clarão quando o facho passa por quem olha e um holofote que varre o mar;
+- 20 moradores com roupas, chapéus (palha, pescador, gorro, panamá, boné) e acessórios variados, andando pelas ruas, pelo calçadão, pela praça e pelo cais. O caminho de cada um sai do relógio da partida, então todos os jogadores veem as mesmas pessoas no mesmo lugar. Os rostos são retratos pintados no próprio jogo. Mais tarde eles vão dar missões.
 
 A vegetação e a grama balançam com o vento, que fica mais forte na tempestade. No shader do mar, o fundo da ilha deixa a água rasa turquesa, e as marolas correm para a praia e quebram com espuma.
 
 O **supermercado** é inspirado nas lojas Althoff: paredes amarelo-limão, faixa de telha metálica ondulada azul, oval amarelo com o logo, marquise branca, totem na praça, carrinhos e portas automáticas. Por dentro há:
 
 - gôndolas cheias, hortifrúti, geladeiras de frios e uma pirâmide de latas de Baly;
-- a **peixaria**, onde se vende o balde inteiro com **E** (o barco precisa estar atracado, porque o balde fica nele);
-- a **padaria**, com "O pescador" trabalhando de padeiro — dá para dar um tapa nele: ele vira ragdoll, levanta e volta andando ao balcão;
+- a **peixaria**, onde se vende o balde inteiro com **E**. O balde precisa estar ali: alguém pega o balde no barco (E) e carrega até a peixaria;
+- a **padaria**, com "O pescador" trabalhando de padeiro. Com **E**, ele diz "É... Tenho que sair aqui" (todos por perto veem o diálogo sendo digitado) e some numa nuvem de fumaça, com o som de quem sai da chamada. Dez segundos depois ele volta pela porta da loja. O tapa ainda funciona: ele vira ragdoll, levanta e volta andando ao balcão;
 - quatro **caixas de autoatendimento** sem operador (a compra de itens entra numa próxima versão).
 
-Andar pela borda do barco não derruba mais ninguém na água: a borda é uma parede. Só se passa para o cais ou para a praia quando há chão firme ao lado. Os ragdolls sempre reaparecem no barco. O barco colide com a ilha e com o cais.
+Andar pela borda do barco não derruba ninguém na água: a borda é uma parede. Só se passa para o cais ou para a praia quando há chão firme ao lado. O barco colide com a ilha e com o cais.
+
+## Corda, deriva e resgate
+
+- **Deriva:** sem ninguém no leme e sem corda, o barco anda sozinho com o mar. Na tempestade ele vai longe.
+- **Atracar:** a corda fica enrolada na proa. Com ela na mão, mire num cabeço do cais e clique: o laço começa a girar sobre a cabeça. Clique de novo quando o laço estiver na frente (faixa verde). Quanto mais longe, menor a faixa, até o limite de 24 m. Acertando, a corda voa em arco e amarra no cabeço, com física de corda. **E** no cunho da proa ou no cabeço solta de novo.
+- **Morrer e reviver:** o tapa só derruba, e a pessoa levanta onde caiu. Cair no mar é o que conta: o corpo ainda voa no primeiro contato com a água e depois fica boiando. Quem está à deriva tem **20 segundos** (barra na tela) para ser laçado com o mesmo minigame da corda. Laçado, é puxado até quem segura a corda e levanta no barco. Se ninguém laçar a tempo, acorda no cais de Laguna.
 
 ## Pesca
 
@@ -60,6 +71,23 @@ São 25 coisas na linha, em raridades **comum, incomum, rara, épica e lendária
 - **Especial:** a **lata de BALY** (rótulo preto e amarelo do Baly Tradicional), que dá 30 segundos de velocidade em tudo — andar, pular, recolher a linha e atirar. Durante o efeito, a tela fica frenética: matiz girando, pulso na batida, linhas de velocidade e uma batida eletrônica.
 
 O minigame mostra a raridade de quem está na linha. Manter a marca na faixa verde enche um **combo** que acelera o progresso. A interface tem o "!" gigante da fisgada, cartão de captura com raios na cor da raridade, confete, valor em reais e "novo recorde" ou "novo no álbum". A venda solta moedas e o contador de dinheiro vai rolando.
+
+## Balde e gaivotas no cabo de guerra
+
+O balde é uma peça solta: fica no convés, na mão de alguém ou no chão. As gaivotas vão atrás dele onde estiver. Se uma gaivota agarrar o balde enquanto alguém o segura, começa um cabo de guerra: segure **F** para manter a marca numa faixa que foge o tempo todo, antes que a garra da gaivota encha. É difícil de propósito. Os amigos podem atirar nela durante a briga, e o rifle continua sendo a melhor arma.
+
+## Violão
+
+O violão fica no banco do meio do barco. Com **E**, quem pega vira a banda da partida: a trilha automática saiu, e a música agora é o que alguém toca. São quatro trilhas (D F J K), com notas caindo numa estrada em perspectiva, combo, multiplicador e acordes no começo de cada compasso. Há seis músicas, e cada uma fica mais rápida e mais apertada que a anterior:
+
+1. Brilha, Brilha, Estrelinha (tradicional)
+2. Frère Jacques (tradicional francesa)
+3. Ode à Alegria (Beethoven)
+4. Scarborough Fair (tradicional inglesa)
+5. Greensleeves (tradicional inglesa)
+6. Laguna ao Entardecer (original do jogo)
+
+Depois da sexta, a lista recomeça ainda mais rápida. O som é posicional: quem está perto ouve bem, e quem está longe ouve cada vez menos. Nas opções há volume do jogo, volume da música (violão) e sensibilidade do mouse.
 
 ## Rifles e gaivotas
 
@@ -82,7 +110,7 @@ O clima alterna calmaria e tempestade indefinidamente. Quando o anfitrião apert
 
 O anfitrião é a autoridade sobre barco, pesca, gaivotas, venda, padeiro, tapas e relógio. Cada jogador controla o próprio movimento (no barco ou em terra) com predição local.
 
-- **Sala com código:** um jogador cria a sala e passa o código de 5 letras; até 3 amigos entram com ele.
+- **Sala com código:** um jogador cria a sala e passa o código de 5 letras; até 4 amigos entram com ele.
 - **Conexão manual:** para 2 jogadores, sem servidor de salas.
 - **Duas abas:** teste local no mesmo navegador.
 
@@ -110,7 +138,10 @@ O workflow `.github/workflows/pages.yml` testa, gera e publica a cada push na br
 - `src/shop.js`: supermercado (fachada, gôndolas, peixaria, padaria, caixas).
 - `src/weapons.js`: rifle, braços em primeira pessoa, recarga, luneta e traçante.
 - `src/gulls.js`: gaivotas ladras.
-- `src/main.js`: partida, movimento barco/terra, rede, câmera, cutscene e HUD.
+- `src/main.js`: partida, movimento barco/terra, itens (balde, corda, violão), resgate, padeiro, rede, câmera, cutscene e HUD.
+- `src/rope.js`: corda com física de Verlet (laço, arremesso, amarração, resgate).
+- `src/guitar.js`: minigame do violão e as músicas.
+- `src/npcs.js`: moradores de Laguna e os retratos pintados.
 - `src/fish.js`, `src/characters.js`, `src/boat.js`: modelos procedurais.
 - `src/environment.js`, `src/cataclysm.js`, `src/fluid.js`, `src/post.js`, `src/shaders.js`: céu, mar, meteoro, fluido e pós-processamento.
 - `src/animation.js`: animação procedural, IK dos braços e olhar entre personagens.

@@ -19,8 +19,10 @@ export const FACE_FIT=[
   // foto 3: cabeça inclinada ~5,6° (olho direito mais baixo); foto 4: tirada de baixo, face mais curta entre olhos e nariz
   {u:.53,v:.5,su:1.23,sv:.86,eyeY:1.638,mask:[.118,.15,1.6],tilt:.09},
   {u:.6375,v:.38,su:2.34,sv:1.6,eyeY:1.638,mask:[.118,.155,1.6],tilt:.074},
+  // foto 5: selfie de baixo, óculos sem aro; olhos em (140,215) e (248,212) px numa foto de 365×524
+  {u:.532,v:.41,su:2.42,sv:2.45,eyeY:1.638,mask:[.118,.158,1.6],tilt:-.012},
 ];
-export const FACE_FILES=['rosto-01.png','rosto-02.png','rosto-03.jpg','rosto-04.jpg'];
+export const FACE_FILES=['rosto-01.png','rosto-02.png','rosto-03.jpg','rosto-04.jpg','rosto-05.png'];
 // A foto já contém olhos, sobrancelhas, boca e barba: essas peças saem para não duplicar o rosto.
 // Média da pele na foto (bochechas e testa), em espaço linear, para equilibrar a cor com a pele do modelo.
 function faceAverage(image,fit){
@@ -39,13 +41,14 @@ export async function loadAssets(){
 }
 // Material de pele com a foto projetada na própria malha da cabeça (não é um plano colado):
 // projeção frontal em espaço do objeto, máscara elíptica e pela normal, e balanço de branco para a cor da pele.
-export function faceMaterial(assets,index,skin){
-  const fit=FACE_FIT[index],avg=assets.averages[index],base=skin.color;
+export function faceMaterial(assets,index,skin,custom=null){
+  // custom: rosto de NPC ({map,fit,avg}) no lugar das fotos dos jogadores
+  const fit=custom?.fit||FACE_FIT[index],avg=custom?.avg||assets.averages[index],base=skin.color,faceMap=custom?.map||assets.faces[index];
   const gain=new THREE.Vector3(base.r/Math.max(avg.x,1e-3),base.g/Math.max(avg.y,1e-3),base.b/Math.max(avg.z,1e-3));
   const m=new THREE.MeshStandardMaterial({color:skin.color.clone(),roughness:.62,metalness:0});
-  m.userData.face={fit,gain,map:assets.faces[index]};
+  m.userData.face={fit,gain,map:faceMap};
   m.onBeforeCompile=shader=>{
-    Object.assign(shader.uniforms,{uFace:{value:assets.faces[index]},uFit:{value:new THREE.Vector4(fit.u,fit.v,fit.su,fit.sv)},uEyeY:{value:fit.eyeY-1.43},uTilt:{value:fit.tilt||0},uMask:{value:new THREE.Vector3(...fit.mask)},uGain:{value:gain}});
+    Object.assign(shader.uniforms,{uFace:{value:faceMap},uFit:{value:new THREE.Vector4(fit.u,fit.v,fit.su,fit.sv)},uEyeY:{value:fit.eyeY-1.43},uTilt:{value:fit.tilt||0},uMask:{value:new THREE.Vector3(...fit.mask)},uGain:{value:gain}});
     shader.vertexShader=shader.vertexShader.replace('#include <common>','#include <common>\nvarying vec3 vFacePos;varying vec3 vFaceNormal;').replace('#include <begin_vertex>','#include <begin_vertex>\nvFacePos=position;vFaceNormal=normal;');
     shader.fragmentShader=shader.fragmentShader.replace('#include <common>','#include <common>\nvarying vec3 vFacePos;varying vec3 vFaceNormal;uniform sampler2D uFace;uniform vec4 uFit;uniform float uEyeY,uTilt;uniform vec3 uMask,uGain;')
       .replace('#include <map_fragment>',`
@@ -58,12 +61,18 @@ export function faceMaterial(assets,index,skin){
       diffuseColor.rgb=mix(diffuseColor.rgb,graded,mask);
       `);
   };
-  m.customProgramCacheKey=()=>'face-'+index;
+  m.customProgramCacheKey=()=>'face';
   return m;
 }
-// Primeira pessoa: a cabeça some; com o rifle, braços e tronco do próprio corpo também (os braços do viewmodel assumem)
-export function setFirstPerson(root,on,rifle=false){const j=root.userData.joints,hide=on&&rifle,joints=new Set(Object.values(j));j.head.visible=!on;j.armL.visible=j.armR.visible=!hide;
-  for(const c of j.torso.children)if(!joints.has(c)&&c!==root.userData.gun)c.visible=!hide;}
+// Primeira pessoa: a cabeça (e, com o rifle, os braços do próprio corpo) não é desenhada para a câmera, mas continua
+// projetando sombra: a malha troca para um material "fantasma" que não escreve cor nem profundidade.
+const GHOST=new THREE.MeshBasicMaterial({colorWrite:false,depthWrite:false});
+const REAL=new WeakMap();
+export const realMaterial=o=>REAL.get(o)||o.material;
+function ghost(obj,on,skip){obj.traverse(o=>{if(skip&&skip.has(o)||!o.isMesh)return;if(on){if(!REAL.has(o)){REAL.set(o,o.material);o.material=GHOST;}}else if(REAL.has(o)){o.material=REAL.get(o);REAL.delete(o);}});}
+export function setFirstPerson(root,on,rifle=false){const j=root.userData.joints,key=(on?1:0)+(on&&rifle?2:0);if(root.userData.fpKey===key)return;root.userData.fpKey=key;
+  const skip=new Set();for(const o of [root.userData.rod,root.userData.gun])o?.traverse(c=>skip.add(c));
+  ghost(j.head,on,skip);for(const k of ['armL','armR','foreL','foreR'])for(const c of j[k].children)if(!Object.values(j).includes(c))ghost(c,on&&rifle,skip);}
 export {makeCharacter} from './characters.js';
 export {makeBoat,addHelm,addLantern,addMotor} from './boat.js';
 export {makeFish} from './fish.js';

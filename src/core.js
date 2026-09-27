@@ -1,8 +1,8 @@
 import {CATCHES} from './catalog.js';
 export const CONFIG = Object.freeze({
   stormAt:60, asteroidAt:120, impactAt:137, embraceAt:145, kissAt:152, hitAt:164, titleAt:167.5,
-  impactDistance:235, boatScale:2.15, deckY:-.07, eyeHeight:1.62, walkSpeed:2.3, runSpeed:4.4,
-  respawnAfter:3.5, fixedStep:1/60, slapRange:1.7, protocol:4, maxPlayers:4, characters:4, balyTime:30, rampTime:8
+  impactDistance:235, boatScale:2.15, deckY:-.07, eyeHeight:1.62, walkSpeed:2.6, runSpeed:6.4,
+  respawnAfter:3.5, fixedStep:1/60, slapRange:1.7, protocol:5, maxPlayers:5, characters:5, balyTime:30, rampTime:8
 });
 export const clamp=(x,a=0,b=1)=>Math.max(a,Math.min(b,x));
 export const lerp=(a,b,t)=>a+(b-a)*t;
@@ -64,7 +64,7 @@ float tsunamiProfile(float s,float H){
 function hullHalf(zq){const L=(a,b,t)=>a+(b-a)*t;if(zq< -1.65)return L(.48,.67,(zq+2)/.35);if(zq< -1.1)return L(.67,.79,(zq+1.65)/.55);if(zq< -.45)return L(.79,.84,(zq+1.1)/.65);if(zq<.35)return L(.84,.83,(zq+.45)/.8);if(zq<1.05)return L(.83,.71,(zq-.35)/.7);if(zq<1.6)return L(.71,.49,(zq-1.05)/.55);if(zq<2)return L(.49,.2,(zq-1.6)/.4);return L(.2,.025,(zq-2)/.21);}
 export function deckHalfWidth(z){const zq=z/2.15,t=Math.max(0,((-.07+.68)/2.15-(.16+.11*Math.pow(Math.abs(zq)/2.21,3)))/.64);return hullHalf(zq)*(.57+.43*(t+.12))*2.15;}
 export function insideBoat(x,z){return Math.abs(z)<3.6 && Math.abs(x)<deckHalfWidth(z)-.2;}
-// Lobby: de 2 a 4 pescadores, cada um com um personagem diferente; começa quando todos marcam pronto.
+// Lobby: de 2 a 5 pescadores, cada um com um personagem diferente; começa quando todos marcam pronto.
 export class Lobby {
   constructor(mode='online'){this.mode=mode;this.players=new Map();}
   join(id,character){if(!Number.isInteger(character)||character<0||character>=CONFIG.characters)throw Error('Personagem invalido');if(!this.players.has(id)&&this.players.size>=CONFIG.maxPlayers)throw Error('Barco cheio');for(const [key,p]of this.players)if(key!==id&&p.character===character)throw Error('Personagem ocupado');const prev=this.players.get(id);this.players.set(id,{id,character,ready:prev?.ready&&prev.character===character||false});}
@@ -108,8 +108,36 @@ export class Fishing {
     return null;
   }
 }
-export const SPAWNS=[[-.45,-1.1],[.45,-1.1],[-.45,1.2],[.45,1.2]];
+export const SPAWNS=[[-.45,-1.1],[.45,-1.1],[-.45,1.2],[.45,1.2],[0,.55]];
 export function newPlayer(id,character){const s=SPAWNS[id%SPAWNS.length];return {id,character,x:s[0],z:s[1],land:0,baly:0,rifle:-1,ammo:5,reload:0,yaw:0,pitch:0,mode:'walk',fish:0,slap:0,ragTime:0,height:0,vy:0,speed:0,tp:0,cx:0,cz:0};}
 // yaw é relativo ao barco; x/z/h são a posição prevista pelo próprio cliente (movimento com autoridade local).
-export function inputPacket(input){const n=(v,a,b)=>clamp(Number(v)||0,a,b);return {type:'input',v:CONFIG.protocol,x:n(input.x,-1,1),z:n(input.z,-1,1),yaw:n(input.yaw,-1e4,1e4),pitch:n(input.pitch,-1.6,1.6),px:n(input.px,-4000,4000),pz:n(input.pz,-4000,4000),ph:n(input.ph,-20,60),land:input.land?1:0,speed:n(input.speed,0,8),tp:Math.floor(n(input.tp,0,1e6)),run:!!input.run,interact:!!input.interact,cast:!!input.cast,slap:!!input.slap,jump:!!input.jump,reel:!!input.reel,fall:!!input.fall,fire:!!input.fire,aim:!!input.aim,gull:Math.floor(n(input.gull,-1,31)),ray:Array.isArray(input.ray)?input.ray.slice(0,6).map(v=>n(v,-1e4,1e4)):null};}
-export function validPacket(p){return p&&p.v===CONFIG.protocol&&['hello','welcome','pick','ready','start','input','snapshot','lobby','event','bye'].includes(p.type);}
+export function inputPacket(input){const n=(v,a,b)=>clamp(Number(v)||0,a,b);return {type:'input',v:CONFIG.protocol,x:n(input.x,-1,1),z:n(input.z,-1,1),yaw:n(input.yaw,-1e4,1e4),pitch:n(input.pitch,-1.6,1.6),px:n(input.px,-4000,4000),pz:n(input.pz,-4000,4000),ph:n(input.ph,-20,60),land:input.land?1:0,speed:n(input.speed,0,8),tp:Math.floor(n(input.tp,0,1e6)),run:!!input.run,interact:!!input.interact,cast:!!input.cast,slap:!!input.slap,jump:!!input.jump,reel:!!input.reel,fall:!!input.fall,fire:!!input.fire,aim:!!input.aim,gull:Math.floor(n(input.gull,-1,31)),ray:Array.isArray(input.ray)?input.ray.slice(0,6).map(v=>n(v,-1e4,1e4)):null,throwAt:Math.floor(n(input.throwAt??-1,-1,200)),throwOk:!!input.throwOk,shoo:Math.floor(n(input.shoo,0,2)),strum:Array.isArray(input.strum)?input.strum.slice(0,8).map(v=>Math.floor(n(v,0,127))):null};}
+export function validPacket(p){return p&&p.v===CONFIG.protocol&&['hello','welcome','pick','ready','start','input','snapshot','lobby','event','bye','song','relay','full'].includes(p.type);}
+
+// ---------- Corda: laço girando sobre a cabeça ----------
+// O laço gira a uma velocidade fixa; acerta quem soltar com o laço na frente (ângulo 0). A janela encolhe com a distância.
+export const ROPE={max:24,min:2,length:7.5,flight:.85,omega:5.6};
+export function ropeWindow(dist){const k=clamp((dist-ROPE.min)/(ROPE.max-ROPE.min));return lerp(1.5,.2,Math.pow(k,.75));}
+export function ropeAngle(t){const a=(t*ROPE.omega)%(Math.PI*2);return a>Math.PI?a-Math.PI*2:a;}
+export function ropeHit(t,dist){return dist<=ROPE.max&&Math.abs(ropeAngle(t))<ropeWindow(dist)/2;}
+// ---------- Deriva do barco solto: corrente e vento mudam devagar; na tempestade ele vai longe ----------
+export function driftAt(t,storm){const a=t*.013+Math.sin(t*.051)*1.3,s=.1+storm*1.4+.04*Math.sin(t*.3);return {x:Math.sin(a)*s,z:Math.cos(a)*s,yaw:(Math.sin(t*.07)*.02+Math.sin(t*.23)*.012)*(1+storm*3)};}
+// ---------- Espantar a gaivota que agarrou o balde na sua mão (difícil de propósito: o rifle é a arma certa) ----------
+export class Shoo {
+  constructor(random=Math.random){this.random=random;this.reset();}
+  reset(){this.active=false;this.progress=0;this.grip=0;this.needle=.5;this.vel=0;this.target=.5;this.t=0;this.seed=0;}
+  start(){this.reset();this.active=true;this.seed=this.random()*100;}
+  get zone(){return .1;}
+  step(dt,held){
+    if(!this.active)return null;this.t+=dt;const t=this.t,s=this.seed;
+    // calibrado: um robô com reflexo perfeito sempre ganha; com o reflexo de uma pessoa (~0,2 s) ganha metade das vezes
+    const goal=clamp(.5+.28*Math.sin(t*1.3+s)+.07*Math.sin(t*3.3+s*2)+.015*Math.sin(t*11.3+s),.06,.94);this.target+=(goal-this.target)*Math.min(1,dt*6);
+    this.vel+=(held?2.5:-2.1)*dt;this.vel*=Math.exp(-dt*1.5);this.needle+=this.vel*dt;if(this.needle<0||this.needle>1){this.needle=clamp(this.needle);this.vel=0;}
+    const inZone=Math.abs(this.needle-this.target)<this.zone;
+    this.progress=clamp(this.progress+(inZone?.45:-.1)*dt);this.grip=clamp(this.grip+dt/6.5);
+    if(this.progress>=1){this.active=false;return 'win';}
+    if(this.grip>=1){this.active=false;return 'lose';}
+    return null;
+  }
+}
+export const DROWN_TIME=20;
