@@ -105,7 +105,7 @@ function event(name,p){
   if(name==='ropeCatch'){sound.effect('ropeTie',{pos:p.at?V(...p.at):pos});if(p.target===localId)toast('Te laçaram! Segura firme, estão te puxando.');else if(p.id===localId)toast('Laçou! Puxando o pescador para o barco…');}
   if(name==='rescued'){sound.effect('rescue');if(p.id===localId)toast('Resgatado! Nunca mais duvide da corda.');else toast(`Pescador ${(players[p.id]?.net??0)+1} foi resgatado!`);confetti('#7dff6a',50);}
   if(name==='drowned'){if(p.id===localId)toast('Ninguém te puxou a tempo. Você acordou no cais de Laguna.');}
-  if(name==='guitar'){sound.effect('rack',{pos});if(p.id===localId){if(p.on){gh.start();toast('Você é a banda! D F J K no tempo da nota · E larga o violão');}else{gh.stop();toast('Violão de volta ao banco.');}}}
+  if(name==='guitar'){sound.effect('rack',{pos});if(p.id===localId){if(p.on){gh.start();toast('Você é a banda! W/S escolhe a música · ENTER toca · D F J K no tempo da nota');}else{gh.stop();toast('Violão de volta ao banco.');}}}
   if(name==='strum'&&p.id!==localId){const m=models[p.id];const at=m?m.getWorldPosition(V()).add(V(0,1.1,0)):pos;sound.guitar(p.notes,at);const a=m?.userData.anim;if(a)a.strumT=0;}
   if(name==='song'&&p.id!==localId&&pl&&worldOf(pl).distanceTo(camera.position)<30)toast(`Pescador ${(pl.net??0)+1} tocou “${p.name}” (${Math.round(p.acc*100)}%)`);
   if(name==='shoo'){const g=gulls.gulls[p.gull];sound.effect('gull',{pos:g?boat.localToWorld(g.pos.clone()):null});if(p.id===localId){shooGame.start();toast('A GAIVOTA AGARROU O BALDE! Segure F para puxar e fique na faixa!');}else toast('Uma gaivota está brigando pelo balde! Atirem nela!');}
@@ -215,30 +215,36 @@ function moveLocal(p,i,dt,t){
   const grounded=p.height<=floorHere()+.02;if(i.jump&&grounded){p.vy=4.6*(p.baly>0?1.2:1);}
   p.speed=0;
   if(len){mx/=len;mz/=len;const speed=(i.run?CONFIG.runSpeed:CONFIG.walkSpeed)*boost,dx=mx*speed*dt,dz=mz*speed*dt;
-    const moved=p.land?(landMove(p,dx,dz)||landMove(p,dx,0)||landMove(p,0,dz)):boatMove(p,dx,dz);
+    const air=!grounded,moved=p.land?(landMove(p,dx,dz,air)||landMove(p,dx,0,air)||landMove(p,0,dz,air)):boatMove(p,dx,dz,air);
     if(moved)p.speed=speed;else if(!p.land&&displayTick%90===0&&floorAt(p.x+mx*.5,p.z+mz*.5)>.1)toast('ESPAÇO para pular o banco.');}
   p.vy-=10*dt;p.height+=p.vy*dt;const floor=floorHere();if(p.height<floor){if(p.vy<-3.2)sound.effect('land');p.height=floor;p.vy=0;}
+  // pulou para fora do cais ou do barco e caiu no mar: vira ragdoll na água (o anfitrião confirma)
+  if(p.land&&floor<-.35&&!p.fall&&p.height<waveHeight(p.x,p.z,t,weatherAt(story).storm)-.25){p.fall=true;p.vy=0;}
   const w=weatherAt(story);if(!p.land&&w.storm>.25){const ox=p.x,oz=p.z;p.x+=Math.sin(t*2.1)*w.storm*.17*dt;p.z+=Math.cos(t*1.7)*w.storm*.13*dt;if(!insideBoat(p.x,p.z)){p.x=ox;p.z=oz;}}
   if(p.speed&&grounded){stepDist+=p.speed*dt;if(stepDist>(i.run?1.55:.8)){stepDist=0;sound.effect('step');}}
 }
 // No barco: a borda é parede (ninguém cai por andar). Só passa se do outro lado houver chão firme na altura de um passo (cais, praia).
-function boatMove(p,dx,dz){
+function boatMove(p,dx,dz,air=false){
   const tryMove=(nx,nz)=>{
     if(insideBoat(nx,nz)){const floor=floorAt(nx,nz);if(p.height>=floor-.15){p.x=nx;p.z=nz;return true;}return false;}
     // passa por cima da amurada: procura chão firme até ~60 cm adiante (o casco é mais largo que o convés)
     const dl=Math.hypot(nx-p.x,nz-p.z)||1,ux=(nx-p.x)/dl,uz=(nz-p.z)/dl;
     for(const k of [0,.25,.5,.75,1]){const w=boat.localToWorld(V(nx+ux*k,CONFIG.deckY+p.height,nz+uz*k)),g=island.ground(w.x,w.z);
       if(g>-.35&&g-w.y<.95&&g-w.y>-1.8){const wy=worldYaw(p);p.land=1;p.x=w.x;p.z=w.z;p.height=Math.max(g,w.y);p.vy=0;p.yaw=wy;if(p===me())input.yaw+=boatState.heading;return true;}}
+    // no ar (pulo) a borda não segura: sai do barco para o mundo, por cima da água
+    if(air){const w=boat.localToWorld(V(nx,CONFIG.deckY+p.height,nz)),wy=worldYaw(p);p.land=1;p.x=w.x;p.z=w.z;p.height=w.y;p.yaw=wy;if(p===me())input.yaw+=boatState.heading;return true;}
     return false;};
   return tryMove(p.x+dx,p.z+dz)||tryMove(p.x+dx,p.z)||tryMove(p.x,p.z+dz);
 }
 // Em terra: colide com paredes, balcões, casas e árvores; não entra no mar; volta ao barco pisando no convés
-function landMove(p,dx,dz){
+function landMove(p,dx,dz,air=false){
   let [nx,nz]=island.collide(p.x+dx,p.z+dz,.3);if(villagers&&!island.exploded)[nx,nz]=villagers.push(nx,nz);
   // do cais para o barco: o convés pode estar a ~60 cm (vão entre a borda do cais e a borda caminhável)
   const dl=Math.hypot(dx,dz)||1;let l=null;for(const k of [0,.25,.5,.75,1]){const c=boat.worldToLocal(V(nx+dx/dl*k,p.height,nz+dz/dl*k));if(insideBoat(c.x,c.z)){l=c;break;}}
   if(l){const f=floorAt(l.x,l.z),deck=boat.localToWorld(V(l.x,CONFIG.deckY+f,l.z)).y;if(p.height-deck<1.4&&p.height-deck>-.6){const wy=p.yaw;p.land=0;p.x=l.x;p.z=l.z;p.height=Math.max(f,p.height-deck+f);p.vy=Math.min(p.vy,0);p.yaw=wy-boatState.heading;if(p===me())input.yaw-=boatState.heading;return true;}}
-  const g=island.ground(nx,nz);if(g<-.35||g>p.height+.55)return false;
+  // na praia a água continua bloqueada; do cais (ou já sobre a água) dá para pular no mar
+  const g=island.ground(nx,nz),u=p.x-ISLAND.x,v=p.z-ISLAND.z,onDock=u>=DOCK.u0-.1&&u<=DOCK.u1+.1&&v>=DOCK.v0-.1&&v<=DOCK.rampFrom,overSea=island.ground(p.x,p.z)<-.35;
+  if(g<-.35&&!(air&&(onDock||overSea))||g>p.height+.55)return false;
   p.x=nx;p.z=nz;return true;
 }
 function doSlap(p){p.slap=1;const wy=worldYaw(p),fx=Math.sin(wy),fz=Math.cos(wy),pw=worldOf(p);let hit=false;
@@ -336,7 +342,9 @@ function tickPlayer(p,i,dt,t,isLocal){
   if(i.cast&&p.rifle>=0)toastFor(p.id,'Devolva o rifle (E) para pescar.');else if(i.cast&&!handsFree(p)&&p.mode!=='guitar')toastFor(p.id,'Mãos ocupadas: largue o que está segurando (E) para pescar.');else if(i.cast&&p.mode!=='guitar'){if(f.phase==='idle')castLine(p,f);else if(f.phase==='bite')f.reel();else if(f.phase==='waiting'){f.reset();p.mode='walk';}}
   const result=f.step(dt,!!i.reel,t,p.baly>0);if(result){if(result==='caught')world.bucket.push([f.lastSpecies,f.lastWeight]);stateEvent(result,{id:p.id,fish:f.caught,species:f.lastSpecies,weight:f.lastWeight});if(result==='caught'&&f.lastSpecies===BALY){p.baly=CONFIG.balyTime;stateEvent('baly',{id:p.id});}if(result==='caught'||result==='escaped'){p.mode='walk';p.fish=f.caught;}}
   if(p.mode==='fish'&&(i.x||i.z)){f.reset();p.mode='walk';}
-  if(p.mode==='walk'){if(isLocal)moveLocal(p,i,dt,t);else if(i.px!==undefined&&i.tp===p.tp){p.x=i.px;p.z=i.pz;p.height=i.ph;p.speed=i.speed;p.land=i.land?1:0;}}else p.speed=0;
+  if(p.mode==='walk'){if(isLocal)moveLocal(p,i,dt,t);else if(i.px!==undefined&&i.tp===p.tp){p.x=i.px;p.z=i.pz;p.height=i.ph;p.speed=i.speed;p.land=i.land?1:0;}
+    // caiu no mar depois de um pulo (o próprio jogador detecta; o anfitrião transforma em ragdoll)
+    if(isLocal?p.fall:i.fall&&i.tp===p.tp){p.fall=false;rag(p.id,'water',[Math.sin(worldYaw(p))*1.5,-2,Math.cos(worldYaw(p))*1.5]);}}else p.speed=0;
 }
 // Corda: o cliente de quem arremessa resolve o minigame e manda o alvo e se acertou; o anfitrião valida a distância
 function throwRope(p,code,ok){const r=world.rope;if(r.h!==p.id||r.s!=='held')return;const from=handPos(p.id);let to=null,target=null;
@@ -391,7 +399,7 @@ function hostTick(dt,local){
 }
 function guestTick(dt,local){
   elapsed+=dt;story=storyTime(elapsed,world.trig);if(pred){moveLocal(pred,local,dt,elapsed);}
-  net.send(inputPacket({...local,px:pred.x,pz:pred.z,ph:pred.height,speed:pred.speed,tp:pred.tp,land:pred.land}));if(local.song)net.send({type:'song',v:CONFIG.protocol,...local.song});if(local.fire)local.fire=false;pred.fall=false;
+  net.send(inputPacket({...local,px:pred.x,pz:pred.z,ph:pred.height,speed:pred.speed,tp:pred.tp,land:pred.land,fall:pred.fall}));if(local.song)net.send({type:'song',v:CONFIG.protocol,...local.song});if(local.fire)local.fire=false;pred.fall=false;
   boatState.x+=Math.sin(boatState.heading)*boatState.speed*dt;boatState.z+=Math.cos(boatState.heading)*boatState.speed*dt;
   if(boatTarget){const k=Math.min(1,dt*5);boatState.x+=(boatTarget.x-boatState.x)*k;boatState.z+=(boatTarget.z-boatState.z)*k;}
 }
@@ -550,7 +558,7 @@ function updateHUD(t){const p=me(),f=fishing[localId];if(!p||!f)return;
   const nearBucket=free&&world.bucketAt<0&&Math.hypot(pw2.x-bw.x,pw2.z-bw.z)<1.3&&Math.abs(pw2.y-bw.y)<1.4,nearCoil=!p.land&&free&&world.rope.s==='boat'&&Math.hypot(p.x-ROPE_HOME.x,p.z-ROPE_HOME.z)<1.2,nearGuitar=!p.land&&free&&world.guitar<0&&Math.hypot(p.x-GUITAR_SPOT.x,p.z-GUITAR_SPOT.z)<1.2;
   const cleatW=boat.localToWorld(V(BOW_CLEAT.x,BOW_CLEAT.y,BOW_CLEAT.z)),nearTie=free&&world.rope.s==='tied'&&(Math.hypot(pw2.x-cleatW.x,pw2.z-cleatW.z)<1.5||Math.hypot(pw2.x-bollardPos(world.rope.tgt).x,pw2.z-bollardPos(world.rope.tgt).z)<1.5);
   const nearBaker=p.land&&baker.mode==='work'&&!world.talk&&Math.hypot(pw2.x-baker.x,pw2.z-baker.z)<2.6,holdBucket=world.bucketAt===localId,holdRope=world.rope.h===localId&&world.rope.s==='held';
-  $('context').textContent=p.mode==='guitar'?'VIOLÃO · D F J K no tempo das notas · E larga':holdBucket?(nearSell?`E · vender o balde (≈ ${money(bucketValue)})`:'BALDE NA MÃO · leve até a peixaria do mercado · E larga'):holdRope?'CORDA · mire num cabeço do cais ou num pescador na água e clique · E devolve':holding?'RIFLE · botão direito mira (luneta) · botão esquerdo atira · SHIFT segura a respiração · E devolve':p.mode==='drive'?`NO LEME · W/S acelerar · A/D virar · E soltar · ${Math.abs(boatState.speed*1.94).toFixed(1)} nós`:p.mode==='ragdoll'?'RETORNO AÉREO EM ANDAMENTO…':p.mode==='fish'?'F pescar · WASD cancelar':
+  $('context').textContent=p.mode==='guitar'?(gh.state==='play'?'VIOLÃO · D F J K no tempo das notas · Q volta à lista · E larga':'VIOLÃO · W/S escolhe a música · ENTER toca · E larga'):holdBucket?(nearSell?`E · vender o balde (≈ ${money(bucketValue)})`:'BALDE NA MÃO · leve até a peixaria do mercado · E larga'):holdRope?'CORDA · mire num cabeço do cais ou num pescador na água e clique · E devolve':holding?'RIFLE · botão direito mira (luneta) · botão esquerdo atira · SHIFT segura a respiração · E devolve':p.mode==='drive'?`NO LEME · W/S acelerar · A/D virar · E soltar · ${Math.abs(boatState.speed*1.94).toFixed(1)} nós`:p.mode==='ragdoll'?'RETORNO AÉREO EM ANDAMENTO…':p.mode==='fish'?'F pescar · WASD cancelar':
     target?'BOTÃO DIREITO · dar um tapa':nearBaker?'E · falar com o padeiro · BOTÃO DIREITO · tapa (por quê?)':nearBucket?'E · pegar o balde':nearCoil?'E · pegar a corda':nearGuitar?'E · tocar o violão':nearTie?'E · soltar a corda (o barco fica à deriva!)':bakerNear?'BOTÃO DIREITO · dar um tapa no padeiro (por quê?)':nearSell?(world.bucket.length?'PEIXARIA · traga o balde até aqui para vender':'PEIXARIA · traga o balde cheio para vender'):nearLane?'CAIXA DE AUTOATENDIMENTO · em breve':
     nearRack&&world.rifles.some(r=>r<0)?'E · pegar um rifle (as gaivotas estão de olho no balde)':nearHelm&&!engineDead?'E · assumir o leme':outward?'F · lançar a linha na direção da mira':p.land?'Laguna · o mercado Althoff fica no fim da rua':'Olhe para o mar para lançar · ESPAÇO pula bancos';
   $('tab-hint').hidden=!(host&&!world.trig&&!ended);
@@ -578,7 +586,7 @@ function localItems(controls,dt){const p=me();if(!p||!running||cinematic)return;
     else{const k=elapsed-ropeGame.t0,dist=ropeGame.pos.distanceTo(camera.position);controls.throwAt=ropeGame.code;controls.throwOk=ropeHit(k,dist);ropeGame=null;}controls.fire=false;}
   if(ropeGame){const t=ropeTargets().find(q=>q.code===ropeGame.code);if(!t||t.pos.distanceTo(camera.position)>ROPE.max+1){ropeGame=null;toast('O alvo saiu do alcance da corda.');}else ropeGame.pos=t.pos;if(controls.interact||controls.aim){ropeGame=null;controls.interact=false;}}
   controls.swing=!!ropeGame;
-  if(p.mode==='guitar'&&gh.active){const out=gh.update(dt,controls.lanes||[]),at=worldOf(p,1.1);if(out.play.length){sound.guitar(out.play,at);controls.strum=out.play;strumT=0;}if(out.ghost||out.miss)sound.deadNote(at);
+  if(p.mode==='guitar'&&gh.active){const out=gh.update(dt,controls.lanes||[],controls.nav||{}),at=worldOf(p,1.1);if(out.click)sound.effect('tick');if(out.milestone)sound.effect('combo',{level:Math.min(6,Math.round(out.milestone/10))});if(out.play.length){sound.guitar(out.play,at);controls.strum=out.play;strumT=0;}if(out.ghost||out.miss)sound.deadNote(at);
     if(out.finished){controls.song={name:out.finished.name,acc:out.finished.acc};sound.effect('song');toast(`“${out.finished.name}” · ${Math.round(out.finished.acc*100)}% de acerto · maior combo ${out.finished.best}`);confetti('#ffd23c',30+Math.round(out.finished.acc*50));}
     controls.cast=false;}
   if(world.shoo&&world.shoo.pid===localId){controls.cast=false;if(!shooGame.active&&!shooGame.sent)shooGame.start();const r=shooGame.step(dt,!!controls.reel);if(r){controls.shoo=r==='win'?1:2;shooGame.sent=true;}}else{shooGame.sent=false;if(shooGame.active)shooGame.reset();}
@@ -624,7 +632,7 @@ function hudItems(){const p=me();if(!p||!running)return;
     $('rope-label').textContent=hit?'AGORA!':'CLIQUE COM O LAÇO NA FRENTE';$('rope-dist').textContent=`${dist.toFixed(1)} m · ${dist>16?'DIFÍCIL':dist>9?'MÉDIO':'FÁCIL'} · E cancela`;}
   const shooing=!!(world.shoo&&world.shoo.pid===localId&&shooGame.active);show('shoo-ui',shooing);if(shooing){const z=shooGame.zone;$('shoo-zone').style.left=(shooGame.target-z)*100+'%';$('shoo-zone').style.width=z*200+'%';$('shoo-needle').style.left=shooGame.needle*100+'%';$('shoo-prog').style.width=shooGame.progress*100+'%';$('shoo-grip').style.width=shooGame.grip*100+'%';}
   const drowning=p.mode==='ragdoll'&&p.water&&!(world.rope.s==='pull'&&world.rope.pid===localId);show('drown-ui',drowning);if(drowning){const d=p.drown??DROWN_TIME;$('drown-bar').style.width=(d/DROWN_TIME*100)+'%';$('drown-text').textContent=Math.ceil(d)+' s';}
-  const playing=p.mode==='guitar'&&gh.active;show('gh',playing);if(playing)gh.draw(ghCanvas,520,380);
+  const playing=p.mode==='guitar'&&gh.active;show('gh',playing);if(playing)gh.draw(ghCanvas,560,420);
   // diálogo: só para quem está perto do padeiro
   const tk=world.talk,near=tk&&worldOf(p).distanceTo(V(baker.x,baker.y,baker.z))<14;show('talk',!!near);
   if(near){const txt=talkText(elapsed-tk.at);if(txt.length!==lastTyped){if(txt.length>lastTyped)sound.effect('blip');lastTyped=txt.length;}$('talk-text').textContent=txt;}else lastTyped=0;}

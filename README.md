@@ -78,16 +78,14 @@ O balde é uma peça solta: fica no convés, na mão de alguém ou no chão. As 
 
 ## Violão
 
-O violão fica no banco do meio do barco. Com **E**, quem pega vira a banda da partida: a trilha automática saiu, e a música agora é o que alguém toca. São quatro trilhas (D F J K), com notas caindo numa estrada em perspectiva, combo, multiplicador e acordes no começo de cada compasso. Há seis músicas, e cada uma fica mais rápida e mais apertada que a anterior:
+O violão fica no banco do meio do barco. Com **E**, quem pega vira a banda da partida: a trilha automática saiu, e a música agora é o que alguém toca. Primeiro aparece a lista de músicas (**W/S** escolhe, **ENTER** toca, **Q** volta à lista), cada uma marcada como **fácil, médio, difícil ou extremo**. São quatro trilhas (D F J K) com notas caindo numa estrada em perspectiva, janela de acerto folgada, combo, multiplicador até x4 (as bordas da estrada acendem), explosões nos acertos e avisos de combo. No fim, a nota em estrelas fica guardada na lista.
 
-1. Brilha, Brilha, Estrelinha (tradicional)
-2. Frère Jacques (tradicional francesa)
-3. Ode à Alegria (Beethoven)
-4. Scarborough Fair (tradicional inglesa)
-5. Greensleeves (tradicional inglesa)
-6. Laguna ao Entardecer (original do jogo)
+- **Fácil:** Brilha, Brilha, Estrelinha · Rema, Rema, Remador (Row, Row, Row Your Boat) · Frère Jacques · Canção do Pescador (original)
+- **Médio:** Ode à Alegria (Beethoven) · Meu Bem Está Além do Mar (My Bonnie) · O Marinheiro Bêbado (Drunken Sailor, cantiga de marinheiro e pirata)
+- **Difícil:** Scarborough Fair · Greensleeves · Saque em Laguna (shanty de pirata original)
+- **Extremo:** Laguna ao Entardecer (original) · No Salão do Rei da Montanha (Grieg, acelera até o fim) · Cavalgada das Valquírias (Wagner, mitologia nórdica)
 
-Depois da sexta, a lista recomeça ainda mais rápida. O som é posicional: quem está perto ouve bem, e quem está longe ouve cada vez menos. Nas opções há volume do jogo, volume da música (violão) e sensibilidade do mouse.
+Todas são de domínio público ou composições do jogo; músicas de filmes e séries (como as de piratas e vikings famosas) têm direitos autorais e ficaram de fora. O som é posicional: quem está perto ouve bem, e quem está longe ouve cada vez menos. Nas opções há volume do jogo, volume da música (violão) e sensibilidade do mouse.
 
 ## Rifles e gaivotas
 

@@ -246,13 +246,18 @@ export class Viewmodel {
   updateProp(dt,kind,{strum=0,chord=0,bob=0,swing=0}={}){if(!this.props||!this.arms)return false;for(const [k,o]of Object.entries(this.props))if(o.parent===this.propRoot)o.visible=k===kind;if(!kind)return false;
     const show=true;for(const s of ['L','R'])for(const m of Object.values(this.arms[s]))if(m&&m.isObject3D)m.visible=show;this.gun.visible=false;
     const o=this.props[kind],e=new THREE.Euler(),q=new THREE.Quaternion(),by=Math.abs(Math.cos(bob))*.01;
-    if(kind==='guitar'){o.position.set(.1,-.31+by,-.62);o.rotation.set(-.28,-.38,Math.PI/2-.4,'YXZ');o.updateMatrixWorld(true);
-      const strumP=o.localToWorld(o.userData.strum.clone().add(V(0,strum*.06,.04)));this.root.worldToLocal(strumP);
-      const neckP=o.localToWorld(o.userData.neck.clone().add(V(0,chord*.06,-.02)));this.root.worldToLocal(neckP);
-      const gq=o.quaternion.clone();
-      const RQ=gq.clone().multiply(q.setFromEuler(e.set(-.3,.2,Math.PI*.95)));const LQ=gq.clone().multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(0,-1.3,Math.PI*.5)));
-      this.placeArm('R',strumP.add(V(0,.05,.07)),RQ,[.6,.8,1,1.1],.6,.5,V(.24,-.5,.02),V(.9,-.6,0));
-      this.placeArm('L',neckP.add(V(0,-.03,.02)),LQ,[1.1+chord*.2,1.2,1.25-chord*.2,1.3],.2,.9,V(-.24,-.44,-.05),V(-.8,-.8,0));}
+    if(kind==='guitar'){
+      // violão como se segura de verdade: tampo para a frente e inclinado para cima (dá para ver as cordas olhando para baixo),
+      // braço para a esquerda; mão direita dedilha por cima da boca, mão esquerda abraça o braço com o polegar por trás
+      const B=(x,y,z)=>{const Y=x.clone().normalize(),Z=y.clone().addScaledVector(Y,-y.dot(Y)).normalize(),X=V().crossVectors(Y,Z);return new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(X,Y,Z));};
+      const neckDir=V(-1,.2,-.32).normalize(),top=V(0,.95,-.3);o.quaternion.copy(B(neckDir,top));o.position.set(.1,-.31+by,-.56);o.updateMatrixWorld(true);
+      const nrm=V(0,0,1).applyQuaternion(o.quaternion),across=V(1,0,0).applyQuaternion(o.quaternion),down=across.y<0?across.clone():across.clone().negate();
+      const hand=(yv,zv)=>{const Y=yv.clone().normalize(),Z=zv.clone().addScaledVector(Y,-zv.dot(Y)).normalize(),X=V().crossVectors(Y,Z);return new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(X,Y,Z));};
+      const sp=this.root.worldToLocal(o.localToWorld(o.userData.strum.clone())).addScaledVector(nrm,.05).addScaledVector(down,-.02+strum*.05);
+      const rZ=down.clone().multiplyScalar(.9).addScaledVector(neckDir,-.35).normalize(),RQ=hand(nrm,rZ);
+      this.placeArm('R',sp.clone().addScaledVector(rZ,-.05).addScaledVector(nrm,.012),RQ,[.55,.7,.85,.95],.55,.35,V(.26,-.52,.05),V(1,-.4,.3));
+      const np=this.root.worldToLocal(o.localToWorld(o.userData.neck.clone().add(V(0,chord*.07-.03,0))));const lY=nrm.clone().negate().addScaledVector(down,.35),lZ=down.clone().negate().addScaledVector(nrm,.6),LQ=hand(lY,lZ);
+      const lz=V(0,0,1).applyQuaternion(LQ);this.placeArm('L',np.clone().addScaledVector(nrm,-.03).addScaledVector(lz,-.05).addScaledVector(down,.03),LQ,[1.25+chord*.15,1.3,1.35-chord*.15,1.4],.35,.7,V(-.25,-.46,-.02),V(-.9,-.7,.2));}
     else if(kind==='coil'){const sw=swing;o.scale.setScalar(.55);o.position.set(.25,-.36+by,-.64);o.rotation.set(1.15,0,.35);
       const hp=o.position.clone().add(V(.01,.03,.05));this.placeArm('R',hp,q.setFromEuler(e.set(-.4,0,Math.PI*.55)),[1.3,1.35,1.4,1.45],.1,.9,V(.24,-.5,.1),V(.9,-.7,0));
       // mão esquerda segura a sobra do rolo quando o laço gira
