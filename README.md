@@ -23,7 +23,7 @@ Abra o endereço informado pelo Vite. **Testar sozinho** inicia o teste solo. O 
 | Pular | Espaço |
 | Dar um tapa · mirar com a luneta (com rifle) | Botão direito |
 | Atirar (com rifle) | Botão esquerdo |
-| Leme · rifle · balde · corda · violão · vender · falar com o padeiro · largar o que está na mão | E |
+| Usar o que está na mira (leme, rifle, balde, corda, violão, peixaria, padeiro, caixas): o aviso "E" aparece em cima do objeto · largar o que está na mão | E |
 | Girar o laço e soltar (com a corda) | Botão esquerdo, duas vezes |
 | Tocar o violão | D F J K |
 | Espantar a gaivota que agarrou o balde (segurar) | F |
@@ -42,7 +42,7 @@ No centro do mapa fica **Laguna**, uma vila no estilo açoriano do litoral catar
 - praça com chafariz e ipês-amarelos, e uma igrejinha com torre sineira;
 - praia com coqueiros, guarda-sóis, canoas e ranchos de pesca;
 - morro com araucárias e o farol, com lente de Fresnel girando, dois fachos com poeira no ar, clarão quando o facho passa por quem olha e um holofote que varre o mar;
-- 20 moradores com roupas, chapéus (palha, pescador, gorro, panamá, boné) e acessórios variados, andando pelas ruas, pelo calçadão, pela praça e pelo cais. O caminho de cada um sai do relógio da partida, então todos os jogadores veem as mesmas pessoas no mesmo lugar. Os rostos são retratos pintados no próprio jogo. Mais tarde eles vão dar missões.
+- 20 moradores (dá para dar tapa neles: viram ragdoll e voltam ao caminho) com roupas, chapéus (palha, pescador, gorro, panamá, boné) e acessórios variados, andando pelas ruas, pelo calçadão, pela praça e pelo cais. O caminho de cada um sai do relógio da partida, então todos os jogadores veem as mesmas pessoas no mesmo lugar. Os rostos são retratos pintados no próprio jogo. Mais tarde eles vão dar missões.
 
 A vegetação e a grama balançam com o vento, que fica mais forte na tempestade. No shader do mar, o fundo da ilha deixa a água rasa turquesa, e as marolas correm para a praia e quebram com espuma.
 
@@ -74,7 +74,7 @@ O minigame mostra a raridade de quem está na linha. Manter a marca na faixa ver
 
 ## Balde e gaivotas no cabo de guerra
 
-O balde é uma peça solta: fica no convés, na mão de alguém ou no chão. As gaivotas vão atrás dele onde estiver. Se uma gaivota agarrar o balde enquanto alguém o segura, começa um cabo de guerra: segure **F** para manter a marca numa faixa que foge o tempo todo, antes que a garra da gaivota encha. É difícil de propósito. Os amigos podem atirar nela durante a briga, e o rifle continua sendo a melhor arma.
+O balde é uma peça solta: fica no convés, na mão de alguém ou no chão. Largado no chão, ele ganha um marcador amarelo na tela (com a distância), como o das gaivotas. As gaivotas vão atrás dele onde estiver. Se uma gaivota agarrar o balde enquanto alguém o segura, começa um cabo de guerra: segure **F** para manter a marca numa faixa que foge o tempo todo, antes que a garra da gaivota encha. É difícil de propósito. Os amigos podem atirar nela durante a briga, e o rifle continua sendo a melhor arma.
 
 ## Violão
 

@@ -98,7 +98,7 @@ export class Villagers {
   push(x,z,r=.3){for(const n of this.list){if(!n.near)continue;const dx=x-n.x,dz=z-n.z,d=Math.hypot(dx,dz),m=r+.28;if(d<m&&d>1e-4){x=n.x+dx/d*m;z=n.z+dz/d*m;}}return [x,z];}
   update(t,dt,camera,exploded,frame){
     this.group.visible=!exploded;if(exploded)return;
-    for(const n of this.list){const p=this.place(n,t),x=ISLAND.x+p.u,z=ISLAND.z+p.v,y=groundLocal(p.u,p.v);n.x=x;n.z=z;
+    for(const n of this.list){if(n.rag!=null){n.near=false;continue;}const p=this.place(n,t),x=ISLAND.x+p.u,z=ISLAND.z+p.v,y=groundLocal(p.u,p.v);n.x=x;n.z=z;
       if(p.yaw!==null){let d=p.yaw-n.yaw;d=Math.atan2(Math.sin(d),Math.cos(d));n.yaw+=d*Math.min(1,dt*6);}else if(n.idle)n.yaw=p.yaw;
       const dist=camera.position.distanceTo(V(x,y,z));n.near=dist<60;n.model.visible=n.near;if(!n.near)continue;
       n.model.position.set(x,y,z);n.model.rotation.set(0,n.yaw,0);
