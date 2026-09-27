@@ -69,7 +69,11 @@ vec3 skyColor(vec3 d,float detail){
   vec3 dd=normalize(vec3(d.x,uSunDir.y+(d.y-uSunDir.y)*1.25,d.z));float disc=smoothstep(.99955,.9997,dot(dd,uSunDir));
   col=mix(col,vec3(9.,4.6,1.7)*(.7+.3*smoothstep(.9996,.99995,dot(dd,uSunDir))),disc*(1.-uStorm)*(1.-uRed)*smoothstep(-.01,.01,h));
   // Estrelas no zênite
-  if(h>.25){vec2 sp=d.xz/(h+.3)*180.;float st=hash12(floor(sp));float tw=.6+.4*sin(uTime*3.+st*60.);col+=vec3(.9,.9,1.)*step(.9975,st)*smoothstep(.25,.7,h)*tw*.7*(1.-uStorm)*(1.-uRed*.7);}
+  // pontos redondos com posição sorteada dentro da célula (o hash com a célula deslocada evita fileiras alinhadas);
+  // somem de vez com nuvens de tempestade e com o céu vermelho
+  float starVis=(1.-smoothstep(.02,.25,uStorm))*(1.-smoothstep(0.,.2,uRed));
+  if(h>.25&&starVis>0.){vec2 sp=d.xz/(h+.3)*180.;vec2 cell=floor(sp);float st=hash12(cell*1.37+vec2(17.3,91.7));vec2 off=vec2(hash12(cell+vec2(3.1,7.7)),hash12(cell+vec2(11.9,5.3)))*.6+.2;
+    float r=length(fract(sp)-off);float tw=.6+.4*sin(uTime*3.+st*60.);col+=vec3(.9,.9,1.)*step(.9975,st)*(1.-smoothstep(.06,.16,r))*smoothstep(.25,.7,h)*tw*.9*starVis;}
   if(h>0.){
     vec2 uv=d.xz/(h+.12)*1.4+vec2(uTime*mix(.012,.045,uStorm),uTime*.004);
     float dens=cloudDensity(uv,detail)*smoothstep(0.,.1,h);

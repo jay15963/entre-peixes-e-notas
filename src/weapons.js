@@ -154,11 +154,11 @@ export class Viewmodel {
   fire(){this.kick.kick(-10);this.tilt.kick(13);this.side.kick((Math.random()-.5)*6);this.flashT=0;this.flash.visible=true;this.flash.rotation.z=Math.random()*6;this.flash.scale.setScalar(.8+Math.random()*.5);this.mode='fired';this.modeT=0;}
   reload(){this.mode='reload';this.modeT=0;this.magSwapped=false;this.cycleEvents={};}
   emit(name){this.onSound?.(name);}
-  update(dt,{visible,aiming,yaw,pitch,bob,moving=0,steady=false}){
-    const show=visible;this.gun.visible=show;if(this.arms)for(const s of ['L','R'])for(const m of Object.values(this.arms[s]))if(m&&m.isObject3D)m.visible=show;
+  update(dt,{visible,hide=false,aiming,yaw,pitch,bob,moving=0,steady=false}){
+    const show=visible&&!hide;this.gun.visible=show;if(this.arms)for(const s of ['L','R'])for(const m of Object.values(this.arms[s]))if(m&&m.isObject3D)m.visible=show;
     // a cena do viewmodel segue a câmera
     this.camera.updateMatrixWorld();this.root.position.setFromMatrixPosition(this.camera.matrixWorld);this.root.quaternion.setFromRotationMatrix(this.camera.matrixWorld);this.root.updateMatrixWorld(true);
-    this.updateCasings(dt);if(!show)return;
+    this.updateCasings(dt);if(!visible){this.aim=0;return;}
     this.modeT+=dt;const busy=this.mode==='reload'||this.mode==='cycle';
     if(this.mode==='fired'&&this.modeT>.14){this.mode='cycle';this.modeT=0;this.cycleEvents={};}
     const rig=this.mode==='cycle'?rigState('cycle',this.modeT):this.mode==='reload'?rigState('reload',this.modeT):rigState('idle',0);

@@ -60,7 +60,7 @@ function event(name,p){
   if(name==='slap'){sound.effect(p.hit?'slap':'whoosh',{pos});if(pl)pl.slap=1;if(p.hit&&p.id===localId){hitStop=.09;jolt(-.6,0,2.2,-9);aberrPulse=.6;}else if(p.id!==localId&&!p.hit)models[localId]?.userData.anim?.flinch.kick(-4);}
   if(name==='ragdoll'){const m=models[p.id];if(m){ragdolls.launch(p.id,m,p.velocity);sound.effect('launch',{pos});if(p.id===localId){aberrPulse=1.2;jolt(3,4,-6,14);}if(p.id===localId)toast(p.reason==='water'?'Você esqueceu que não é um peixe.':p.reason==='boom'?'A ilha explodiu. Você foi junto.':'A amizade veio com força.');}}
   if(name==='splash'){const at=V(...p.position);environment.burst(at);sound.effect('splash',{pos:at});if(p.id===localId)toast('A água rejeitou sua presença.');}
-  if(name==='respawn'){ragdolls.remove(p.id);if(p.id===localId){toast('De volta ao barco. A dignidade fica no mar.');input.pitch=-.1;}}
+  if(name==='respawn'){ragdolls.remove(p.id);if(p.id===localId){toast(p.water?'De volta ao barco. A dignidade fica no mar.':'Você se levantou. Doeu mais no orgulho.');input.pitch=-.1;}}
   if(name==='cast')sound.effect('cast',{pos});
   if(name==='bite'){fx.event('bite',p.id);sound.effect('bite',{pos:fx.state[p.id]?.bobber.position});if(p.id===localId){pop('bite-pop');jolt(-1.5,0,.8,-3);}}
   if(name==='nibble'){fx.event('nibble',p.id);sound.effect('plop',{pos:fx.state[p.id]?.bobber.position});if(p.id===localId)jolt(-.4);}
@@ -147,6 +147,14 @@ function start(isSolo,roster){
 }
 function dropRifle(p){if(p.rifle<0)return;const slot=p.rifle;p.rifle=-1;world.rifles[slot]=-1;stateEvent('rifle',{id:p.id,slot,on:false});}
 function rag(id,reason,velocity){const p=players[id];if(p.mode==='ragdoll'||p.mode==='gone')return;dropRifle(p);p.mode='ragdoll';p.ragTime=0;fishing[id].reset();stateEvent('ragdoll',{id,reason,velocity:velocity||[(Math.random()-.5)*3,-1,(Math.random()-.5)*3]});}
+// Fim do ragdoll: quem caiu na água volta para o barco; quem caiu no convés, no cais ou na ilha levanta ali mesmo
+function standUp(p){const r=ragdolls.active.get(p.id),local=p.id===localId,was=p.land;let spot=null;
+  if(r&&!r.launched){const T=r.bodies.torso.position,l=boat.worldToLocal(V(T.x,T.y,T.z));
+    if(insideBoat(l.x,l.z))spot={land:0,x:l.x,z:l.z,h:floorAt(l.x,l.z)};
+    else if(!island.exploded){const [x,z]=island.collide(T.x,T.z,.3),g=island.ground(x,z);if(g>-.35){if(T.y>g+2&&p.ragTime<CONFIG.respawnAfter+4)return;spot={land:1,x,z,h:g};}}}
+  const water=!spot;if(water){const sp=SPAWNS[p.id%SPAWNS.length];spot={land:0,x:sp[0],z:sp[1],h:0};}
+  if(was!==spot.land){p.yaw+=(spot.land?1:-1)*boatState.heading;if(local)input.yaw+=(spot.land?1:-1)*boatState.heading;}
+  p.mode='walk';p.land=spot.land;p.x=spot.x;p.z=spot.z;p.height=spot.h;p.vy=0;p.tp++;stateEvent('respawn',{id:p.id,water});}
 function floorAt(x,z){const benches=[[-2.84,1.29],[-.258,1.48],[2.279,1.225]];for(const [bz,w]of benches)if(Math.abs(z-bz)<.32&&Math.abs(x)<w)return .79;return 0;}
 // Movimento com autoridade local (anfitrião para si; convidado com predição e envio da posição).
 function moveLocal(p,i,dt,t){
@@ -160,7 +168,7 @@ function moveLocal(p,i,dt,t){
     if(moved)p.speed=speed;else if(!p.land&&displayTick%90===0&&floorAt(p.x+mx*.5,p.z+mz*.5)>.1)toast('ESPAÇO para pular o banco.');}
   p.vy-=10*dt;p.height+=p.vy*dt;const floor=floorHere();if(p.height<floor){if(p.vy<-3.2)sound.effect('land');p.height=floor;p.vy=0;}
   const w=weatherAt(story);if(!p.land&&w.storm>.25){const ox=p.x,oz=p.z;p.x+=Math.sin(t*2.1)*w.storm*.17*dt;p.z+=Math.cos(t*1.7)*w.storm*.13*dt;if(!insideBoat(p.x,p.z)){p.x=ox;p.z=oz;}}
-  if(p.speed&&grounded){stepDist+=p.speed*dt;if(stepDist>(i.run?.8:.62)){stepDist=0;sound.effect('step');}}
+  if(p.speed&&grounded){stepDist+=p.speed*dt;if(stepDist>(i.run?1.15:.78)){stepDist=0;sound.effect('step');}}
 }
 // No barco: a borda é parede (ninguém cai por andar). Só passa se do outro lado houver chão firme na altura de um passo (cais, praia).
 function boatMove(p,dx,dz){
@@ -236,7 +244,7 @@ function tickPlayer(p,i,dt,t,isLocal){
   const f=fishing[p.id];p.slap=Math.max(0,p.slap-dt*2.2);
   if(p.mode==='gone')return;
   p.reload=Math.max(0,(p.reload||0)-dt);p.cool=Math.max(0,(p.cool||0)-dt);p.baly=Math.max(0,(p.baly||0)-dt);if(p.reload===0&&p.ammo<=0)p.ammo=5;
-  if(p.mode==='ragdoll'){p.ragTime+=dt;if(p.ragTime>CONFIG.respawnAfter){p.mode='walk';const sp=SPAWNS[p.id%SPAWNS.length];if(p.land&&p.id===localId)input.yaw-=boatState.heading;p.land=0;p.x=sp[0];p.z=sp[1];p.height=0;p.vy=0;p.tp++;stateEvent('respawn',{id:p.id});}return;}
+  if(p.mode==='ragdoll'){p.ragTime+=dt;if(p.ragTime>CONFIG.respawnAfter)standUp(p);return;}
   if(i.yaw!==undefined){p.yaw=i.yaw;p.pitch=i.pitch;}
   if(p.rifle>=0){
     // Tiro: o atirador informa o raio e a gaivota que viu na mira; o anfitrião confirma se ela ainda está viva
@@ -326,7 +334,7 @@ function fpCamera(t,dt){
   prevGrounded=grounded;
   // tapa local: tranco horizontal no instante do golpe
   if(prevSlap>.66&&p.slap<=.66)jolt(-.4,3.4,2,-5);prevSlap=p.slap;
-  bobPhase+=dt*(moving?p.speed*4.2:0);const amp=moving?(p.speed>2?1.35:1):0;
+  bobPhase+=dt*(moving?p.speed*4.2:0);const amp=moving?(p.speed>3?1.35:1):0;
   const bob=Math.abs(Math.sin(bobPhase))*.045*amp,sway=Math.sin(bobPhase)*.018*amp;
   const yaw=p.mode==='drive'||p.mode==='walk'||p.mode==='fish'?input.yaw:p.yaw;
   for(const k of Object.values(kick))k.update(0,dt);
@@ -334,30 +342,28 @@ function fpCamera(t,dt){
   const feetW=worldOf(p).y;if(lastFeetW!==null&&grounded&&Math.abs(feetW-lastFeetW)>.04&&Math.abs(feetW-lastFeetW)<1.6)stepLag+=lastFeetW-feetW;lastFeetW=feetW;stepLag*=Math.exp(-dt*11);
   const eye=V(p.x+Math.sin(p.yaw)*.14,(p.land?0:CONFIG.deckY)+p.height+CONFIG.eyeHeight+bob+kick.dip.x*.05,p.z+Math.cos(p.yaw)*.14);
   camera.position.copy(p.land?eye:boat.localToWorld(eye));camera.position.y+=stepLag;
-  runFov=lerp(runFov,p.speed>2?1:0,1-Math.exp(-dt*5));strafeRoll=lerp(strafeRoll,-(lastControls.x||0)*.03*(p.mode==='walk'?1:0),1-Math.exp(-dt*6));
+  runFov=lerp(runFov,p.speed>3?1:0,1-Math.exp(-dt*5));strafeRoll=lerp(strafeRoll,-(lastControls.x||0)*.03*(p.mode==='walk'?1:0),1-Math.exp(-dt*6));
   camera.quaternion.copy(p.land?new THREE.Quaternion():boat.quaternion).multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(input.pitch+kick.x.x*.02,yaw+Math.PI+kick.y.x*.02,sway+strafeRoll+kick.z.x*.02,'YXZ')));
   // tensão da linha treme as mãos (e a câmera)
   const f=fishing[localId];if(f?.phase==='reeling'){const s=f.tension*.004+(f.run>0?.004:0);camera.rotateX(Math.sin(t*43)*s);camera.rotateY(Math.sin(t*37+1)*s);}
   // Rifle: quadril → mira → luneta (acima de ~90% da mira a lente ocupa a tela, zoom 5x e sensibilidade reduzida)
   const holding=(p.rifle??-1)>=0&&p.mode==='walk',vm=viewmodel;camera.updateMatrixWorld();
   vm.hemi.color.copy(environment.ambient.color);vm.hemi.groundColor.copy(environment.ambient.groundColor);vm.hemi.intensity=environment.ambient.intensity;vm.sun.color.copy(environment.sun.color);vm.sun.intensity=environment.sun.intensity*.8;vm.sun.position.copy(U.uSunDir.value).multiplyScalar(5);vm.scene.environment=scene.environment;
-  const scopeK=smooth(.62,.95,vm.aim);vm.update(dt,{visible:holding&&!window.__peixesThirdPerson&&!cinematic&&scopeK<.98,aiming:holding&&!!lastControls.aim,yaw:input.yaw,pitch:input.pitch,bob:bobPhase,moving:moving?1:0});
+  const scopeK=smooth(.62,.95,vm.aim);vm.update(dt,{visible:holding&&!window.__peixesThirdPerson&&!cinematic,hide:scopeK>=.98,aiming:holding&&!!lastControls.aim,yaw:input.yaw,pitch:input.pitch,bob:bobPhase,moving:moving?1:0});
   const baly=p.baly>0?Math.min(1,p.baly/2):0;
   camera.fov=lerp(lerp(60+runFov*7,34,vm.aim),11.5,scopeK)+kick.fov.x+baly*(8+Math.sin(t*16.3)*3)*(1-scopeK);
   if(window.__peixesFov)camera.fov=window.__peixesFov;// diagnóstico: aproxima para inspecionar a arma
   input.aimScale=lerp(1,.2,scopeK);document.body.classList.toggle("scoped",scopeK>.5);$("scope").style.opacity=scopeK;show('scope',scopeK>.02);
   if(scopeK>0){const steady=!!lastControls.run;breath=lerp(breath,steady?.18:1,1-Math.exp(-dt*3));camera.rotateX((Math.sin(t*1.3)*.0035+Math.sin(t*2.9)*.0012)*breath*scopeK);camera.rotateY((Math.sin(t*.9+1)*.004+Math.sin(t*2.3)*.0015)*breath*scopeK);}
   // diagnóstico: câmera orbital de terceira pessoa para inspecionar as animações do próprio personagem
-  const tp=window.__peixesThirdPerson;setFirstPerson(models[localId],!tp);if(tp){const a=tp.yaw??(yaw+2.4),d=tp.dist||2.6,W=v=>p.land?v:boat.localToWorld(v);const focus=V(p.x,(p.land?0:CONFIG.deckY)+p.height+1.1,p.z);camera.position.copy(W(focus.clone().add(V(Math.sin(a)*d,tp.h??.5,Math.cos(a)*d))));camera.lookAt(W(focus));camera.fov=tp.fov||50;}
+  const tp=window.__peixesThirdPerson;setFirstPerson(models[localId],!tp,holding);if(tp){const a=tp.yaw??(yaw+2.4),d=tp.dist||2.6,W=v=>p.land?v:boat.localToWorld(v);const focus=V(p.x,(p.land?0:CONFIG.deckY)+p.height+1.1,p.z);camera.position.copy(W(focus.clone().add(V(Math.sin(a)*d,tp.h??.5,Math.cos(a)*d))));camera.lookAt(W(focus));camera.fov=tp.fov||50;}
 }
 // Assistência de olhar, zoom e tremores do impacto
 function cameraDrama(t,dt){
   const w=weatherAt(t),I=U.uImpact.value;let shake=w.storm*.0025;
   if(world.impact&&t>=CONFIG.asteroidAt&&t<CONFIG.embraceAt){
     const a=clamp((t-CONFIG.asteroidAt)/(CONFIG.impactAt-CONFIG.asteroidAt));shake+=Math.pow(a,3)*.012;
-    const assist=smooth(130.5,132,t)*(1-smooth(139.5,141.5,t))*.85;
-    if(assist>0&&me()?.mode!=='ragdoll'){const target=t<CONFIG.impactAt?U.uMeteorPos.value.clone():I.clone().add(V(0,55,0));const dir=target.sub(camera.position).normalize().applyQuaternion(boat.quaternion.clone().invert());
-      const dy=Math.atan2(dir.x,dir.z);let diff=dy-input.yaw;diff=Math.atan2(Math.sin(diff),Math.cos(diff));input.yaw+=diff*Math.min(1,dt*5*assist);input.pitch+=(Math.asin(clamp(dir.y,-1,1))-input.pitch)*Math.min(1,dt*5*assist);}
+    // câmera livre: nada puxa o olhar do jogador para o meteoro
     const age=t-CONFIG.impactAt;const zoom=smooth(136.1,136.9,t)*(1-smooth(137.3,138.8,t));camera.fov=lerp(camera.fov,26,zoom);
     if(age>=0)shake+=.02*Math.exp(-age*4);
   }
@@ -409,7 +415,7 @@ function renderPlayers(t,dt){
     const hasRifle=(p.id===localId?me().rifle:p.rifle)>=0,since=(p.baly>0?.62:.85)-(p.cool||0)-.14;
     const rig=!hasRifle?null:p.reload>0?rigState('reload',RELOAD-p.reload):since>0&&since<CYCLE&&(p.cool||0)>0?rigState('cycle',since):rigState('idle',0);
     const floorH=src.land?island.ground(src.x,src.z):floorAt(src.x,src.z),boost=src.baly>0?1.6:1;
-    anim.update(dt*boost,{time:t+p.id*1.3,speed:p.id===localId?src.speed||0:Math.min(sp,3),strafe:sp>.1?(vx*Math.cos(bodyYaw)-vz*Math.sin(bodyYaw))/sp:0,yaw:bodyYaw,grounded:src.height<=floorH+.04,
+    anim.update(dt*boost,{time:t+p.id*1.3,speed:p.id===localId?src.speed||0:Math.min(sp,5),strafe:sp>.1?(vx*Math.cos(bodyYaw)-vz*Math.sin(bodyYaw))/sp:0,yaw:bodyYaw,grounded:src.height<=floorH+.04,
       fishing:phase,tension:f?.tension||0,reelHeld:p.id===localId?!!lastControls.reel:(f?.vel||0)>0,slap:p.slap,drive:p.mode==='drive',steer:steerVis,pitch:p.id===localId?input.pitch:p.pitch,look,roll:src.land?0:boat.userData.roll||0,rifle:hasRifle,aim:p.id===localId?!!lastControls.aim:false,rig,hideGun:p.id===localId&&!window.__peixesThirdPerson});}
 }
 const RANK={lixo:0,comum:0,incomum:1,raro:2,epico:3,lendario:4,especial:3};
@@ -459,7 +465,7 @@ function updateHUD(t){const p=me(),f=fishing[localId];if(!p||!f)return;
 const markerEls=[];function updateMarkers(){const box=$('markers');const list=running&&!cinematic?gulls.thieves(v=>boat.localToWorld(v)):[];
   while(markerEls.length<list.length){const m=document.createElement('div');m.className='marker';m.innerHTML='<b>!</b><span></span>';box.appendChild(m);markerEls.push(m);}
   markerEls.forEach((m,i)=>{const g=list[i];m.hidden=!g;if(!g)return;const v=g.pos.clone().project(camera),behind=v.z>1;let x=v.x,y=v.y;if(behind){x=-x;y=-y;}const off=behind||Math.abs(x)>.92||Math.abs(y)>.88;if(off){const k=1/Math.max(Math.abs(x)/.9,Math.abs(y)/.85,1e-3);x*=k;y*=k;}
-    m.style.transform=`translate(${(x*.5+.5)*innerWidth}px,${(-y*.5+.5)*innerHeight}px)`;m.classList.toggle('edge',off);m.classList.toggle('fish',g.fish);m.querySelector('span').textContent=g.fish?'LADRA COM PEIXE':'LADRA';m.style.setProperty('--a',Math.atan2(-y,x)+'rad');});}
+    const sx=(x*.5+.5)*innerWidth,sy=(-y*.5+.5)*innerHeight;m.style.transform=`translate(${sx}px,${sy}px)`;m.classList.toggle('edge',off);m.classList.toggle('near',!off&&Math.hypot(sx-innerWidth/2,sy-innerHeight/2)<Math.min(140,innerHeight*.14));m.classList.toggle('fish',g.fish);m.querySelector('span').textContent=g.fish?'LADRA COM PEIXE':'LADRA';m.style.setProperty('--a',Math.atan2(-y,x)+'rad');});}
 function animate(){
   requestAnimationFrame(animate);const rdt=Math.min(clock.getDelta(),.05);hitStop=Math.max(0,hitStop-rdt);slowMo=Math.max(0,slowMo-rdt);const dt=rdt,vdt=rdt*(hitStop>0?.05:slowMo>0?.3:1);menuTime+=dt;displayTick++;
   const controls=input.enabled&&input.locked?input.read():input.enabled?{...input.read(),x:0,z:0,slap:false,cast:false,interact:false,jump:false,reel:false,fire:false,aim:false}:{};lastControls=controls;
@@ -517,7 +523,7 @@ async function init(){
   updateBoat(0,0);environment.update(0,0,boat,camera);await renderer.compileAsync(scene,camera);post.render(0);hidden.forEach(o=>o.visible=false);U.uImpactAge.value=-1;
   environment.updateEnvMap();show('loading',false);animate();
   // Diagnóstico somente leitura; o salto de tempo funciona apenas no teste solo.
-  window.__peixes={get state(){return {running,solo,host,localId,time:elapsed,phase:weatherAt(elapsed).phase,players:structuredClone(players),fishing:fishing.map(f=>({phase:f.phase,caught:f.caught,progress:f.progress})),lobby:lobby.snapshot(),impact:world.impact,drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles,meanFps:1/(frameTimes.reduce((a,b)=>a+b,0)/(frameTimes.length||1))}},get renderer(){return renderer;},get scene(){return scene;},get post(){return post;},get input(){return input;},get camera(){return camera;},get environment(){return environment;},get cataclysm(){return cataclysm;},get sound(){return sound;},get fx(){return fx;},get models(){return models;},get fishing(){return fishing;},get gulls(){return gulls;},get world(){return world;},get players(){return players;},get boat(){return boat;},get island(){return island;},get boatState(){return boatState;},get baker(){return baker;},get viewmodel(){return viewmodel;},get story(){return story;},setStory(v){if(solo)world.trig={at:elapsed-(v-CONFIG.asteroidAt+CONFIG.rampTime),from:CONFIG.asteroidAt};},me,jump(t){if(solo){elapsed=t;hold=null;}},hold(t){if(solo){hold=t;elapsed=t;}},look(yaw,pitch){input.yaw=yaw;input.pitch=pitch;}};
+  window.__peixes={get state(){return {running,solo,host,localId,time:elapsed,phase:weatherAt(elapsed).phase,players:structuredClone(players),fishing:fishing.map(f=>({phase:f.phase,caught:f.caught,progress:f.progress})),lobby:lobby.snapshot(),impact:world.impact,drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles,meanFps:1/(frameTimes.reduce((a,b)=>a+b,0)/(frameTimes.length||1))}},get renderer(){return renderer;},get scene(){return scene;},get post(){return post;},get input(){return input;},get camera(){return camera;},get environment(){return environment;},get cataclysm(){return cataclysm;},get sound(){return sound;},get fx(){return fx;},get models(){return models;},get fishing(){return fishing;},get gulls(){return gulls;},get world(){return world;},get players(){return players;},get boat(){return boat;},get island(){return island;},get boatState(){return boatState;},get baker(){return baker;},get viewmodel(){return viewmodel;},get story(){return story;},testRag(v){if(solo)rag(0,"slap",v||[1,2,0]);},setStory(v){if(solo)world.trig={at:elapsed-(v-CONFIG.asteroidAt+CONFIG.rampTime),from:CONFIG.asteroidAt};},me,jump(t){if(solo){elapsed=t;hold=null;}},hold(t){if(solo){hold=t;elapsed=t;}},look(yaw,pitch){input.yaw=yaw;input.pitch=pitch;}};
 }
 function triggerMeteor(){if(world.trig||!running)return;world.trig={at:elapsed,from:story};stateEvent('trigger',{});}
 function setupUI(){

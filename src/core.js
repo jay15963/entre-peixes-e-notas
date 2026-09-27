@@ -1,7 +1,7 @@
 import {CATCHES} from './catalog.js';
 export const CONFIG = Object.freeze({
   stormAt:60, asteroidAt:120, impactAt:137, embraceAt:145, kissAt:152, hitAt:164, titleAt:167.5,
-  impactDistance:235, boatScale:2.15, deckY:-.07, eyeHeight:1.62, walkSpeed:1.5, runSpeed:2.45,
+  impactDistance:235, boatScale:2.15, deckY:-.07, eyeHeight:1.62, walkSpeed:2.3, runSpeed:4.4,
   respawnAfter:3.5, fixedStep:1/60, slapRange:1.7, protocol:4, maxPlayers:4, characters:4, balyTime:30, rampTime:8
 });
 export const clamp=(x,a=0,b=1)=>Math.max(a,Math.min(b,x));
@@ -111,5 +111,5 @@ export class Fishing {
 export const SPAWNS=[[-.45,-1.1],[.45,-1.1],[-.45,1.2],[.45,1.2]];
 export function newPlayer(id,character){const s=SPAWNS[id%SPAWNS.length];return {id,character,x:s[0],z:s[1],land:0,baly:0,rifle:-1,ammo:5,reload:0,yaw:0,pitch:0,mode:'walk',fish:0,slap:0,ragTime:0,height:0,vy:0,speed:0,tp:0,cx:0,cz:0};}
 // yaw é relativo ao barco; x/z/h são a posição prevista pelo próprio cliente (movimento com autoridade local).
-export function inputPacket(input){const n=(v,a,b)=>clamp(Number(v)||0,a,b);return {type:'input',v:CONFIG.protocol,x:n(input.x,-1,1),z:n(input.z,-1,1),yaw:n(input.yaw,-1e4,1e4),pitch:n(input.pitch,-1.6,1.6),px:n(input.px,-4000,4000),pz:n(input.pz,-4000,4000),ph:n(input.ph,-20,60),land:input.land?1:0,speed:n(input.speed,0,4),tp:Math.floor(n(input.tp,0,1e6)),run:!!input.run,interact:!!input.interact,cast:!!input.cast,slap:!!input.slap,jump:!!input.jump,reel:!!input.reel,fall:!!input.fall,fire:!!input.fire,aim:!!input.aim,gull:Math.floor(n(input.gull,-1,31)),ray:Array.isArray(input.ray)?input.ray.slice(0,6).map(v=>n(v,-1e4,1e4)):null};}
+export function inputPacket(input){const n=(v,a,b)=>clamp(Number(v)||0,a,b);return {type:'input',v:CONFIG.protocol,x:n(input.x,-1,1),z:n(input.z,-1,1),yaw:n(input.yaw,-1e4,1e4),pitch:n(input.pitch,-1.6,1.6),px:n(input.px,-4000,4000),pz:n(input.pz,-4000,4000),ph:n(input.ph,-20,60),land:input.land?1:0,speed:n(input.speed,0,8),tp:Math.floor(n(input.tp,0,1e6)),run:!!input.run,interact:!!input.interact,cast:!!input.cast,slap:!!input.slap,jump:!!input.jump,reel:!!input.reel,fall:!!input.fall,fire:!!input.fire,aim:!!input.aim,gull:Math.floor(n(input.gull,-1,31)),ray:Array.isArray(input.ray)?input.ray.slice(0,6).map(v=>n(v,-1e4,1e4)):null};}
 export function validPacket(p){return p&&p.v===CONFIG.protocol&&['hello','welcome','pick','ready','start','input','snapshot','lobby','event','bye'].includes(p.type);}

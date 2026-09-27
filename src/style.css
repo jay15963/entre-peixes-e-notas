@@ -115,3 +115,4 @@ body.baly #speedlines{opacity:1;animation:speed .12s linear infinite}body.baly #
 #tab-hint{margin-left:6px;color:#ff9a7a}
 #toast{font:800 16px Arial;border-radius:14px;background:#0b1c3bdd;border:2px solid #ffffff22;box-shadow:0 5px 0 #0006}
 body.scoped #crosshair,body.scoped #hitmark{opacity:0}
+#markers .marker{transition:opacity .15s}#markers .marker.near{opacity:0}

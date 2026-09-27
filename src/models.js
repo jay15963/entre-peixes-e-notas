@@ -61,7 +61,9 @@ export function faceMaterial(assets,index,skin){
   m.customProgramCacheKey=()=>'face-'+index;
   return m;
 }
-export function setFirstPerson(root,on){root.userData.joints.head.visible=!on;}
+// Primeira pessoa: a cabeça some; com o rifle, braços e tronco do próprio corpo também (os braços do viewmodel assumem)
+export function setFirstPerson(root,on,rifle=false){const j=root.userData.joints,hide=on&&rifle,joints=new Set(Object.values(j));j.head.visible=!on;j.armL.visible=j.armR.visible=!hide;
+  for(const c of j.torso.children)if(!joints.has(c)&&c!==root.userData.gun)c.visible=!hide;}
 export {makeCharacter} from './characters.js';
 export {makeBoat,addHelm,addLantern,addMotor} from './boat.js';
 export {makeFish} from './fish.js';

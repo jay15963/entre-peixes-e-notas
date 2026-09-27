@@ -17,7 +17,7 @@ export class Animator{
     // ----- velocidade, aceleração e curva -----
     const prev=this.speed;this.speed=damp(this.speed,o.speed||0,9,dt);this.accel=damp(this.accel,(this.speed-prev)/Math.max(dt,1e-3),6,dt);
     if(this.prevYaw===null)this.prevYaw=o.yaw||0;let dy=(o.yaw||0)-this.prevYaw;dy=Math.atan2(Math.sin(dy),Math.cos(dy));this.prevYaw=o.yaw||0;this.turn=damp(this.turn,clamp(dy/Math.max(dt,1e-3),-8,8),8,dt);
-    const run=this.speed>2,w=clamp(this.speed/1.5,0,1.35),cycle=run?2.2:1.45;this.phase+=dt*Math.PI*2*this.speed/cycle;const p=this.phase;
+    const run=this.speed>3,w=clamp(this.speed/2.2,0,1.35),cycle=run?3.4:2.1;this.phase+=dt*Math.PI*2*this.speed/cycle;const p=this.phase;
     const strafe=clamp(o.strafe||0,-1,1),fwd=1-Math.abs(strafe)*.6,A=(run?.7:.5)*Math.min(w,1.2);
     // ----- pernas: balanço, joelho na fase aérea, passo lateral -----
     // passada assimétrica: a coxa sobe mais à frente do que estende atrás; joelho dobra na fase aérea
