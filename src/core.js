@@ -1,11 +1,19 @@
+import {CATCHES} from './catalog.js';
 export const CONFIG = Object.freeze({
   stormAt:60, asteroidAt:120, impactAt:137, embraceAt:145, kissAt:152, hitAt:164, titleAt:167.5,
   impactDistance:235, boatScale:2.15, deckY:-.07, eyeHeight:1.62, walkSpeed:1.5, runSpeed:2.45,
-  respawnAfter:3.5, fixedStep:1/60, slapRange:1.7, protocol:3, maxPlayers:4, characters:4
+  respawnAfter:3.5, fixedStep:1/60, slapRange:1.7, protocol:4, maxPlayers:4, characters:4, balyTime:30, rampTime:8
 });
 export const clamp=(x,a=0,b=1)=>Math.max(a,Math.min(b,x));
 export const lerp=(a,b,t)=>a+(b-a)*t;
 export const smooth=(a,b,x)=>{const t=clamp((x-a)/(b-a));return t*t*(3-2*t)};
+// Tempo de história: o jogo agora é infinito. Antes do meteoro, o clima alterna calmaria (~3,5 min) e
+// tempestade (~1,5 min). Quando o anfitrião aperta TAB, a história acelera até o meteoro em rampTime segundos
+// e segue a linha do tempo original (impacto, onda, despedida, apagão).
+export function storyTime(t,trig){
+  if(!trig){const c=t%330;return 45+55*smooth(215,240,c)*(1-smooth(300,325,c));}
+  const k=t-trig.at;if(k<CONFIG.rampTime)return lerp(trig.from,CONFIG.asteroidAt,smooth(0,CONFIG.rampTime,k));return CONFIG.asteroidAt+(k-CONFIG.rampTime);
+}
 export function phaseAt(t){return t<60?'sunset':t<120?'storm':t<137?'asteroid':t<145?'wave':t<164?'farewell':t<167.5?'blackout':'title'}
 // fade é um corte seco: a tela apaga no quadro exato em que a onda alcança o barco.
 export function weatherAt(t){return {storm:smooth(60,85,t)*(1-smooth(120,130,t)*.45),red:smooth(120,126,t),wave:smooth(137,164,t),fade:t>=CONFIG.hitAt?1:0,phase:phaseAt(t)};}
@@ -68,15 +76,16 @@ export class Lobby {
 }
 // Pesca: cada lançamento sorteia a espécie e o peso. O peixe tem "corridas" (puxões para um lado),
 // o ponteiro tem inércia, a faixa verde encolhe com a dificuldade e fisgar rápido dá vantagem.
-export const FISH_TABLE=[{diff:.15,kg:[.08,.2],rarity:30},{diff:.3,kg:[.5,1.3],rarity:24},{diff:.45,kg:[.9,2.6],rarity:16},{diff:.55,kg:[1.4,4.2],rarity:13},{diff:.75,kg:[3,8.5],rarity:8},{diff:.9,kg:[4,11],rarity:5},{diff:.2,kg:[.6,.6],rarity:4}];
+export const FISH_TABLE=CATCHES.map(c=>({diff:c.diff,kg:c.kg,rarity:c.rarity}));
 export function pickFish(r){const total=FISH_TABLE.reduce((s,f)=>s+f.rarity,0);let x=r*total;for(let i=0;i<FISH_TABLE.length;i++){x-=FISH_TABLE[i].rarity;if(x<0)return i;}return 0;}
 export class Fishing {
   constructor(random=Math.random){this.random=random;this.reset();this.caught=0;this.lastSpecies=-1;this.lastWeight=0;}
-  reset(){this.phase='idle';this.timer=0;this.progress=0;this.tension=.3;this.target=.5;this.needle=.5;this.vel=0;this.run=0;this.runDir=1;this.biteAge=0;this.perfect=false;this.species=-1;this.weight=0;}
+  reset(){this.phase='idle';this.timer=0;this.progress=0;this.tension=.3;this.target=.5;this.needle=.5;this.vel=0;this.run=0;this.runDir=1;this.biteAge=0;this.perfect=false;this.species=-1;this.weight=0;this.combo=0;}
   get zone(){return this.species<0?.18:.2-FISH_TABLE[this.species].diff*.065;}
   cast(){if(this.phase!=='idle')return false;this.phase='waiting';this.timer=2.5+this.random()*4;this.species=pickFish(this.random());const k=FISH_TABLE[this.species].kg;this.weight=Math.round((k[0]+(k[1]-k[0])*this.random())*100)/100;return true;}
   reel(){if(this.phase==='bite'){this.phase='reeling';this.perfect=this.biteAge<.45;this.progress=this.perfect?.12:0;this.timer=0;return true;}return false;}
-  step(dt,held,time){
+  // combo: tempo contínuo na faixa verde acelera o progresso (até 1,6x); boost = efeito do Baly
+  step(dt,held,time,boost=false){
     if(this.phase==='waiting'){this.timer-=dt;if(this.timer<=0){this.phase='bite';this.timer=2;this.biteAge=0;return 'bite';}if(this.timer<1.8&&this.random()>1-dt*1.3)return 'nibble';}
     else if(this.phase==='bite'){this.timer-=dt;this.biteAge+=dt;if(this.timer<=0){this.reset();return 'escaped';}}
     else if(this.phase==='reeling'){
@@ -85,9 +94,11 @@ export class Fishing {
       if(this.run>0)this.run-=dt;
       const base=.5+Math.sin(time*(1.2+d*.9))*(.18+d*.08)+Math.sin(time*3.1+1)*.05*d;
       const goal=clamp(base+(this.run>0?this.runDir*(.22+d*.12):0),.08,.92);this.target+=(goal-this.target)*Math.min(1,dt*(this.run>0?4.5:2.6));
+      if(boost)dt*=1.35;
       this.vel+=(held?1.9:-1.5)*dt;this.vel*=Math.exp(-dt*2.2);this.needle+=this.vel*dt;if(this.needle<0||this.needle>1){this.needle=clamp(this.needle);this.vel=0;}
       const accurate=Math.abs(this.needle-this.target)<this.zone;
-      this.progress=clamp(this.progress+(accurate?.22*(1-d*.35):-.06)*dt);
+      this.combo=accurate?this.combo+dt:Math.max(0,this.combo-dt*3);const mult=1+Math.min(this.combo/2.5,1)*.6;
+      this.progress=clamp(this.progress+(accurate?.22*(1-d*.35)*mult*(boost?1.4:1):-.06)*dt);
       this.tension=clamp(this.tension+(accurate?-.28:.3+(this.run>0?.22:0))*dt);
       if(this.progress>=1){this.caught++;this.lastSpecies=this.species;this.lastWeight=this.weight;this.reset();return 'caught';}
       if(this.tension>=1||this.timer>30){this.lastSpecies=this.species;this.reset();return 'escaped';}
@@ -98,7 +109,7 @@ export class Fishing {
   }
 }
 export const SPAWNS=[[-.45,-1.1],[.45,-1.1],[-.45,1.2],[.45,1.2]];
-export function newPlayer(id,character){const s=SPAWNS[id%SPAWNS.length];return {id,character,x:s[0],z:s[1],rifle:-1,ammo:5,reload:0,yaw:0,pitch:0,mode:'walk',fish:0,slap:0,ragTime:0,height:0,vy:0,speed:0,tp:0,cx:0,cz:0};}
+export function newPlayer(id,character){const s=SPAWNS[id%SPAWNS.length];return {id,character,x:s[0],z:s[1],land:0,baly:0,rifle:-1,ammo:5,reload:0,yaw:0,pitch:0,mode:'walk',fish:0,slap:0,ragTime:0,height:0,vy:0,speed:0,tp:0,cx:0,cz:0};}
 // yaw é relativo ao barco; x/z/h são a posição prevista pelo próprio cliente (movimento com autoridade local).
-export function inputPacket(input){const n=(v,a,b)=>clamp(Number(v)||0,a,b);return {type:'input',v:CONFIG.protocol,x:n(input.x,-1,1),z:n(input.z,-1,1),yaw:n(input.yaw,-1e4,1e4),pitch:n(input.pitch,-1.6,1.6),px:n(input.px,-4,4),pz:n(input.pz,-5,5),ph:n(input.ph,0,3),speed:n(input.speed,0,4),tp:Math.floor(n(input.tp,0,1e6)),run:!!input.run,interact:!!input.interact,cast:!!input.cast,slap:!!input.slap,jump:!!input.jump,reel:!!input.reel,fall:!!input.fall,fire:!!input.fire,aim:!!input.aim,gull:Math.floor(n(input.gull,-1,31)),ray:Array.isArray(input.ray)?input.ray.slice(0,6).map(v=>n(v,-1e4,1e4)):null};}
+export function inputPacket(input){const n=(v,a,b)=>clamp(Number(v)||0,a,b);return {type:'input',v:CONFIG.protocol,x:n(input.x,-1,1),z:n(input.z,-1,1),yaw:n(input.yaw,-1e4,1e4),pitch:n(input.pitch,-1.6,1.6),px:n(input.px,-4000,4000),pz:n(input.pz,-4000,4000),ph:n(input.ph,-20,60),land:input.land?1:0,speed:n(input.speed,0,4),tp:Math.floor(n(input.tp,0,1e6)),run:!!input.run,interact:!!input.interact,cast:!!input.cast,slap:!!input.slap,jump:!!input.jump,reel:!!input.reel,fall:!!input.fall,fire:!!input.fire,aim:!!input.aim,gull:Math.floor(n(input.gull,-1,31)),ray:Array.isArray(input.ray)?input.ray.slice(0,6).map(v=>n(v,-1e4,1e4)):null};}
 export function validPacket(p){return p&&p.v===CONFIG.protocol&&['hello','welcome','pick','ready','start','input','snapshot','lobby','event','bye'].includes(p.type);}

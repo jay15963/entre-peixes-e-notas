@@ -47,6 +47,10 @@ export function sculpt(geo,fn){const p=geo.attributes.position,v=V();for(let i=0
 export class Kit {
   constructor(){this.parts=new Map();}
   add(material,geo,color,jitter){if(!geo)return this;let g=geo;if(color!==undefined)g=tint(g,color,jitter);else if(!g.attributes.color)g=tint(g,0xffffff,0);if(g.index)g=g.toNonIndexed();if(g.attributes.uv)g.deleteAttribute('uv');if(!g.attributes.normal)g.computeVertexNormals();if(!this.parts.has(material))this.parts.set(material,[]);this.parts.get(material).push(g);return this;}
-  build({shadows=true,origin=[0,0,0]}={}){const group=new THREE.Group();for(const [m,geos]of this.parts){const merged=mergeGeometries(geos.map(g=>{for(const k of Object.keys(g.attributes))if(!['position','normal','color'].includes(k))g.deleteAttribute(k);return g;}));merged.translate(-origin[0],-origin[1],-origin[2]);const mesh=new THREE.Mesh(merged,m);mesh.castShadow=shadows;mesh.receiveShadow=true;group.add(mesh);geos.forEach(g=>g.dispose());}return group;}
+  build({shadows=true,origin=[0,0,0]}={}){const group=new THREE.Group();for(const [m,geos]of this.parts){
+      // aSway (peso do vento na vegetação) é mantido quando alguma peça do material o usa
+      const sway=geos.some(g=>g.attributes.aSway);if(sway)for(const g of geos)if(!g.attributes.aSway)g.setAttribute('aSway',new THREE.BufferAttribute(new Float32Array(g.attributes.position.count),1));
+      const keep=sway?['position','normal','color','aSway']:['position','normal','color'];
+      const merged=mergeGeometries(geos.map(g=>{for(const k of Object.keys(g.attributes))if(!keep.includes(k))g.deleteAttribute(k);return g;}));merged.translate(-origin[0],-origin[1],-origin[2]);const mesh=new THREE.Mesh(merged,m);mesh.castShadow=shadows;mesh.receiveShadow=true;group.add(mesh);geos.forEach(g=>g.dispose());}return group;}
 }
 export {V,rand};

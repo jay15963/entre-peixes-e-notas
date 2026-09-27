@@ -8,9 +8,9 @@ import {SMAAPass} from 'three/addons/postprocessing/SMAAPass.js';
 
 // Lente cinematográfica em HDR linear (antes do tone mapping do OutputPass).
 const CinematicShader={
-  uniforms:{tDiffuse:{value:null},uTime:{value:0},uFlash:{value:0},uAberration:{value:.0015},uRadial:{value:0},uCenter:{value:new THREE.Vector2(.5,.5)},uVignette:{value:.9},uGrain:{value:.035},uSaturation:{value:1.08},uContrast:{value:1.06},uTint:{value:new THREE.Vector3(1,1,1)},uExposure:{value:1},uLetterbox:{value:0},uRed:{value:0},uStorm:{value:0}},
+  uniforms:{tDiffuse:{value:null},uTime:{value:0},uFlash:{value:0},uAberration:{value:.0015},uRadial:{value:0},uCenter:{value:new THREE.Vector2(.5,.5)},uVignette:{value:.9},uGrain:{value:.035},uSaturation:{value:1.08},uContrast:{value:1.06},uTint:{value:new THREE.Vector3(1,1,1)},uExposure:{value:1},uLetterbox:{value:0},uRed:{value:0},uStorm:{value:0},uHue:{value:0},uPulse:{value:0},uBaly:{value:0}},
   vertexShader:`varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`,
-  fragmentShader:`uniform sampler2D tDiffuse;uniform float uTime,uFlash,uAberration,uRadial,uVignette,uGrain,uSaturation,uContrast,uExposure,uLetterbox,uRed,uStorm;uniform vec2 uCenter;uniform vec3 uTint;varying vec2 vUv;
+  fragmentShader:`uniform sampler2D tDiffuse;uniform float uTime,uFlash,uAberration,uRadial,uVignette,uGrain,uSaturation,uContrast,uExposure,uLetterbox,uRed,uStorm,uHue,uPulse,uBaly;uniform vec2 uCenter;uniform vec3 uTint;varying vec2 vUv;
 float h(vec2 p){return fract(sin(dot(p,vec2(12.9898,78.233)))*43758.5453);}
 void main(){
   vec2 uv=vUv,d=uv-.5;float r2=dot(d,d);
@@ -30,6 +30,9 @@ void main(){
   col=pow(max(col,0.)/.18,vec3(uContrast))*.18;
   vec3 shadowTint=mix(vec3(.94,1.,1.08),vec3(1.1,.9,.88),uRed);
   col*=mix(shadowTint,vec3(1.05,1.,.94),smoothstep(0.,.6,l));
+  // Efeito do Baly: matiz girando, cores saturadas e bordas pulsando em amarelo e preto
+  if(uBaly>0.){float c=cos(uHue),s=sin(uHue);mat3 rot=mat3(.299+.701*c+.168*s,.587-.587*c+.33*s,.114-.114*c-.497*s,.299-.299*c-.328*s,.587+.413*c+.035*s,.114-.114*c+.292*s,.299-.3*c+1.25*s,.587-.588*c-1.05*s,.114+.886*c-.203*s);
+    col=mix(col,max(rot*col,0.),uBaly*.55);float edge=smoothstep(.25,.75,sqrt(r2)*1.4);col+=vec3(1.,.78,.08)*edge*uPulse*uBaly*.35;col*=1.+uPulse*uBaly*.12;}
   // Clarão do impacto
   col=mix(col,vec3(6.,5.6,5.)*(1.+col),clamp(uFlash,0.,1.)*.92);
   // Vinheta e grão
@@ -43,6 +46,8 @@ export class Post {
     const size=renderer.getDrawingBufferSize(new THREE.Vector2());
     this.composer=new EffectComposer(renderer,new THREE.WebGLRenderTarget(size.x,size.y,{type:THREE.HalfFloatType}));
     this.composer.addPass(new RenderPass(scene,camera));
+    // cena sobreposta (rifle e braços em primeira pessoa): profundidade limpa, desenhada por cima
+    this.overlay=new RenderPass(new THREE.Scene(),camera);this.overlay.clear=false;this.overlay.clearDepth=true;this.composer.addPass(this.overlay);
     this.bloom=new UnrealBloomPass(new THREE.Vector2(size.x/2,size.y/2),.4,.45,2.2);this.composer.addPass(this.bloom);
     // Um único pixel NaN/infinito contaminaria a tela inteira pelo bloom: o filtro de brilho descarta e limita picos.
     const hp=this.bloom.materialHighPassFilter;hp.fragmentShader=hp.fragmentShader.replace('vec4 texel = texture2D( tDiffuse, vUv );','vec4 texel = texture2D( tDiffuse, vUv );if(any(isnan(texel))||any(isinf(texel)))texel=vec4(0.);texel=min(texel,vec4(12.));');hp.needsUpdate=true;
@@ -52,6 +57,7 @@ export class Post {
     if(quality!=='low')this.composer.addPass(new SMAAPass());
     this.u=this.cinema.uniforms;
   }
+  setOverlay(scene){this.overlay.scene=scene;}
   setSize(w,h){this.composer.setPixelRatio(this.renderer.getPixelRatio());this.composer.setSize(w,h);}
   render(dt){this.u.uTime.value+=dt;this.composer.render(dt);}
 }

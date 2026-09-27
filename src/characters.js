@@ -122,9 +122,9 @@ export function makeCharacter(assets,index){
     const hip=V(s*.095,.9,0),knee=V(s*.105,.574,.01),ankle=V(s*.11,.085,-.005);
     Th.add(mat,limb(hip,knee,.095,.068,10),look.skin);
     if(longPants)Th.add(mat,limb(hip,knee,.103,.078,10),look.pants);else{Th.add(mat,limb(hip,hip.clone().lerp(knee,.82),.108,.096,10),look.pants);}
-    Sh.add(mat,ellipsoid([knee.x,knee.y,knee.z+.01],[.058,.06,.06],8,6),longPants?look.pants:look.skin);
+    Sh.add(mat,ellipsoid([knee.x,knee.y,knee.z+.01],[.058,.06,.06],8,6),longPants?look.pants:look.skin);// joelho: preenche a dobra (fica 2 cm por dentro da calça)
     Sh.add(mat,limb(knee,ankle,.062,.042,9),look.skin);
-    Sh.add(mat,ellipsoid([knee.x,.42,-.022],[.056,.11,.05],8,6),longPants?look.pants:look.skin);
+    if(!longPants)Sh.add(mat,ellipsoid([knee.x,.42,-.022],[.056,.11,.05],8,6),look.skin);// panturrilha (dentro da calça ela encostaria no tecido)
     if(longPants){Sh.add(mat,limb(knee,ankle.clone().add(V(0,.03,0)),.078,.07,10),look.pants);}
     else Sh.add(mat,limb(V(ankle.x,.09,ankle.z),V(ankle.x,.2,ankle.z),.043,.041,9),look.sock);
     shoe(Sh,mat,look,s);
@@ -146,5 +146,20 @@ export function makeCharacter(assets,index){
   // empunhadura: a vara continua o antebraço e aponta para frente e para cima na pose de pesca
   rod.rotation.x=2.35;rod.position.set(-.078,-.29,.035);joints.foreL.add(rod);rod.visible=false;
   root.userData={joints,rod,tip,index,face,rodSegs:segs,crank,look};return root;
+}
+// Uniforme de padeiro (easter egg: "O pescador" trabalha na padaria do mercado da ilha)
+export function addBakerOutfit(model){
+  const j=model.userData.joints,mat=new THREE.MeshStandardMaterial({vertexColors:true,roughness:.85,flatShading:true});
+  const hat=new Kit();hat.add(mat,loft([{y:1.735,rx:.135,rz:.15},{y:1.79,rx:.14,rz:.155}],{n:16,capStart:false,capEnd:false}),0xffffff,.02);
+  hat.add(mat,sculpt(loft([{y:1.785,rx:.14,rz:.155},{y:1.86,rx:.165,rz:.175},{y:1.93,rx:.15,rz:.16},{y:1.95,rx:.08,rz:.09}],{n:16,capEnd:true,capStart:false}),v=>{v.y+=Math.sin(Math.atan2(v.z,v.x)*6)*.008*(v.y>1.8?1:0);}),0xf7f7f3,.04);
+  const h=hat.build({origin:JOINTS.head.origin});j.head.add(h);
+  // avental afastado do corpo (sem atravessar a camisa): saia da cintura para baixo e peitilho à frente do peito
+  const apron=new Kit();apron.add(mat,sculpt(new THREE.BoxGeometry(.32,.46,.012,4,4,1),v=>{v.z+=.142+Math.pow(v.x/.16,2)*-.025;}).translate(0,.93,0),0xf4f2ec,.03);
+  apron.add(mat,box([0,1.16,.135],[.34,.035,.02]),0xe8e2d4);
+  apron.add(mat,sculpt(new THREE.BoxGeometry(.2,.16,.01,2,2,1),v=>{v.z+=.162-Math.pow(v.x/.1,2)*.012;}).translate(0,1.27,0),0xf4f2ec,.03);
+  for(const s of [-1,1])apron.add(mat,limb(V(s*.085,1.345,.155),V(s*.06,1.43,.07),.006,.006,4),0xf4f2ec);
+  apron.add(mat,box([.075,1.0,.152],[.09,.08,.008]),0xd8d2c4);apron.add(mat,ellipsoid([-.05,.95,.152],[.05,.03,.003],8,4),0xe8e2d0);
+  const a=apron.build({origin:JOINTS.torso.origin});j.torso.add(a);
+  model.userData.baker=true;return model;
 }
 export {LOOKS};

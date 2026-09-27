@@ -100,11 +100,37 @@ export class Sound {
     if(name==='run'){for(let i=0;i<26;i++)this.burst(this.white,{type:'bandpass',freq:3200+Math.random()*900,q:6,dur:.014,attack:.001,gain:.13,when:i*.028,reverb:.05});this.tone(1400,{type:'sawtooth',dur:.7,gain:.025,to:600});this.burst(this.white,{type:'bandpass',freq:1600,to:500,q:1,dur:.5,gain:.35,pos,reverb:.3});}
     if(name==='snap'){this.burst(this.white,{type:'highpass',freq:5000,dur:.05,attack:.001,gain:.6,reverb:.2});this.tone(2600,{type:'triangle',dur:.25,gain:.12,to:300});this.burst(this.pink,{type:'bandpass',freq:900,to:3000,q:2,dur:.3,attack:.02,gain:.2});}
     if(name==='bucket'){this.tone(460,{type:'triangle',dur:.35,gain:.12,pos,reverb:.2});this.tone(1120,{type:'sine',dur:.5,gain:.05,pos});this.burst(this.white,{type:'bandpass',freq:1500,q:1.5,dur:.2,gain:.25,pos});for(let i=0;i<4;i++)this.burst(this.brown,{type:'lowpass',freq:700,dur:.06,gain:.25,when:.12+i*.11,pos});}
-    if(name==='gunshot'){// estalo supersônico, corpo grave e eco rolando sobre a água
-      this.burst(this.white,{type:'highpass',freq:2200,dur:.06,attack:.001,gain:1.2,pos,reverb:.2});this.burst(this.brown,{type:'lowpass',freq:1400,to:120,dur:.5,attack:.001,gain:1.6,pos,reverb:.7});this.tone(95,{type:'sine',dur:.35,gain:.7,to:45,pos});
-      for(let i=1;i<4;i++)this.burst(this.pink,{type:'lowpass',freq:900/i,dur:.6,attack:.02,gain:.35/i,when:.25*i+Math.random()*.1,reverb:.9});}
-    if(name==='bolt'){[0,.16,.34,.5].forEach((w,i)=>this.burst(this.white,{type:'bandpass',freq:[2800,1900,2400,3200][i],q:4,dur:.03,attack:.001,gain:.35,when:w,pos,reverb:.05}));}
-    if(name==='reload'){for(let i=0;i<5;i++)this.burst(this.white,{type:'bandpass',freq:2500,q:5,dur:.025,gain:.3,when:.3+i*.28,pos,reverb:.05});this.burst(this.white,{type:'bandpass',freq:1800,q:3,dur:.05,gain:.4,when:1.9,pos});}
+    if(name==='gunshot'){// estalo supersônico, sopro da boca, estrondo grave, cauda longa e ecos batendo na água e na ilha
+      const far=o.far?1:0,g=far?.45:1;
+      this.burst(this.white,{type:'highpass',freq:3200,dur:.018,attack:.0005,gain:1.6*g,pos,reverb:.1});this.burst(this.white,{type:'bandpass',freq:1800,q:.6,dur:.05,attack:.0008,gain:1.1*g,pos,reverb:.3,when:.004});
+      this.burst(this.brown,{type:'lowpass',freq:2200,to:140,dur:.42,attack:.0008,gain:2*g,pos,reverb:.8});this.burst(this.pink,{type:'bandpass',freq:420,q:.7,dur:.28,attack:.001,gain:.9*g,pos,reverb:.6});
+      this.tone(78,{type:'sine',dur:.32,gain:.9*g,to:34,pos});this.tone(160,{type:'triangle',dur:.08,gain:.35*g,to:60,pos});
+      [[.16,.42],[.38,.26],[.7,.16],[1.15,.09]].forEach(([w,k])=>this.burst(this.brown,{type:'lowpass',freq:700,to:160,dur:.55,attack:.01,gain:k*g,when:w+Math.random()*.05,reverb:.95}));}
+    if(name==='boltUp')this.burst(this.white,{type:'bandpass',freq:2600,q:5,dur:.025,attack:.001,gain:.45,pos,reverb:.05});
+    if(name==='boltBack'){this.burst(this.white,{type:'bandpass',freq:1700,to:2600,q:3,dur:.07,attack:.002,gain:.5,pos,reverb:.05});this.tone(900,{type:'square',dur:.02,gain:.05,pos});}
+    if(name==='boltFwd'){this.burst(this.white,{type:'bandpass',freq:2400,to:1500,q:3,dur:.06,attack:.002,gain:.5,pos,reverb:.05});this.burst(this.white,{type:'bandpass',freq:3400,q:6,dur:.02,gain:.5,when:.06,pos});}
+    if(name==='boltDown')this.burst(this.white,{type:'bandpass',freq:3000,q:6,dur:.03,attack:.001,gain:.55,pos,reverb:.05});
+    if(name==='magOut'){this.burst(this.white,{type:'bandpass',freq:2200,q:4,dur:.03,gain:.45,pos});this.burst(this.pink,{type:'bandpass',freq:900,q:2,dur:.08,gain:.3,when:.03,pos});}
+    if(name==='magDrop')this.burst(this.brown,{type:'lowpass',freq:500,dur:.12,attack:.002,gain:.4,pos,reverb:.2});
+    if(name==='pouch')this.burst(this.pink,{type:'bandpass',freq:700,q:1.2,dur:.18,attack:.02,gain:.25,pos});
+    if(name==='magIn'){this.burst(this.white,{type:'bandpass',freq:1600,q:3,dur:.05,gain:.6,pos});this.tone(420,{type:'triangle',dur:.05,gain:.12,pos});}
+    if(name==='magSlap'){this.burst(this.white,{type:'bandpass',freq:1100,q:1.5,dur:.04,attack:.001,gain:.6,pos});this.burst(this.brown,{type:'lowpass',freq:300,dur:.08,gain:.4,pos});}
+    if(name==='casing'){for(let i=0;i<3;i++)this.tone(3800+Math.random()*1500,{type:'sine',dur:.08,gain:.05/(i+1),when:i*.09+Math.random()*.03,pos});}
+    if(name==='reveal'){// fanfarra que cresce com a raridade
+      const tier=o.tier||0,now=this.ctx.currentTime,notes=[[72,76,79],[72,76,79,84],[72,76,79,84,88],[72,76,79,83,86,91],[72,76,79,84,88,91,96]][Math.min(4,tier)];
+      notes.forEach((n,i)=>{this.pluck(n,now+i*.06,.3,(i%2?.3:-.3));this.tone(NOTE(n),{type:'triangle',dur:.25,gain:.05+tier*.015,when:i*.06,reverb:.5});});
+      if(tier>=3){for(let i=0;i<14;i++)this.tone(2000+Math.random()*3000,{type:'sine',dur:.12,gain:.03,when:.3+Math.random()*.9,reverb:.6});this.burst(this.white,{type:'highpass',freq:6000,dur:1.2,attack:.2,gain:.08,reverb:.8});}}
+    if(name==='junk'){const now=this.ctx.currentTime;[60,59,58,57].forEach((n,i)=>this.tone(NOTE(n),{type:'sawtooth',dur:.18,gain:.05,when:i*.16,to:NOTE(n)*.97}));this.pluck(48,now+.64,.25);}
+    if(name==='coin'){const k=o.big?1.4:1;[0,.07,.14].forEach((w,i)=>this.tone([1976,2637,3136][i],{type:'square',dur:.12,gain:.05*k,when:w,reverb:.2}));}
+    if(name==='cash'){this.burst(this.white,{type:'bandpass',freq:2500,q:2,dur:.05,gain:.4});this.tone(2093,{type:'triangle',dur:.6,gain:.18,when:.08,reverb:.4});this.tone(3136,{type:'sine',dur:.5,gain:.1,when:.1,reverb:.4});for(let i=0;i<10;i++)this.tone(2400+Math.random()*1800,{type:'sine',dur:.06,gain:.05,when:.2+i*.05});}
+    if(name==='combo'){const n=o.level||1;this.tone(NOTE(72+n*4),{type:'square',dur:.09,gain:.06});this.tone(NOTE(79+n*4),{type:'square',dur:.12,gain:.05,when:.07});}
+    if(name==='baly'){// lata abrindo: estalo, chiado do gás e a batida acelerada começa
+      this.burst(this.white,{type:'highpass',freq:3000,dur:.05,attack:.001,gain:.8});this.burst(this.white,{type:'bandpass',freq:5000,to:2500,q:1,dur:.9,attack:.01,gain:.35,when:.04});
+      for(let i=0;i<30;i++)this.tone(3000+Math.random()*4000,{type:'sine',dur:.02,gain:.03,when:.1+Math.random()*1.2});}
+    if(name==='dive'){this.gullCall(pos,1.4);}
+    if(name==='door')this.burst(this.pink,{type:'bandpass',freq:500,to:900,q:1,dur:.6,attack:.1,gain:.12,pos});
+    if(name==='thud'){this.burst(this.brown,{type:'lowpass',freq:260,dur:.5,attack:.003,gain:1.1,pos,reverb:.4});this.creak();this.creak();}
+    if(name==='alarm'){const now=this.ctx.currentTime;for(let i=0;i<6;i++)this.tone(i%2?740:988,{type:'sawtooth',dur:.28,gain:.08,when:i*.3,reverb:.5});}
     if(name==='gull'){const now=this.ctx.currentTime,g=this.out(pos,.4);for(let i=0;i<3;i++){const t=now+i*.22,o=this.ctx.createOscillator(),a=this.ctx.createGain(),base=1250+Math.random()*300;o.type='sawtooth';o.frequency.setValueAtTime(base,t);o.frequency.linearRampToValueAtTime(base*1.7,t+.05);o.frequency.exponentialRampToValueAtTime(base*.6,t+.2);const f=this.ctx.createBiquadFilter();f.type='bandpass';f.frequency.value=2200;f.Q.value=2;o.connect(f).connect(a).connect(g);this.env(a,t,.01,.12,.2);o.start(t);o.stop(t+.25);}}
     if(name==='feathers'){this.burst(this.pink,{type:'bandpass',freq:1200,q:.7,dur:.25,attack:.005,gain:.5,pos});this.gull&&this.effect('gull',{pos});}
     if(name==='hitmark')this.tone(1800,{type:'square',dur:.05,gain:.08,reverb:0});
@@ -137,6 +163,13 @@ export class Sound {
   sonicBoom(when){this.burst(this.brown,{type:'lowpass',freq:900,to:80,dur:1.2,attack:.003,gain:1.1,when,reverb:.8});this.burst(this.brown,{type:'lowpass',freq:900,to:80,dur:1.4,attack:.003,gain:.9,when:when+.22,reverb:.8});}
   gull(){const now=this.ctx.currentTime,pan=(Math.random()-.5)*1.4,base=1100+Math.random()*400,g=this.ctx.createStereoPanner();g.pan.value=pan;g.connect(this.bus);const r=this.ctx.createGain();r.gain.value=.4;g.connect(r).connect(this.revSend);
     for(let i=0;i<2+Math.floor(Math.random()*3);i++){const t=now+i*.28,o=this.ctx.createOscillator(),m=this.ctx.createOscillator(),mg=this.ctx.createGain(),a=this.ctx.createGain();o.type='triangle';m.frequency.value=38;mg.gain.value=90;m.connect(mg).connect(o.frequency);o.frequency.setValueAtTime(base,t);o.frequency.linearRampToValueAtTime(base*1.55,t+.06);o.frequency.exponentialRampToValueAtTime(base*.75,t+.22);o.connect(a).connect(g);this.env(a,t,.02,.03,.22);o.start(t);m.start(t);o.stop(t+.3);m.stop(t+.3);}}
+  gullCall(pos,k=1){const now=this.ctx.currentTime,g=this.out(pos,.4);for(let i=0;i<4;i++){const t=now+i*.2,o=this.ctx.createOscillator(),a=this.ctx.createGain(),base=(1250+Math.random()*300)*k/1.2;o.type='sawtooth';o.frequency.setValueAtTime(base,t);o.frequency.linearRampToValueAtTime(base*1.8,t+.05);o.frequency.exponentialRampToValueAtTime(base*.55,t+.19);const f=this.ctx.createBiquadFilter();f.type='bandpass';f.frequency.value=2300;f.Q.value=2;o.connect(f).connect(a).connect(g);this.env(a,t,.01,.16,.18);o.start(t);o.stop(t+.25);}}
+  // batida eletrônica enquanto dura o efeito do Baly (150 bpm: bumbo, chimbal e baixo)
+  balyBeat(active){if(!this.ctx)return;const now=this.ctx.currentTime;if(!active){this.balyNext=0;return;}if(!this.balyNext||this.balyNext<now)this.balyNext=now+.05;
+    while(this.balyNext<now+.2){const t=this.balyNext,b=(this.balyStep=(this.balyStep||0)+1),step=60/150/2;this.balyNext+=step;
+      if(b%2===0){const o=this.ctx.createOscillator(),g=this.ctx.createGain();o.frequency.setValueAtTime(150,t);o.frequency.exponentialRampToValueAtTime(45,t+.12);o.connect(g).connect(this.bus);g.gain.setValueAtTime(.5,t);g.gain.exponentialRampToValueAtTime(.001,t+.16);o.start(t);o.stop(t+.2);}
+      const s=this.ctx.createBufferSource(),f=this.ctx.createBiquadFilter(),g=this.ctx.createGain();s.buffer=this.white;f.type='highpass';f.frequency.value=8000;s.connect(f).connect(g).connect(this.bus);g.gain.setValueAtTime(b%2?.09:.05,t);g.gain.exponentialRampToValueAtTime(.001,t+.04);s.start(t,Math.random());s.stop(t+.05);
+      if(b%4===1){const o=this.ctx.createOscillator(),g2=this.ctx.createGain(),fl=this.ctx.createBiquadFilter();o.type='sawtooth';o.frequency.value=[55,55,65.4,49][Math.floor(b/8)%4];fl.type='lowpass';fl.frequency.value=600;o.connect(fl).connect(g2).connect(this.bus);g2.gain.setValueAtTime(.12,t);g2.gain.exponentialRampToValueAtTime(.001,t+.3);o.start(t);o.stop(t+.32);}}}
   creak(){const now=this.ctx.currentTime,o=this.ctx.createOscillator(),f=this.ctx.createBiquadFilter(),g=this.ctx.createGain(),lfo=this.ctx.createOscillator(),lg=this.ctx.createGain(),base=90+Math.random()*140,d=.25+Math.random()*.5;o.type='sawtooth';o.frequency.setValueAtTime(base,now);o.frequency.linearRampToValueAtTime(base*(1+(Math.random()-.5)*.4),now+d);lfo.frequency.value=22+Math.random()*30;lg.gain.value=base*.3;lfo.connect(lg).connect(o.frequency);f.type='bandpass';f.frequency.value=600+Math.random()*700;f.Q.value=9;o.connect(f).connect(g).connect(this.out(null,.1));this.env(g,now,.05,.035,d);o.start(now);lfo.start(now);o.stop(now+d+.1);lfo.stop(now+d+.1);}
   // Linha do tempo do cataclismo, disparada pelo jogo
   impact(delay){if(!this.ctx||this.cut)return;this.effect('flash');}

@@ -1,13 +1,13 @@
 // Primeira pessoa: pointer lock com olhar pelo mouse. Botão direito dá o tapa, E assume o leme, F pesca.
 export class Input {
   constructor(canvas){
-    this.canvas=canvas;this.keys=new Set();this.edges=new Set();this.yaw=Math.PI;this.pitch=-.05;this.enabled=false;this.sensitivity=Number(localStorage.getItem('peixes-sens'))||1;this.locked=false;this.onLockChange=null;this.mouseSlap=false;
+    this.canvas=canvas;this.keys=new Set();this.edges=new Set();this.yaw=Math.PI;this.pitch=-.05;this.enabled=false;this.sensitivity=Number(localStorage.getItem('peixes-sens'))||1;this.locked=false;this.onLockChange=null;this.aimScale=1;this.mouseSlap=false;
     const mapped=['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space','KeyE','KeyF','ShiftLeft','ShiftRight'];
     window.addEventListener('keydown',e=>{if(!this.enabled||/INPUT|TEXTAREA|SELECT/.test(e.target.tagName))return;if(mapped.includes(e.code)){e.preventDefault();if(!this.keys.has(e.code))this.edges.add(e.code);this.keys.add(e.code);}});
     window.addEventListener('keyup',e=>this.keys.delete(e.code));window.addEventListener('blur',()=>this.clear());
     this.buttons=new Set();canvas.addEventListener('mousedown',e=>{if(!this.enabled)return;if(!this.locked){this.lock();return;}this.buttons.add(e.button);if(e.button===2){this.edges.add('Slap');e.preventDefault();}if(e.button===0)this.edges.add('Fire');});window.addEventListener('mouseup',e=>this.buttons.delete(e.button));
     canvas.addEventListener('contextmenu',e=>e.preventDefault());
-    document.addEventListener('mousemove',e=>{if(!this.locked||!this.enabled)return;const k=.0022*this.sensitivity;this.yaw-=e.movementX*k;this.pitch=Math.max(-1.45,Math.min(1.45,this.pitch-e.movementY*k));});
+    document.addEventListener('mousemove',e=>{if(!this.locked||!this.enabled)return;const k=.0022*this.sensitivity*(this.aimScale||1);this.yaw-=e.movementX*k;this.pitch=Math.max(-1.45,Math.min(1.45,this.pitch-e.movementY*k));});
     document.addEventListener('pointerlockchange',()=>{this.locked=document.pointerLockElement===canvas;if(!this.locked)this.keys.clear();if(this.onLockChange)this.onLockChange(this.locked);});
   }
   lock(){const plain=()=>{try{this.canvas.requestPointerLock()?.catch?.(()=>{});}catch{}};try{const r=this.canvas.requestPointerLock({unadjustedMovement:true});if(r&&r.catch)r.catch(plain);}catch{plain();}}

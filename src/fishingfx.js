@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import {waveHeight,weatherAt,clamp,lerp} from './core.js';
-import {makeFish,flop,SPECIES} from './fish.js';
+import {makeCatch as makeFish,flop,SPECIES} from './fish.js';
 import {Particles} from './cataclysm.js';
 import {Spring} from './animation.js';
 
@@ -32,13 +32,13 @@ export class FishingFX {
     if(name==='caught'){const species=payload.species??s.species;let f=s.fish;if(!f){f=makeFish(Math.max(0,species));this.scene.add(f);}s.fish=null;this.splash(s.fishPos,40,1.3);
       this.flights.push({fish:f,t:0,dur:.6,from:s.fishPos.clone(),player:i,kind:'hand',species,weight:payload.weight||0});}
   }
-  update(t,dt,{players,fishing,models,boat,camera,localId,cinematic}){
-    this.t=t;const w=weatherAt(t);
+  update(t,dt,{players,fishing,models,boat,camera,localId,cinematic,story}){
+    this.t=t;const w=weatherAt(story??t);
     players.forEach((p,i)=>{const s=this.state[i],f=fishing[i],model=models[i];if(!s)return;
       const active=p.mode==='fish'&&!cinematic&&model?.visible&&f;s.bobber.visible=s.line.visible=!!active&&f.phase!=='reeling'||(!!active&&f.phase==='reeling');
       if(!active){s.bobber.visible=s.line.visible=false;if(s.fish&&(!f||f.phase!=='reeling')){this.scene.remove(s.fish);s.fish=null;}s.lastPhase=f?.phase||'idle';return;}
       // ponto de lançamento na água (coordenadas do barco → mundo)
-      const cast=boat.localToWorld(V(p.cx,0,p.cz));cast.y=waveHeight(cast.x,cast.z,t,w.storm);s.cast.copy(cast);
+      const cast=p.land?V(p.cx,0,p.cz):boat.localToWorld(V(p.cx,0,p.cz));cast.y=waveHeight(cast.x,cast.z,t,w.storm);s.cast.copy(cast);
       if(f.phase==='reeling'&&s.lastPhase!=='reeling'){s.fish=makeFish(Math.max(0,f.species??0));this.scene.add(s.fish);s.fishPos.copy(cast);s.species=f.species;this.splash(cast,36,1.2);}
       s.lastPhase=f.phase;
       const dip=s.dip.update(0,dt);let bob=cast.clone();bob.y+=.03+Math.sin(t*5.5+i)*.018+dip*.05;
@@ -46,13 +46,13 @@ export class FishingFX {
       let end=bob;
       if(f.phase==='reeling'&&s.fish){
         // o peixe vem vindo com o progresso, nada de um lado ao outro e dá corridas
-        const hand=boat.localToWorld(V(p.x,0,p.z)),toBoat=hand.clone().sub(cast);toBoat.y=0;const dist=toBoat.length();toBoat.normalize();const side=V(-toBoat.z,0,toBoat.x);
+        const hand=p.land?V(p.x,0,p.z):boat.localToWorld(V(p.x,0,p.z)),toBoat=hand.clone().sub(cast);toBoat.y=0;const dist=toBoat.length();toBoat.normalize();const side=V(-toBoat.z,0,toBoat.x);
         s.run=Math.max(0,s.run-dt);const k=clamp(f.progress);
         const target=cast.clone().addScaledVector(toBoat,Math.min(dist-2.2,dist*k*.85)).addScaledVector(side,Math.sin(t*1.4+i)*1.4*(1-k*.6)+(s.run>0?s.runDir*2.2:0));
         s.fishPos.lerp(target,1-Math.exp(-dt*(s.run>0?3.5:1.6)));
         const water=waveHeight(s.fishPos.x,s.fishPos.z,t,w.storm);s.jumpT+=dt;
         const vel=target.clone().sub(s.fishPos);
-        if(s.jumpT<1){const a=s.jumpT;s.fishPos.y=water+Math.sin(a*Math.PI)*(1+SPECIES[s.species]?.len*1.5||1);s.fish.rotation.set(-Math.cos(a*Math.PI)*1.1,Math.atan2(vel.x,vel.z),a*Math.PI*2*(s.runDir));if(a+dt>=1)this.splash(V(s.fishPos.x,water,s.fishPos.z),30,1);}
+        if(s.jumpT<1){const a=s.jumpT;s.fishPos.y=water+Math.sin(a*Math.PI)*(1+(SPECIES[s.species]?.len||.3)*1.5);s.fish.rotation.set(-Math.cos(a*Math.PI)*1.1,Math.atan2(vel.x,vel.z),a*Math.PI*2*(s.runDir));if(a+dt>=1)this.splash(V(s.fishPos.x,water,s.fishPos.z),30,1);}
         else{s.fishPos.y=water-.02+Math.sin(t*14)*.02;s.fish.rotation.set(0,Math.atan2(vel.x,vel.z)+Math.sin(t*9)*.4,Math.sin(t*7)*.3);s.thrash+=dt*(2+f.tension*6);if(s.thrash>1){s.thrash=0;this.splash(V(s.fishPos.x,water,s.fishPos.z),10+f.tension*14,.55+f.tension*.5,.8);}}
         s.fish.position.copy(s.fishPos);flop(s.fish,dt,s.jumpT<1?1:.45+f.tension*.5);end=s.fishPos.clone();s.bobber.position.copy(end).add(V(0,.25,0));s.bobber.visible=false;
       }else s.bobber.position.copy(bob);
@@ -84,7 +84,8 @@ export class FishingFX {
   // Gaivota leva o peixe de cima do balde (o visual volta a bater com a contagem via syncBucket)
   steal(boat){const f=this.bucket.pop();if(f)boat.remove(f);return !!f;}
   pendingToBucket(){return this.flights.filter(f=>f.kind!=='dive').length;}
-  syncBucket(count,boat){const target=Math.min(12,Math.max(0,count-this.pendingToBucket()));while(this.bucket.length>target){boat.remove(this.bucket.pop());}while(this.bucket.length<target){const f=makeFish(Math.floor(Math.random()*4));this.toBucket(f,boat);}}
-  toBucket(fish,boat){fish.scale.setScalar(.72);const n=this.bucket.length,a=n*2.4;fish.position.copy(boat.userData.bucketLocal).add(V(Math.cos(a)*.07,.14+Math.min(n,10)*.022,Math.sin(a)*.07));fish.rotation.set(-1.2+Math.random()*.4,a,Math.random()*.6);fish.userData.baseY=fish.position.y;boat.add(fish);this.bucket.push(fish);
+  // o balde mostra os últimos itens de verdade (lista de [espécie, kg])
+  syncBucket(list,boat){const count=list.length,target=Math.min(12,Math.max(0,count-this.pendingToBucket()));while(this.bucket.length>target){boat.remove(this.bucket.pop());}while(this.bucket.length<target){const item=list[this.bucket.length+Math.max(0,count-12)];const f=makeFish(item?item[0]:0);this.toBucket(f,boat);}}
+  toBucket(fish,boat){const L=fish.userData.len||.3;fish.scale.setScalar(Math.min(.72,.3/L));const n=this.bucket.length,a=n*2.4;fish.position.copy(boat.userData.bucketLocal).add(V(Math.cos(a)*.07,.14+Math.min(n,10)*.022,Math.sin(a)*.07));fish.rotation.set(-1.2+Math.random()*.4,a,Math.random()*.6);fish.userData.baseY=fish.position.y;boat.add(fish);this.bucket.push(fish);
     if(this.bucket.length>12){const old=this.bucket.shift();boat.remove(old);}}
 }

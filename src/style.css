@@ -28,3 +28,90 @@ body.cinematic #crosshair,body.cinematic #lock-hint{display:none}
 #crosshair.rifle{width:22px;height:22px;margin:-11px 0 0 -11px;background:none;border-radius:0;box-shadow:none;opacity:.9;background:linear-gradient(#fff4dd,#fff4dd) center/2px 8px no-repeat,linear-gradient(#fff4dd,#fff4dd) center/8px 2px no-repeat}
 #hitmark{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) scale(.6);font:700 26px Arial;color:#ff6a4a;opacity:0;text-shadow:0 0 8px #000;transition:opacity .1s,transform .1s}#hitmark.show{opacity:1;transform:translate(-50%,-50%) scale(1.1)}
 #ammo{position:absolute;right:48px;bottom:88px;font:18px monospace;letter-spacing:6px;color:#ffe7b8;text-shadow:0 2px 8px #000}
+
+/* ===================== v4: HUD de dopamina (pesca, capturas, dinheiro, luneta, Baly) ===================== */
+.weather strong#money{font:900 30px 'Arial Black',Arial,sans-serif;color:#ffe35a;text-shadow:0 3px 0 #6b4a00,0 0 18px #ffcf3a66;display:flex;align-items:center;gap:9px;transition:transform .15s}
+.weather strong#money:before{content:'';width:22px;height:22px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff6b0,#f2c12e 45%,#b8860b);box-shadow:0 2px 0 #7a5600,inset 0 0 0 2px #d9a520}
+#money.rolling{transform:scale(1.12) rotate(-2deg)}.wallet{font-size:8px;letter-spacing:2px;color:#e0c498aa}
+.catch-count strong{font:900 30px 'Arial Black',Arial,sans-serif;text-shadow:0 3px 0 #0006}
+/* ----- minigame de pesca ----- */
+#fishing{bottom:104px;width:min(500px,92vw);padding:16px 20px 14px;background:linear-gradient(180deg,#1f4a86,#122b55);border:3px solid var(--tier,#8fd);border-radius:24px;box-shadow:0 9px 0 #0a1a38,0 18px 40px #0008,0 0 36px var(--glow,#aef);backdrop-filter:none;font-family:'Arial Black',Arial,sans-serif}
+.fz-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
+#fishing-title{font:900 20px 'Arial Black',Arial,sans-serif;color:#fff;text-transform:uppercase;letter-spacing:.5px;text-shadow:0 3px 0 #0a1a38,0 0 14px #fff4;display:inline-block;animation:fz-wobble 1.6s ease-in-out infinite}
+#fishing-tier{font:900 11px Arial;letter-spacing:1.5px;font-style:normal;color:#10131a;background:var(--tier,#ccc);padding:5px 11px;border-radius:99px;box-shadow:0 3px 0 #0006,0 0 14px var(--glow,#fff)}#fishing-tier:empty{display:none}
+.fz-body{display:flex;align-items:center;gap:16px}
+.fz-ring{position:relative;width:78px;height:78px;flex:none}.fz-ring svg{width:100%;height:100%;transform:rotate(-90deg)}
+.fz-ring circle{fill:#0b1c3b;stroke:#ffffff1c;stroke-width:9}#fz-ring{fill:none;stroke:var(--tier,#5dff8a);stroke-width:9;stroke-linecap:round;stroke-dasharray:289;stroke-dashoffset:289;transition:stroke-dashoffset .15s;filter:drop-shadow(0 0 6px var(--glow,#aef))}
+#fishing-percent{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font:900 19px 'Arial Black',Arial;color:#fff;text-shadow:0 2px 0 #000a}
+.fz-bars{flex:1;display:flex;flex-direction:column;gap:9px;position:relative}
+#fishing .fish-track{height:30px;border-radius:15px;background:linear-gradient(#081630,#0f2650);box-shadow:inset 0 3px 6px #000a,0 2px 0 #ffffff14;overflow:visible}
+#fishing #fish-zone{height:100%;border-radius:15px;background:linear-gradient(180deg,#8dffab,#27c95e);box-shadow:0 0 16px #4dff8a88,inset 0 -4px 0 #0005;transition:filter .2s}
+#fishing.inzone #fish-zone{animation:zone-pulse .35s ease-in-out infinite alternate}
+#fishing #fish-needle{width:12px;height:40px;top:-5px;margin-left:-6px;border-radius:6px;background:linear-gradient(#fff,#ffe36a);box-shadow:0 0 12px #ffe36a,0 3px 0 #0008}
+#fishing .tension{height:13px;border-radius:7px;background:#07142c;margin:0;box-shadow:inset 0 2px 4px #000a;position:relative;overflow:hidden}
+#fishing .tension span{position:absolute;right:8px;top:0;font:900 8px/13px Arial;letter-spacing:1.5px;color:#fff8}
+#fishing #fish-tension{height:100%;border-radius:7px;background:linear-gradient(90deg,#5dff8a,#ffe35a 55%,#ff4a3a);background-size:500px 100%;transition:width .1s}
+#fz-combo{position:absolute;right:4px;bottom:-34px;font:900 17px 'Arial Black';color:#ffe35a;text-shadow:0 3px 0 #7a4a00,0 0 12px #ffcf3a;transform:rotate(6deg);animation:combo-bob .5s ease-in-out infinite alternate}
+#fishing-help{display:block;margin-top:10px;font:700 10px Arial;color:#bcd3ff;letter-spacing:.3px}
+#fishing.bite{animation:bite-shake .09s linear infinite;border-color:#ffe35a}#fishing.bite #fishing-title{color:#ffe35a;font-size:26px}
+#fishing.danger{border-color:#ff4a3a;animation:line-shake .1s linear infinite}#fishing.danger #fishing-title{color:#ff8a6a}
+#fishing.run #fishing-title{color:#ffcf6a}
+#fishing.hot{animation:hot-glow .6s linear infinite}
+@keyframes fz-wobble{0%,100%{transform:rotate(-1.2deg)}50%{transform:rotate(1.2deg) scale(1.03)}}
+@keyframes zone-pulse{from{filter:brightness(1.1)}to{filter:brightness(1.6) saturate(1.3);transform:scaleY(1.12)}}
+@keyframes combo-bob{from{transform:rotate(6deg) scale(1)}to{transform:rotate(-3deg) scale(1.12)}}
+@keyframes bite-shake{0%{transform:translateX(-50%) rotate(-1deg)}50%{transform:translateX(calc(-50% + 4px)) rotate(1deg)}100%{transform:translateX(-50%) rotate(-1deg)}}
+@keyframes hot-glow{0%{box-shadow:0 9px 0 #0a1a38,0 0 30px #ff5aa8}33%{box-shadow:0 9px 0 #0a1a38,0 0 30px #ffe35a}66%{box-shadow:0 9px 0 #0a1a38,0 0 30px #4fd1ff}100%{box-shadow:0 9px 0 #0a1a38,0 0 30px #ff5aa8}}
+/* ----- "!" da fisgada ----- */
+#bite-pop{position:absolute;left:50%;top:40%;transform:translate(-50%,-50%) scale(0);font:900 130px/1 'Arial Black',Arial;color:#ffe35a;-webkit-text-stroke:6px #1a0f00;text-shadow:0 10px 0 #1a0f00,0 0 40px #ffcf3a;opacity:0;pointer-events:none}
+#bite-pop.show{animation:bite-pop .9s cubic-bezier(.2,1.8,.4,1) forwards}
+@keyframes bite-pop{0%{opacity:1;transform:translate(-50%,-50%) scale(0) rotate(-20deg)}25%{transform:translate(-50%,-50%) scale(1.3) rotate(8deg)}45%{transform:translate(-50%,-50%) scale(1) rotate(-4deg)}80%{opacity:1}100%{opacity:0;transform:translate(-50%,-60%) scale(.9)}}
+/* ----- cartão de captura por raridade ----- */
+#catch-card{top:27%;min-width:340px;padding:20px 38px 18px;background:linear-gradient(180deg,#203c78,#10204a);border:4px solid var(--tier,#e6c593);border-radius:26px;box-shadow:0 10px 0 #070f25,0 0 60px var(--glow,#fff);font-family:'Arial Black',Arial,sans-serif}
+#catch-card .cc-rays{position:absolute;left:50%;top:50%;width:720px;height:720px;margin:-360px 0 0 -360px;z-index:-1;background:repeating-conic-gradient(from 0deg,var(--glow,#fff) 0 7deg,transparent 7deg 22deg);border-radius:50%;mask:radial-gradient(circle,#000 18%,transparent 62%);-webkit-mask:radial-gradient(circle,#000 18%,transparent 62%);animation:rays 7s linear infinite;opacity:.32}
+#catch-card[data-tier="lixo"] .cc-rays{opacity:.08}
+#catch-tier{font:900 12px Arial!important;letter-spacing:3px!important;color:#10131a!important;background:var(--tier);padding:5px 14px;border-radius:99px;box-shadow:0 3px 0 #0007,0 0 16px var(--glow)}
+#catch-card strong{font:900 38px 'Arial Black',Arial!important;color:#fff!important;letter-spacing:-.5px!important;text-shadow:0 4px 0 #070f25,0 0 20px var(--glow);margin-top:6px;text-align:center}
+#catch-card small{font:800 16px Arial!important;color:#cfe0ff!important}
+#catch-value{font:900 24px 'Arial Black',Arial;color:#7dff6a;text-shadow:0 3px 0 #0a3a10,0 0 14px #7dff6a88}
+#catch-card em{font:900 13px Arial!important;letter-spacing:2px!important;color:#ffe35a!important;animation:combo-bob .4s ease-in-out infinite alternate}
+#catch-note{font:italic 700 12px Arial;color:#d8e4ff;max-width:300px;text-align:center;line-height:1.4;margin-top:4px}#catch-note:empty{display:none}
+#catch-card.show{animation:card-pop2 .6s cubic-bezier(.2,1.7,.4,1) forwards}
+@keyframes card-pop2{0%{opacity:0;transform:translate(-50%,-50%) scale(.3) rotate(-8deg)}60%{opacity:1;transform:translate(-50%,-50%) scale(1.08) rotate(2deg)}100%{opacity:1;transform:translate(-50%,-50%) scale(1) rotate(0)}}
+@keyframes rays{to{transform:rotate(360deg)}}
+/* ----- confete, moedas, dinheiro, clarão ----- */
+#confetti{position:fixed;inset:0;pointer-events:none;z-index:20;overflow:hidden}
+#confetti i{position:absolute;top:42%;width:10px;height:10px;border-radius:2px;animation:confetti 2.3s cubic-bezier(.2,.7,.4,1) forwards}
+@keyframes confetti{0%{transform:translate(0,0) rotate(0)}28%{transform:translate(calc(var(--dx)*.45),-34vh) rotate(calc(var(--r)*.4))}100%{transform:translate(var(--dx),70vh) rotate(var(--r));opacity:.2}}
+#confetti i.coin{width:22px;height:22px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff6b0,#f2c12e 45%,#b8860b);box-shadow:0 2px 0 #7a5600;animation:coin 1.8s cubic-bezier(.3,.8,.5,1) forwards}
+@keyframes coin{0%{transform:translate(0,0) scale(.4)}35%{transform:translate(calc(var(--dx)*.5),-30vh) scale(1.1) rotateY(360deg)}100%{transform:translate(var(--dx),60vh) scale(.8) rotateY(1080deg);opacity:0}}
+.money-pop{position:absolute;left:50%;top:48%;transform:translate(-50%,-50%);font:900 54px 'Arial Black',Arial;color:#7dff6a;-webkit-text-stroke:3px #0a3a10;text-shadow:0 6px 0 #0a3a10,0 0 30px #7dff6a;animation:money-up 2.1s cubic-bezier(.2,1.4,.4,1) forwards}
+@keyframes money-up{0%{opacity:0;transform:translate(-50%,-50%) scale(.3)}20%{opacity:1;transform:translate(-50%,-60%) scale(1.25)}35%{transform:translate(-50%,-62%) scale(1)}80%{opacity:1}100%{opacity:0;transform:translate(-50%,-150%) scale(.9)}}
+#flash{position:fixed;inset:0;pointer-events:none;z-index:19;opacity:0;mix-blend-mode:screen}#flash.go{animation:flash .8s ease-out}@keyframes flash{0%{opacity:0}12%{opacity:1}100%{opacity:0}}
+/* ----- luneta: lente redonda, borda escura, retículo duplex com ponto vermelho ----- */
+#scope{position:fixed;inset:0;z-index:3;pointer-events:none;overflow:hidden}
+#scope:before{content:'';position:absolute;left:50%;top:50%;width:80vh;height:80vh;margin:-40vh 0 0 -40vh;border-radius:50%;box-shadow:inset 0 0 7vh 2.5vh #000d,inset 0 0 0 .6vh #10202e,0 0 0 100vmax #000;background:radial-gradient(circle at 36% 32%,#ffffff12,transparent 38%)}
+#scope .reticle{position:absolute;left:50%;top:50%;width:80vh;height:80vh;margin:-40vh 0 0 -40vh}
+#scope .h{position:absolute;left:0;right:0;top:50%;height:1px;background:#000}#scope .v{position:absolute;top:0;bottom:0;left:50%;width:1px;background:#000}
+#scope .h:before,#scope .h:after{content:'';position:absolute;top:-2px;height:5px;width:30%;background:#000}#scope .h:before{left:0}#scope .h:after{right:0}
+#scope .v:before,#scope .v:after{content:'';position:absolute;left:-2px;width:5px;height:30%;background:#000}#scope .v:before{top:0}#scope .v:after{bottom:0}
+#scope .c{position:absolute;left:50%;top:50%;width:6px;height:6px;margin:-3px;border-radius:50%;background:#ff2a2a;box-shadow:0 0 6px #ff2a2a}
+/* ----- marcadores das gaivotas ladras ----- */
+#markers .marker{position:absolute;left:0;top:0;margin:-17px 0 0 -17px;display:flex;flex-direction:column;align-items:center;gap:6px}
+#markers .marker b{width:30px;height:30px;display:flex;align-items:center;justify-content:center;font:900 17px 'Arial Black';color:#fff;background:#ff3a3a;border:3px solid #fff;border-radius:6px;transform:rotate(45deg);box-shadow:0 0 16px #ff3a3a}
+#markers .marker span{font:900 9px Arial;letter-spacing:1px;color:#fff;background:#000a;padding:2px 6px;border-radius:6px;white-space:nowrap}
+#markers .marker.fish b{background:#ffb627;box-shadow:0 0 22px #ffb627;animation:marker-pulse .4s ease-in-out infinite alternate}
+#markers .marker.edge b{border-radius:4px 50% 50% 50%;transform:rotate(calc(var(--a) + 135deg))}
+@keyframes marker-pulse{to{transform:rotate(45deg) scale(1.2)}}
+/* ----- Baly ----- */
+#baly-hud{position:absolute;top:96px;left:50%;transform:translateX(-50%);background:#0c0c0d;border:3px solid #ffc81e;border-radius:18px;padding:8px 18px 10px;display:flex;flex-direction:column;align-items:center;gap:3px;box-shadow:0 6px 0 #6b5200,0 0 30px #ffc81e88;animation:baly-bounce .2s ease-in-out infinite alternate}
+#baly-hud b{font:900 28px Georgia,serif;color:#ffc81e;letter-spacing:3px;line-height:1}#baly-hud span{font:900 9px Arial;letter-spacing:2px;color:#ffc81e}
+#baly-hud .bar{width:210px;height:8px;background:#333;border-radius:4px;overflow:hidden}#baly-bar{display:block;height:100%;background:linear-gradient(90deg,#ffc81e,#fff2a0);transition:width .2s}
+@keyframes baly-bounce{from{transform:translateX(-50%) scale(1) rotate(-1.5deg)}to{transform:translateX(-50%) scale(1.06) rotate(1.5deg)}}
+#speedlines{position:fixed;inset:-20%;pointer-events:none;z-index:2;opacity:0;background:repeating-conic-gradient(from 0deg at 50% 50%,#fff0 0deg 5deg,#ffe78022 5deg 5.6deg);mask:radial-gradient(circle,transparent 22%,#000 60%);-webkit-mask:radial-gradient(circle,transparent 22%,#000 60%)}
+body.baly #speedlines{opacity:1;animation:speed .12s linear infinite}body.baly #hud{animation:hud-jitter .1s linear infinite}
+@keyframes speed{0%{transform:rotate(0) scale(1)}50%{transform:rotate(2deg) scale(1.05)}100%{transform:rotate(4deg) scale(1)}}
+@keyframes hud-jitter{0%{transform:translate(0,0)}25%{transform:translate(1px,-1px)}50%{transform:translate(-1px,1px)}75%{transform:translate(1px,1px)}}
+#tab-hint{margin-left:6px;color:#ff9a7a}
+#toast{font:800 16px Arial;border-radius:14px;background:#0b1c3bdd;border:2px solid #ffffff22;box-shadow:0 5px 0 #0006}
+body.scoped #crosshair,body.scoped #hitmark{opacity:0}

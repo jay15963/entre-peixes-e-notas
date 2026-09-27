@@ -21,11 +21,13 @@ export class Transport {
   async room(code,host){
     this.close();this.host=host;const {Peer}=await import('peerjs');
     return new Promise((resolve,reject)=>{
-      const id=ROOM_PREFIX+code.toUpperCase();const timeout=setTimeout(()=>reject(Error('O servidor de salas não respondeu. Tente a conexão manual.')),15000);
+      const id=ROOM_PREFIX+code.toUpperCase();const timeout=setTimeout(()=>reject(Error(host?'O servidor de salas não respondeu. Tente de novo em instantes.':'Não foi possível abrir a conexão com a sala em 20 s. Se o código está certo, a rede de um dos dois provavelmente bloqueia conexão direta: tente outra rede (Wi‑Fi em vez de 4G) ou peça para outra pessoa criar a sala.')),host?15000:20000);
       const peer=new Peer(host?id:undefined,{config:{iceServers:ICE_SERVERS},debug:0});this.broker=peer;
       peer.on('error',e=>{clearTimeout(timeout);const msg=e.type==='unavailable-id'?'Esse código já está em uso. Crie outra sala.':e.type==='peer-unavailable'?'Sala não encontrada. Confira o código.':e.type==='network'||e.type==='server-error'?'Sem acesso ao servidor de salas. Use a conexão manual.':'Falha na conexão: '+e.type;if(!this.connected)reject(Error(msg));else this.onStatus('error');});
       peer.on('open',()=>{if(host){clearTimeout(timeout);resolve(code);return;}
         const conn=peer.connect(id,{reliable:true,serialization:'json'});this.link=conn;
+        // Diagnóstico: a sala existe, mas o caminho direto entre as duas redes não abre (NAT restrito / CGNAT de 4G)
+        const watchIce=()=>{const pc=conn.peerConnection;if(!pc){setTimeout(watchIce,200);return;}pc.addEventListener('iceconnectionstatechange',()=>{if(pc.iceConnectionState==='failed'&&!this.connected){clearTimeout(timeout);reject(Error('A sala foi encontrada, mas a rede de um dos dois bloqueia a conexão direta (comum em 4G/5G, Wi‑Fi de empresa ou faculdade). Tente outra rede — por exemplo Wi‑Fi em vez do celular — ou peça para outra pessoa criar a sala.'));}});};watchIce();
         conn.on('open',()=>{clearTimeout(timeout);this.startPing();this.onStatus('connected');resolve(code);});conn.on('data',d=>{if(d?.type==='full'){this.onStatus('full');return;}this.deliver(d,0);});conn.on('close',()=>{this.link=null;this.onStatus('disconnected');});conn.on('error',()=>this.onStatus('error'));});
       if(host)peer.on('connection',conn=>{let pid=-1;conn.on('open',()=>{pid=this.addPeer(p=>{const dc=conn.dataChannel;if(!dc||dc.bufferedAmount<256000)conn.send(p);},()=>conn.close());});conn.on('data',d=>{if(pid>=0)this.deliver(d,pid);});conn.on('close',()=>{if(pid>=0)this.dropPeer(pid);});});
       peer.on('disconnected',()=>{try{peer.reconnect();}catch{}});

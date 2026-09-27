@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 // Animação procedural por camadas. Nada é keyframe: tudo sai de fase de passada, molas e curvas de easing,
 // o que dá peso (antecipação, exagero, acompanhamento) e reage à velocidade, curva, pulo e balanço do barco.
 const clamp=(x,a=0,b=1)=>Math.max(a,Math.min(b,x));
@@ -64,11 +65,20 @@ export class Animator{
       this.root.userData.crank.rotation.x=this.crank;
     }
     this.bend=damp(this.bend,bend,14,dt);segs.forEach((s,i)=>{s.rotation.x=this.bend*(.08+i*.05);});
-    // ----- rifle: coronha no ombro, mão de apoio no guarda-mão, mira segue o olhar, recuo com mola -----
-    if(o.rifle){const aim=this.aim=damp(this.aim||0,o.aim?1:0,10,dt),pitch=clamp(o.pitch||0,-.9,1.1),rc=this.recoil=(this.recoil||new Spring(260,16));const r=rc.update(0,dt);
-      j.armL.rotation.x=-1.3-pitch*.85-aim*.12+r*.35;j.armL.rotation.z=-.08;j.foreL.rotation.x=-.45;j.armR.rotation.x=-1.4-pitch*.85+r*.3;j.armR.rotation.z=-.55;j.foreR.rotation.x=-.25;j.foreR.rotation.y=-.35;
-      j.torso.rotation.y+=.18;j.torso.rotation.x+=-r*.08;j.head.rotation.y-=.12;const gun=this.root.userData.gun;if(gun)gun.visible=!o.hideGun;this.root.userData.rod.visible=false;}
-    else if(this.root.userData.gun)this.root.userData.gun.visible=false;
+    // ----- rifle: coronha no ombro direito, segue o olhar; as duas mãos vão por IK ao punho e ao guarda-mão -----
+    const gun=this.root.userData.gun;
+    if(o.rifle&&gun){const aim=this.aim=damp(this.aim||0,o.aim?1:0,10,dt),pitch=clamp(o.pitch||0,-.9,1.1),rc=this.recoil=(this.recoil||new Spring(260,16));const r=rc.update(0,dt),rig=o.rig||{};
+      j.torso.rotation.y+=.22;j.torso.rotation.x+=-r*.06-pitch*.12;j.head.rotation.y-=.1;
+      gun.visible=!o.hideGun;this.root.userData.rod.visible=false;
+      gun.position.set(-.075+(rig.roll||0)*.03,.36-(rig.lower||0)*.12-aim*.01,.3+r*.02);gun.rotation.set(-pitch*.88+r*.12+(rig.lower||0)*.5,-.2+aim*.04,(rig.roll||0)*.7,'YXZ');
+      if(gun.userData.bolt)poseRifleParts(gun,rig);
+      this.root.updateMatrixWorld(true);const g=gun.userData;
+      // mão do gatilho (armL/foreL no modelo) no punho, ou na bola do ferrolho
+      let tR=g.grip.getWorldPosition(new THREE.Vector3());if(rig.rightToBolt>0)tR.lerp(g.knob.getWorldPosition(new THREE.Vector3()),rig.rightToBolt);
+      // mão de apoio (armR/foreR) no guarda-mão, ou no carregador durante a recarga
+      let tL=g.fore.getWorldPosition(new THREE.Vector3());if(rig.leftBlend>0){const m=g.magBottom.getWorldPosition(new THREE.Vector3());if(rig.leftTarget==='pouch')m.copy(j.torso.localToWorld(new THREE.Vector3(.12,-.05,.12)));tL.lerp(m,rig.leftBlend);}
+      armIK(j.armL,j.foreL,HAND_L,tR,new THREE.Vector3(-.5,-.35,-.25));armIK(j.armR,j.foreR,HAND_R,tL,new THREE.Vector3(.45,-.5,.1));}
+    else if(gun)gun.visible=false;
     // ----- tapa: antecipação, golpe rápido, acompanhamento com sobra -----
     if(o.slap>0){const k=1-o.slap;
       // mão do tapa: o braço que aparece à direita da tela em primeira pessoa (esquerdo do modelo)
@@ -96,3 +106,21 @@ export function lookAngles(fromPos,fromYaw,toPos){
   let yaw=Math.atan2(dx,dz)-fromYaw;yaw=Math.atan2(Math.sin(yaw),Math.cos(yaw));if(Math.abs(yaw)>LOOK_CONE)return null;
   return {yaw:clamp(yaw,-LOOK_LIMIT,LOOK_LIMIT),pitch:clamp(-Math.atan2(dy,dist),-.45,.45)};
 }
+
+// ---------- IK de braço (terceira pessoa) ----------
+// Mão (centro da palma) no espaço do antebraço, medida no modelo; o cotovelo aponta para o polo (espaço do tronco)
+const HAND_L=new THREE.Vector3(-.08,-.29,.035),HAND_R=new THREE.Vector3(.08,-.29,.035);
+const _P=new THREE.Vector3(),_D=new THREE.Vector3(),_e=new THREE.Vector3(),_pl=new THREE.Vector3(),_q1=new THREE.Quaternion(),_q2=new THREE.Quaternion(),_eu=new THREE.Euler();
+export function armIK(arm,fore,H0,targetWorld,pole){
+  const torso=arm.parent,T=torso.worldToLocal(targetWorld.clone()),S=arm.position,E0=fore.position;
+  _D.copy(T).sub(S);const a=E0.length(),b=H0.length(),d=clamp(_D.length(),Math.abs(a-b)+.02,a+b-.002);
+  // flexão do cotovelo por bissecção: |E0 + Rx(θ)·H0| = d
+  let lo=-2.7,hi=0;for(let i=0;i<18;i++){const m=(lo+hi)/2;_eu.set(m,0,0);_P.copy(H0).applyEuler(_eu).add(E0);if(_P.length()>d)hi=m;else lo=m;}
+  const flex=(lo+hi)/2;fore.rotation.set(flex,0,0);_eu.set(flex,0,0);_P.copy(H0).applyEuler(_eu).add(E0);
+  const Dn=_D.clone().normalize();_q1.setFromUnitVectors(_P.normalize(),Dn);
+  _e.copy(E0).applyQuaternion(_q1);_e.addScaledVector(Dn,-_e.dot(Dn));_pl.copy(pole);_pl.addScaledVector(Dn,-_pl.dot(Dn));
+  if(_e.lengthSq()>1e-8&&_pl.lengthSq()>1e-8){_e.normalize();_pl.normalize();let ang=Math.acos(clamp(_e.dot(_pl),-1,1));if(_e.clone().cross(_pl).dot(Dn)<0)ang=-ang;_q2.setFromAxisAngle(Dn,ang);_q1.premultiply(_q2);}
+  arm.quaternion.copy(_q1);
+}
+// Mesma pose das peças do rifle que o viewmodel usa (ferrolho e carregador), sem depender de weapons.js
+function poseRifleParts(gun,rig){const g=gun.userData;g.bolt.rotation.z=-(rig.boltLift||0)*1.15;g.bolt.position.z=.02-(rig.boltBack||0)*.085;g.mag.visible=rig.magState!=='dropped';g.mag.position.copy(g.magHome).add(new THREE.Vector3(0,-(rig.magOffset||0)*.09*(rig.magState==='hand'?1:0),0));}

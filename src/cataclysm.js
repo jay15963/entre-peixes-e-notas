@@ -215,10 +215,11 @@ export class Cataclysm {
     this.tmp=new THREE.Object3D();this.shock=0;this.onShock=null;this.onDebrisSplash=null;
   }
   setImpact(impact){this.impact=impact;U.uImpact.value.set(impact.x,0,impact.z);}
-  meteorPath(t){const I=U.uImpact.value,a=clamp((t-CONFIG.asteroidAt)/(CONFIG.impactAt-CONFIG.asteroidAt),0,1),dir=new THREE.Vector3(-.5,.52,.69).normalize();return {pos:I.clone().addScaledVector(dir,1000*(1-a)),dir,a};}
+  meteorPath(t){const I=U.uImpact.value,a=clamp((t-CONFIG.asteroidAt)/(CONFIG.impactAt-CONFIG.asteroidAt),0,1),dir=this.impact.dir?new THREE.Vector3(this.impact.dir[0],.52,this.impact.dir[1]).normalize():new THREE.Vector3(-.5,.52,.69).normalize();return {pos:I.clone().addScaledVector(dir,1000*(1-a)),dir,a};}
   crest(t,phi,s=2){const I=U.uImpact.value,R=tsunamiRadius(t,this.impact.d)+s;return new THREE.Vector3(I.x+Math.cos(phi)*R,tsunamiAmplitude(t),I.z+Math.sin(phi)*R);}
-  update(t,dt,boat,camera){
-    if(!this.impact){this.meteor.visible=false;return;}
+  // t = tempo de história (linha do tempo do fim); clock = relógio real (idade das partículas)
+  update(t,dt,boat,camera,clock=t){
+    this.now=clock;if(!this.impact){this.meteor.visible=false;return;}
     const I=U.uImpact.value,ti=CONFIG.impactAt,age=t-ti,jumped=Math.abs(t-this.lastT)>1;this.lastT=t;
     // ----- Entrada do meteoro -----
     const flying=t>=CONFIG.asteroidAt&&t<ti;this.meteor.visible=this.trailCore.visible=this.trailOuter.visible=flying;
@@ -230,9 +231,9 @@ export class Cataclysm {
       U.uMeteorPos.value.copy(pos);U.uMeteorGlow.value=.2+a*a*1.1;this.meteorLight.position.copy(pos);this.meteorLight.intensity=1+a*a*5;
       // Rastro de fumaça persistente e fagulhas soltando do meteoro
       if(!jumped){const back=dir,steps=Math.ceil(dt*60*(this.fire.count>2000?3:2));for(let i=0;i<steps;i++){const j=90+Math.random()*120,px=pos.x+back.x*j+(Math.random()-.5)*14,py=pos.y+back.y*j+(Math.random()-.5)*14,pz=pos.z+back.z*j+(Math.random()-.5)*14;
-        this.smoke.emit(t,px,py,pz,(Math.random()-.5)*3,(Math.random()-.2)*2,(Math.random()-.5)*3,40+Math.random()*20,.3,0,14+a*8,55+Math.random()*40,.6);
-        this.fire.emit(t,px-back.x*(j-8),py-back.y*(j-8),pz-back.z*(j-8),back.x*40+(Math.random()-.5)*25,back.y*40+(Math.random()-.5)*25,back.z*40+(Math.random()-.5)*25,.6+Math.random()*1.1,1.2,.3,5+a*6,2,0);}
-        if(Math.random()<dt*3*a)for(let k=0;k<8;k++)this.fire.emit(t,pos.x,pos.y,pos.z,(Math.random()-.5)*60,(Math.random()-.5)*60,(Math.random()-.5)*60,2+Math.random()*2,.4,1,4,1,0);}
+        this.smoke.emit(this.now,px,py,pz,(Math.random()-.5)*3,(Math.random()-.2)*2,(Math.random()-.5)*3,40+Math.random()*20,.3,0,14+a*8,55+Math.random()*40,.6);
+        this.fire.emit(this.now,px-back.x*(j-8),py-back.y*(j-8),pz-back.z*(j-8),back.x*40+(Math.random()-.5)*25,back.y*40+(Math.random()-.5)*25,back.z*40+(Math.random()-.5)*25,.6+Math.random()*1.1,1.2,.3,5+a*6,2,0);}
+        if(Math.random()<dt*3*a)for(let k=0;k<8;k++)this.fire.emit(this.now,pos.x,pos.y,pos.z,(Math.random()-.5)*60,(Math.random()-.5)*60,(Math.random()-.5)*60,2+Math.random()*2,.4,1,4,1,0);}
       this.smoke.uniforms.uGlow.value=U.uMeteorGlow.value*1.2;this.smoke.uniforms.uGlowPos.value.copy(pos);
     }else{U.uMeteorGlow.value=0;this.meteorLight.intensity=0;}
     // ----- Impacto -----
@@ -252,9 +253,9 @@ export class Cataclysm {
       if(!this.fired.shock&&dr>=boatDist){this.fired.shock=true;if(this.onShock)this.onShock();}
       // Coluna de vapor e cogumelo, iluminados por baixo pela bola de fogo
       if(!jumped&&age<16){const rate=age<4?90:age<9?45:18,count=Math.ceil(rate*dt*(this.steam.count/4000));for(let i=0;i<count;i++){const a=Math.random()*6.283,rr=Math.random()*40*(1+age*.15);const up=age<6?30+Math.random()*40:10+Math.random()*15;
-        this.steam.emit(t,I.x+Math.cos(a)*rr,Math.random()*30,I.z+Math.sin(a)*rr,Math.cos(a)*(6+age),up,Math.sin(a)*(6+age),22+Math.random()*16,.08,0,20+Math.random()*20,70+Math.random()*80,.7);
-        if(age>2&&Math.random()<.5){const cap=260+Math.random()*80;this.steam.emit(t,I.x+Math.cos(a)*rr*.5,cap,I.z+Math.sin(a)*rr*.5,Math.cos(a)*(22+Math.random()*25),4+Math.random()*6,Math.sin(a)*(22+Math.random()*25),24+Math.random()*14,.12,0,45,130+Math.random()*80,.9);}}
-        if(age<5)for(let i=0;i<Math.ceil(40*dt*(this.fire.count/4000));i++){const a=Math.random()*6.283;this.fire.emit(t,I.x+(Math.random()-.5)*30,20+Math.random()*60,I.z+(Math.random()-.5)*30,Math.cos(a)*20,25+Math.random()*40,Math.sin(a)*20,1.5+Math.random()*2,.8,0,30,70,0);}}
+        this.steam.emit(this.now,I.x+Math.cos(a)*rr,Math.random()*30,I.z+Math.sin(a)*rr,Math.cos(a)*(6+age),up,Math.sin(a)*(6+age),22+Math.random()*16,.08,0,20+Math.random()*20,70+Math.random()*80,.7);
+        if(age>2&&Math.random()<.5){const cap=260+Math.random()*80;this.steam.emit(this.now,I.x+Math.cos(a)*rr*.5,cap,I.z+Math.sin(a)*rr*.5,Math.cos(a)*(22+Math.random()*25),4+Math.random()*6,Math.sin(a)*(22+Math.random()*25),24+Math.random()*14,.12,0,45,130+Math.random()*80,.9);}}
+        if(age<5)for(let i=0;i<Math.ceil(40*dt*(this.fire.count/4000));i++){const a=Math.random()*6.283;this.fire.emit(this.now,I.x+(Math.random()-.5)*30,20+Math.random()*60,I.z+(Math.random()-.5)*30,Math.cos(a)*20,25+Math.random()*40,Math.sin(a)*20,1.5+Math.random()*2,.8,0,30,70,0);}}
       this.steam.uniforms.uGlow.value=U.uImpactLight.value*1.6;this.steam.uniforms.uGlowPos.value.set(I.x,40,I.z);this.spray.uniforms.uGlow.value=U.uImpactLight.value;this.spray.uniforms.uGlowPos.value.set(I.x,40,I.z);
       this.smoke.uniforms.uGlow.value=U.uImpactLight.value*1.2;this.smoke.uniforms.uGlowPos.value.set(I.x,60,I.z);this.smoke.uniforms.uGlowRadius.value=400;
       this.updateDebris(t,dt,age,jumped);
@@ -264,9 +265,9 @@ export class Cataclysm {
       // Espuma e borrifos arrancados da crista pelo vento
       if(!jumped&&this.lip.visible){const k=smooth(142,160,t),count=Math.ceil(dt*(110+k*150)*(this.spray.count/9000));for(let i=0;i<count;i++){const off=(Math.random()-.5)*(Math.random()<.7?.35:1.2),p=this.crest(t,phi+off,-2+Math.random()*8+lu.uCurl.value*6);p.y*=.9+Math.random()*.14;
         const out=new THREE.Vector3(Math.cos(phi+off),0,Math.sin(phi+off));const sp=4+Math.random()*10;
-        this.spray.emit(t,p.x,p.y,p.z,out.x*sp*(1.5+k),2+Math.random()*6,out.z*sp*(1.5+k),2.5+Math.random()*3,.35,.35,2+Math.random()*3,8+Math.random()*10,-1.2);}
+        this.spray.emit(this.now,p.x,p.y,p.z,out.x*sp*(1.5+k),2+Math.random()*6,out.z*sp*(1.5+k),2.5+Math.random()*3,.35,.35,2+Math.random()*3,8+Math.random()*10,-1.2);}
         // névoa baixa na base da parede
-        for(let i=0;i<Math.ceil(dt*60);i++){const off=(Math.random()-.5)*.4,p=this.crest(t,phi+off,4+Math.random()*8);this.spray.emit(t,p.x,1+Math.random()*6,p.z,Math.cos(phi+off)*9,4+Math.random()*4,Math.sin(phi+off)*9,2+Math.random()*1.5,.5,.2,4,14,0);}}
+        for(let i=0;i<Math.ceil(dt*60);i++){const off=(Math.random()-.5)*.4,p=this.crest(t,phi+off,4+Math.random()*8);this.spray.emit(this.now,p.x,1+Math.random()*6,p.z,Math.cos(phi+off)*9,4+Math.random()*4,Math.sin(phi+off)*9,2+Math.random()*1.5,.5,.2,4,14,0);}}
     }else{U.uImpactAge.value=-1;U.uImpactLight.value=0;U.uTsuOn.value=0;this.lip.visible=false;this.fireball.visible=this.fireGlow.visible=this.crown.visible=this.dome.visible=this.debris.visible=false;}
     this.smoke.flush();this.steam.flush();this.fire.flush();this.spray.flush();
   }
@@ -276,15 +277,15 @@ export class Cataclysm {
     const center=new THREE.Vector2((I.x+boat.position.x)/2,(I.z+boat.position.z)/2);this.fluid.start(center,this.impact.d/(CONFIG.hitAt-CONFIG.impactAt)*.98);
     this.fluid.drop(I.x,I.z,26,34,10);this.fluid.drop(I.x,I.z,60,-6,0);
     // Coroa de borrifos: milhares de gotas balísticas
-    const n=Math.floor(this.spray.count*.45);for(let i=0;i<n;i++){const a=r()*6.283,up=30+r()*55,out=8+r()*30,rr=15+r()*20;this.spray.emit(t,I.x+Math.cos(a)*rr,2,I.z+Math.sin(a)*rr,Math.cos(a)*out,up,Math.sin(a)*out,6+r()*6,.05,1,2+r()*3,9+r()*12,.5);}
+    const n=Math.floor(this.spray.count*.45);for(let i=0;i<n;i++){const a=r()*6.283,up=30+r()*55,out=8+r()*30,rr=15+r()*20;this.spray.emit(this.now,I.x+Math.cos(a)*rr,2,I.z+Math.sin(a)*rr,Math.cos(a)*out,up,Math.sin(a)*out,6+r()*6,.05,1,2+r()*3,9+r()*12,.5);}
     this.debrisData=[];for(let i=0;i<this.debris.count;i++){const a=r()*6.283,el=.55+r()*.75,sp=26+r()*24;this.debrisData.push({p:new THREE.Vector3(I.x,8,I.z),v:new THREE.Vector3(Math.cos(a)*Math.cos(el)*sp,Math.sin(el)*sp,Math.sin(a)*Math.cos(el)*sp),s:1.5+r()*3.5,alive:true,rot:r()*6});}
     this.debris.visible=true;
   }
   updateDebris(t,dt,age,jumped){
     if(!this.debris.visible)return;let alive=0;
     this.debrisData.forEach((d,i)=>{if(d.alive){const T=age,p=d.p.clone().addScaledVector(d.v,T);p.y+=-4.9*T*T;
-      if(p.y<0&&T>.5){d.alive=false;if(!jumped){for(let k=0;k<50;k++){const a=Math.random()*6.283,s=4+Math.random()*10;this.spray.emit(t,p.x,0,p.z,Math.cos(a)*s,15+Math.random()*25,Math.sin(a)*s,3+Math.random()*2,.1,1,3,9,0);}this.fluid.drop(p.x,p.z,4+d.s,4+d.s*1.2,1);if(this.onDebrisSplash)this.onDebrisSplash(p);}}
-      else{alive++;if(!jumped&&Math.random()<.8){this.fire.emit(t,p.x,p.y,p.z,0,0,0,.6+Math.random()*.6,0,0,d.s*2.2,d.s*.5,0);if(Math.random()<.5)this.smoke.emit(t,p.x,p.y,p.z,(Math.random()-.5)*2,2,(Math.random()-.5)*2,9+Math.random()*5,.2,0,d.s*2,d.s*9,.5);}}
+      if(p.y<0&&T>.5){d.alive=false;if(!jumped){for(let k=0;k<50;k++){const a=Math.random()*6.283,s=4+Math.random()*10;this.spray.emit(this.now,p.x,0,p.z,Math.cos(a)*s,15+Math.random()*25,Math.sin(a)*s,3+Math.random()*2,.1,1,3,9,0);}this.fluid.drop(p.x,p.z,4+d.s,4+d.s*1.2,1);if(this.onDebrisSplash)this.onDebrisSplash(p);}}
+      else{alive++;if(!jumped&&Math.random()<.8){this.fire.emit(this.now,p.x,p.y,p.z,0,0,0,.6+Math.random()*.6,0,0,d.s*2.2,d.s*.5,0);if(Math.random()<.5)this.smoke.emit(this.now,p.x,p.y,p.z,(Math.random()-.5)*2,2,(Math.random()-.5)*2,9+Math.random()*5,.2,0,d.s*2,d.s*9,.5);}}
       this.tmp.position.copy(p);this.tmp.rotation.set(d.rot+T*2,d.rot*2+T,0);this.tmp.scale.setScalar(d.alive?d.s:0);}
       else{this.tmp.scale.setScalar(0);}
       this.tmp.updateMatrix();this.debris.setMatrixAt(i,this.tmp.matrix);});
