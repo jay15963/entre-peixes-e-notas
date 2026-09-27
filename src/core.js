@@ -10,8 +10,10 @@ export const smooth=(a,b,x)=>{const t=clamp((x-a)/(b-a));return t*t*(3-2*t)};
 // Tempo de história: o jogo agora é infinito. Antes do meteoro, o clima alterna calmaria (~3,5 min) e
 // tempestade (~1,5 min). Quando o anfitrião aperta TAB, a história acelera até o meteoro em rampTime segundos
 // e segue a linha do tempo original (impacto, onda, despedida, apagão).
-export function storyTime(t,trig){
-  if(!trig){const c=t%330;return 45+55*smooth(215,240,c)*(1-smooth(300,325,c));}
+// storm: evento de tempestade chamado pelo anfitrião ({at, dur}): entra em 20 s, dura, e acalma em 20 s. Sem evento, o mar fica calmo.
+export const STORM_TIME=150;
+export function storyTime(t,trig,storm=null){
+  if(!trig){if(!storm)return 45;const k=t-storm.at,d=storm.dur??STORM_TIME;return 45+55*smooth(0,20,k)*(1-smooth(d-20,d,k));}
   const k=t-trig.at;if(k<CONFIG.rampTime)return lerp(trig.from,CONFIG.asteroidAt,smooth(0,CONFIG.rampTime,k));return CONFIG.asteroidAt+(k-CONFIG.rampTime);
 }
 export function phaseAt(t){return t<60?'sunset':t<120?'storm':t<137?'asteroid':t<145?'wave':t<164?'farewell':t<167.5?'blackout':'title'}
@@ -78,11 +80,15 @@ export class Lobby {
 // o ponteiro tem inércia, a faixa verde encolhe com a dificuldade e fisgar rápido dá vantagem.
 export const FISH_TABLE=CATCHES.map(c=>({diff:c.diff,kg:c.kg,rarity:c.rarity}));
 export function pickFish(r){const total=FISH_TABLE.reduce((s,f)=>s+f.rarity,0);let x=r*total;for(let i=0;i<FISH_TABLE.length;i++){x-=FISH_TABLE[i].rarity;if(x<0)return i;}return 0;}
+function pickWeightedFish(r,w){const total=w.reduce((a,b)=>a+b,0);let x=r*total;for(let i=0;i<w.length;i++){x-=w[i];if(x<0&&w[i]>0)return i;}return 0;}
 export class Fishing {
   constructor(random=Math.random){this.random=random;this.reset();this.caught=0;this.lastSpecies=-1;this.lastWeight=0;}
-  reset(){this.phase='idle';this.timer=0;this.progress=0;this.tension=.3;this.target=.5;this.needle=.5;this.vel=0;this.run=0;this.runDir=1;this.biteAge=0;this.perfect=false;this.species=-1;this.weight=0;this.combo=0;}
+  // ajuda externa (passaguá, bicheiro, arpão): adianta a briga ou tira da água na hora
+  assist(k){if(this.phase!=='reeling')return false;this.bonus=(this.bonus||0)+k;return true;}
+  reset(){this.bonus=0;this.assistK=1;this.phase='idle';this.timer=0;this.progress=0;this.tension=.3;this.target=.5;this.needle=.5;this.vel=0;this.run=0;this.runDir=1;this.biteAge=0;this.perfect=false;this.species=-1;this.weight=0;this.combo=0;}
   get zone(){return this.species<0?.18:.2-FISH_TABLE[this.species].diff*.065;}
-  cast(){if(this.phase!=='idle')return false;this.phase='waiting';this.timer=2.5+this.random()*4;this.species=pickFish(this.random());const k=FISH_TABLE[this.species].kg;this.weight=Math.round((k[0]+(k[1]-k[0])*this.random())*100)/100;return true;}
+  // mods (loja): pesos por espécie, espera, velocidade de recolher e tensão (ver store.js fishingMods)
+  cast(mods=null){if(this.phase!=='idle')return false;this.mods=mods;this.phase='waiting';this.timer=(2.5+this.random()*4)*(mods?.wait??1);this.species=mods?.w?pickWeightedFish(this.random(),mods.w):pickFish(this.random());const k=FISH_TABLE[this.species].kg;this.weight=Math.round((k[0]+(k[1]-k[0])*this.random())*100)/100;return true;}
   reel(){if(this.phase==='bite'){this.phase='reeling';this.perfect=this.biteAge<.45;this.progress=this.perfect?.12:0;this.timer=0;return true;}return false;}
   // combo: tempo contínuo na faixa verde acelera o progresso (até 1,6x); boost = efeito do Baly
   step(dt,held,time,boost=false){
@@ -98,8 +104,9 @@ export class Fishing {
       this.vel+=(held?1.9:-1.5)*dt;this.vel*=Math.exp(-dt*2.2);this.needle+=this.vel*dt;if(this.needle<0||this.needle>1){this.needle=clamp(this.needle);this.vel=0;}
       const accurate=Math.abs(this.needle-this.target)<this.zone;
       this.combo=accurate?this.combo+dt:Math.max(0,this.combo-dt*3);const mult=1+Math.min(this.combo/2.5,1)*.6;
-      this.progress=clamp(this.progress+(accurate?.22*(1-d*.35)*mult*(boost?1.4:1):-.06)*dt);
-      this.tension=clamp(this.tension+(accurate?-.28:.3+(this.run>0?.22:0))*dt);
+      const M=this.mods||{},tk=(M.tension??1)*(this.weight>5?(M.heavy??1):1);
+      this.progress=clamp(this.progress+(accurate?.22*(1-d*.35)*mult*(boost?1.4:1)*(M.reel??1)*(this.assistK||1):-.06)*dt+(this.bonus||0));this.bonus=0;
+      this.tension=clamp(this.tension+(accurate?-.28:(.3+(this.run>0?.22:0))*tk)*dt);
       if(this.progress>=1){this.caught++;this.lastSpecies=this.species;this.lastWeight=this.weight;this.reset();return 'caught';}
       if(this.tension>=1||this.timer>30){this.lastSpecies=this.species;this.reset();return 'escaped';}
       if(!event&&this.random()>1-dt*(.18+d*.2))event='jump';
@@ -111,7 +118,7 @@ export class Fishing {
 export const SPAWNS=[[-.45,-1.1],[.45,-1.1],[-.45,1.2],[.45,1.2],[0,.55]];
 export function newPlayer(id,character){const s=SPAWNS[id%SPAWNS.length];return {id,character,x:s[0],z:s[1],land:0,baly:0,rifle:-1,ammo:5,reload:0,yaw:0,pitch:0,mode:'walk',fish:0,slap:0,ragTime:0,height:0,vy:0,speed:0,tp:0,cx:0,cz:0};}
 // yaw é relativo ao barco; x/z/h são a posição prevista pelo próprio cliente (movimento com autoridade local).
-export function inputPacket(input){const n=(v,a,b)=>clamp(Number(v)||0,a,b);return {type:'input',v:CONFIG.protocol,x:n(input.x,-1,1),z:n(input.z,-1,1),yaw:n(input.yaw,-1e4,1e4),pitch:n(input.pitch,-1.6,1.6),px:n(input.px,-4000,4000),pz:n(input.pz,-4000,4000),ph:n(input.ph,-20,60),land:input.land?1:0,speed:n(input.speed,0,8),tp:Math.floor(n(input.tp,0,1e6)),run:!!input.run,interact:!!input.interact,cast:!!input.cast,slap:!!input.slap,jump:!!input.jump,reel:!!input.reel,fall:!!input.fall,fire:!!input.fire,aim:!!input.aim,gull:Math.floor(n(input.gull,-1,31)),ray:Array.isArray(input.ray)?input.ray.slice(0,6).map(v=>n(v,-1e4,1e4)):null,throwAt:Math.floor(n(input.throwAt??-1,-1,200)),target:Math.floor(n(input.target??-1,-1,50)),throwOk:!!input.throwOk,shoo:Math.floor(n(input.shoo,0,2)),strum:Array.isArray(input.strum)?input.strum.slice(0,8).map(v=>Math.floor(n(v,0,127))):null};}
+export function inputPacket(input){const n=(v,a,b)=>clamp(Number(v)||0,a,b);return {type:'input',v:CONFIG.protocol,x:n(input.x,-1,1),z:n(input.z,-1,1),yaw:n(input.yaw,-1e4,1e4),pitch:n(input.pitch,-1.6,1.6),px:n(input.px,-4000,4000),pz:n(input.pz,-4000,4000),ph:n(input.ph,-20,60),land:input.land?1:0,speed:n(input.speed,0,8),tp:Math.floor(n(input.tp,0,1e6)),run:!!input.run,interact:!!input.interact,cast:!!input.cast,slap:!!input.slap,jump:!!input.jump,reel:!!input.reel,fall:!!input.fall,fire:!!input.fire,aim:!!input.aim,gull:Math.floor(n(input.gull,-1,31)),ray:Array.isArray(input.ray)?input.ray.slice(0,6).map(v=>n(v,-1e4,1e4)):null,throwAt:Math.floor(n(input.throwAt??-1,-1,200)),target:Math.floor(n(input.target??-1,-1,200)),boss:Math.floor(n(input.boss??-1,-1,4)),bossPt:Array.isArray(input.bossPt)?input.bossPt.slice(0,3).map(v=>n(v,-1e4,1e4)):null,throwOk:!!input.throwOk,shoo:Math.floor(n(input.shoo,0,2)),strum:Array.isArray(input.strum)?input.strum.slice(0,8).map(v=>Math.floor(n(v,0,127))):null,sel:Math.floor(n(input.sel??-1,-1,20)),use:!!input.use,scan:!!input.scan,pay:!!input.pay,aimPt:Array.isArray(input.aimPt)?input.aimPt.slice(0,3).map(v=>n(v,-1e4,1e4)):null,dive:!!input.dive,climb:!!input.climb,photo:Math.floor(n(input.photo??0,0,15))};}
 export function validPacket(p){return p&&p.v===CONFIG.protocol&&['hello','welcome','pick','ready','start','input','snapshot','lobby','event','bye','song','relay','full'].includes(p.type);}
 
 // ---------- Corda: laço girando sobre a cabeça ----------

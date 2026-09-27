@@ -6,9 +6,9 @@ import {groundHeight,terrainHeight,ISLAND,DOCK,BERTH,SHOP} from '../src/terrain.
 import {CATCHES,catchValue,BALY,TIERS} from '../src/catalog.js';
 import {GullFlock} from '../src/gulls.js';
 
-test('Jogo infinito: clima alterna calmaria e tempestade até o anfitrião chamar o meteoro',()=>{
-  for(let t=0;t<2000;t+=7){const s=storyTime(t,null);assert.ok(s<CONFIG.asteroidAt,'sem meteoro sem TAB');}
-  assert.equal(weatherAt(storyTime(10,null)).phase,'sunset');assert.ok(weatherAt(storyTime(260,null)).storm>.9,'tempestade no ciclo');assert.equal(weatherAt(storyTime(330+10,null)).phase,'sunset');
+test('Jogo infinito: calmaria até o anfitrião chamar a tempestade ou o meteoro (tela de eventos no TAB)',()=>{
+  for(let t=0;t<2000;t+=7){const s=storyTime(t,null);assert.ok(s<CONFIG.asteroidAt,'sem meteoro sem evento');assert.equal(weatherAt(s).storm,0,'sem tempestade sozinha');}
+  const storm={at:100};assert.ok(weatherAt(storyTime(160,null,storm)).storm>.9,'tempestade chamada');assert.equal(weatherAt(storyTime(100+260,null,storm)).phase,'sunset','a tempestade passa');
   const trig={at:500,from:storyTime(500,null)};assert.equal(storyTime(500+CONFIG.rampTime,trig),CONFIG.asteroidAt);
   assert.equal(storyTime(500+CONFIG.rampTime+(CONFIG.impactAt-CONFIG.asteroidAt),trig),CONFIG.impactAt);
 });

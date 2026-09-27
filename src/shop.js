@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import {Kit,loft,limb,ellipsoid,box,sculpt,paint,reseed,rand,V} from './geometry.js';
 import {SHOP,ISLAND} from './terrain.js';
 import {makeCatch} from './fish.js';
+import {buildFixtures,buildLane} from './storefront.js';
 
 // Supermercado inspirado nas lojas Althoff do sul de SC: paredes amarelo-limão, faixa superior em
 // telha metálica ondulada azul, oval amarelo com o logo azul e a folhinha verde, marquise branca,
@@ -88,7 +89,8 @@ export function buildShop(mats){
   const cartKit=new Kit();const cart=(k,x,z,rot)=>{const g=new Kit();g.add(metal,box([0,.72,0],[.56,.46,.85]),0xc9ced3,.02);for(let i=0;i<6;i++)g.add(metal,box([-.29,.72,-.36+i*.14],[.02,.44,.02]),0x9aa0a6);g.add(metal,box([0,.52,0],[.5,.03,.8]),0x9aa0a6).add(metal,box([0,1,-.46],[.56,.05,.05]),0x2c6db8);
     for(const sx of [-1,1])for(const sz of [-1,1]){g.add(metal,limb(V(sx*.24,.12,sz*.34),V(sx*.25,.5,sz*.38),.015,.015,4),0x9aa0a6);g.add(metal,new THREE.CylinderGeometry(.06,.06,.04,8).rotateZ(Math.PI/2).translate(sx*.24,.07,sz*.34),0x222222);}
     const b=g.build();b.position.set(x,F,z);b.rotation.y=rot;k.push(b);};
-  const carts=[];for(let i=0;i<5;i++)cart(carts,11.8+i*.0,v0-1.2-i*.22,0);carts.forEach(c=>group.add(c));colliders.push({x0:11.4,x1:12.2,z0:v0-2.4,z1:v0-.7});
+  // os carrinhos agora são de verdade (market.js): aqui fica só o abrigo com a placa
+  for(const x of [10.1,13.9])ext.add(metal,box([x,F+.5,v0-2.2],[.06,1,2.6]),0xc9ced3,.02);ext.add(metal,box([12,F+2.4,v0-2.2],[4,.08,2.8]),0x2c6db8,.02);for(const x of [10.1,13.9])for(const z of [v0-1,v0-3.4])ext.add(metal,limb(V(x,F,z),V(x,F+2.4,z),.04,.04,8),0xc9ced3,.01);
   // ================= INTERIOR =================
   // paredes internas brancas com faixa amarela e azul, teto com luminárias
   inn.add(im,box([cu,F+Hh-.3,cv],[W-.62,.1,D-.62]),0xeceae4,.01);
@@ -108,7 +110,9 @@ export function buildShop(mats){
     for(const s of [-1,1]){for(let sh=0;sh<5;sh++){const y=F+.2+sh*.38;inn.add(imMetal,box([u+s*.3,y,mid],[.5,.03,len]),0xd8dadd,.02).add(im,box([u+s*.56,y-.02,mid],[.02,.07,len]),0xf3d73a,.02);
         let v=va+.1;while(v<vb-.12){const kind=[0,0,1,2,0,3][Math.floor(rand()*6)],color=palette[Math.floor(rand()*palette.length)],n=1+Math.floor(rand()*3);for(let d=0;d<n;d++)product(inn,im,u+s*(.16+d*.13),y+.015,v,s,kind,color);v+=kind===0?.2+rand()*.05:.11;}}}
     inn.add(im,box([u,F+2.05,mid],[1.1,.18,len]),0x2c6db8,.02);colliders.push({x0:u-.6,x1:u+.6,z0:va,z1:vb});};
-  for(const u of [-9,-5.5,5.5,9])gondola(u,11,20.5);
+  for(const u of [-9,9])gondola(u,11,20.5);
+  // Loja do Pescador: os dois expositores centrais e a vitrine de iscas (storefront.js)
+  const store=buildFixtures({inn,im,imMetal,glass,group,colliders,canvasTex,F});
   // ilha de promoção no corredor central: pirâmide de latas de Baly (preto e amarelo) e melancias
   const balyTex=canvasTex(256,128,(c,w,h)=>{c.fillStyle='#111';c.fillRect(0,0,w,h);c.fillStyle='#ffc81e';c.font='bold 56px Georgia';c.textAlign='center';c.fillText('BALY',w/2,80);c.font='bold 16px Arial';c.fillText('ENERGY DRINK',w/2,108);});
   const can=new THREE.CylinderGeometry(.034,.034,.16,14);const canMesh=new THREE.InstancedMesh(can,new THREE.MeshStandardMaterial({map:balyTex,metalness:.5,roughness:.35}),120);let ci=0;const mm=new THREE.Matrix4();
@@ -151,31 +155,17 @@ export function buildShop(mats){
   const chalk=new THREE.Mesh(new THREE.PlaneGeometry(1.4,1),new THREE.MeshStandardMaterial({map:canvasTex(420,300,(c,w,h)=>{c.fillStyle='#2b3a2e';c.fillRect(0,0,w,h);c.strokeStyle='#8a6a45';c.lineWidth=18;c.strokeRect(0,0,w,h);c.fillStyle='#f4f1e8';c.textAlign='center';c.font='bold 40px "Comic Sans MS", cursive';c.fillText('Pão francês',w/2,90);c.fillText('quentinho!',w/2,140);c.font='30px "Comic Sans MS", cursive';c.fillStyle='#f3d73a';c.fillText('saiu agora 🥖',w/2,200);c.fillStyle='#fff';c.fillText('R$ 12,90 o kg',w/2,250);}),roughness:.9}));
   chalk.position.set(3.35,F+1.9,v1-.2);chalk.rotation.y=Math.PI;group.add(chalk);
   colliders.push({x0:3.9,x1:14.1,z0:22,z1:23.2},{x0:3.9,x1:14.1,z0:v1-.8,z1:v1},{x0:13.6,x1:15.9,z0:v1-2.3,z1:v1});
-  // ----- caixas de autoatendimento: esteira, leitor, tela, maquininha, área de ensacar, poste com número -----
-  const belt=canvasTex(64,256,(c,w,h)=>{c.fillStyle='#161718';c.fillRect(0,0,w,h);c.fillStyle='#2a2b2d';for(let y=0;y<h;y+=16)c.fillRect(0,y,w,5);});belt.wrapS=belt.wrapT=THREE.RepeatWrapping;belt.repeat.set(1,3);
-  const beltMat=new THREE.MeshStandardMaterial({map:belt,roughness:.7});
-  const screenTex=canvasTex(320,240,(c,w,h)=>{c.fillStyle='#f4f6f8';c.fillRect(0,0,w,h);c.fillStyle='#2c6db8';c.fillRect(0,0,w,54);drawLogo(c,w/2,44,40,{sub:false,color:'#f3d73a'});c.fillStyle='#1f2a36';c.textAlign='center';c.font='bold 22px Arial';c.fillText('AUTOATENDIMENTO',w/2,96);c.font='18px Arial';c.fillText('Passe seus produtos',w/2,132);c.fillText('no leitor',w/2,156);c.fillStyle='#6fb83a';c.fillRect(70,184,180,38);c.fillStyle='#fff';c.font='bold 18px Arial';c.fillText('INICIAR',w/2,210);});
-  const scanGlow=new THREE.MeshStandardMaterial({color:0x220000,emissive:0xff2020,emissiveIntensity:1.6,roughness:.1});
-  for(const [i,u]of [[1,-11],[2,-7.2],[3,7.2],[4,11]].map(([n,u])=>[n,u])){const v=7.2;
-    inn.add(imMetal,box([u,F+.45,v],[.8,.9,2.8]),0xe9eaec,.02).add(im,box([u,F+.45,v-1.41],[.82,.86,.04]),0x2c6db8,.02);
-    const bm=new THREE.Mesh(new THREE.BoxGeometry(.6,.02,1.5),beltMat);bm.position.set(u,F+.915,v+.55);group.add(bm);
-    inn.add(imMetal,box([u,F+.93,v-.35],[.62,.03,.5]),0x2b2e33,.02);const sg=new THREE.Mesh(new THREE.PlaneGeometry(.4,.3),scanGlow);sg.rotation.x=-Math.PI/2;sg.position.set(u,F+.95,v-.35);group.add(sg);
-    inn.add(imMetal,limb(V(u+.3,F+.9,v-.3),V(u+.3,F+1.55,v-.3),.025,.025,6),0x2b2e33).add(imMetal,box([u+.3,F+1.6,v-.3],[.06,.36,.5],[0,0,-.3]),0x1d1f22,.02);
-    const scr=new THREE.Mesh(new THREE.PlaneGeometry(.44,.33),new THREE.MeshStandardMaterial({map:screenTex,emissive:0xffffff,emissiveMap:screenTex,emissiveIntensity:.9}));scr.position.set(u+.26,F+1.6,v-.3);scr.rotation.set(0,-Math.PI/2,-.3);scr.rotation.order='YXZ';scr.rotation.set(-0,-Math.PI/2,0);scr.rotateX(-.3);group.add(scr);
-    inn.add(imMetal,box([u-.22,F+1,v-.75],[.1,.16,.2],[-.4,0,0]),0x1d1f22,.02);
-    inn.add(imMetal,box([u,F+.78,v-1.9],[.8,.05,1],[0,0,0]),0xc9ced3,.02).add(imMetal,limb(V(u-.3,F+.8,v-1.5),V(u-.3,F+1.3,v-1.5),.012,.012,4),0x9aa0a6).add(imMetal,limb(V(u+.3,F+.8,v-1.5),V(u+.3,F+1.3,v-1.5),.012,.012,4),0x9aa0a6).add(im,box([u,F+1.02,v-1.9],[.5,.44,.02]),0xf4f4f0,.05);
-    inn.add(imMetal,limb(V(u-.35,F+.9,v+1.3),V(u-.35,F+2.4,v+1.3),.03,.03,6),0x2b2e33);
-    const num=new THREE.Mesh(new THREE.CylinderGeometry(.18,.18,.12,16).rotateX(Math.PI/2).rotateY(Math.PI/2),new THREE.MeshStandardMaterial({map:canvasTex(128,128,(c)=>{c.fillStyle='#1a8a3a';c.fillRect(0,0,128,128);c.fillStyle='#fff';c.font='bold 90px Arial';c.textAlign='center';c.textBaseline='middle';c.fillText(String(i),64,70);}),emissive:0x40ff70,emissiveIntensity:.8}));num.position.set(u-.35,F+2.55,v+1.3);group.add(num);
-    colliders.push({x0:u-.45,x1:u+.45,z0:v-2.45,z1:v+1.45});}
+  // ----- caixas de autoatendimento (modelo novo em storefront.js) -----
+  const lanes=[[1,-11],[2,-7.2],[3,7.2],[4,11]].map(([n,u])=>buildLane({inn,im,imMetal,group,colliders,canvasTex,drawLogo,F,u,v:7.2,n}));
   // cestinhas empilhadas e carrinhos na entrada, por dentro
   for(let i=0;i<5;i++)inn.add(im,loft([{y:F+i*.12,rx:.22,rz:.16},{y:F+.24+i*.12,rx:.26,rz:.19}],{n:8,capStart:true,capEnd:false}).translate(-3.2,0,5.4),0xd62028,.05);colliders.push({x:-3.2,z:5.4,r:.3});
   const bakerSpot={u:9,v:23.45,yaw:Math.PI};
   const e=ext.build(),n=inn.build();e.traverse(o=>{if(o.isMesh)o.castShadow=true;});n.traverse(o=>{if(o.isMesh){o.castShadow=false;o.receiveShadow=true;}});group.add(e,n);
-  const points={baker:bakerSpot,sell:{u:u0+2.6,v:15.5},door:{u:0,v:v0},lanes:[-11,-7.2,7.2,11].map(u=>({u,v:7.2}))};
+  const points={baker:bakerSpot,sell:{u:u0+2.6,v:15.5},door:{u:0,v:v0},lanes:lanes.map(l=>({u:l.u,v:7.2,scan:l.scan,pay:l.pay})),slots:store.slots};
   let doorOpen=0;
-  return {group,colliders,points,lights,
-    update(t,dt,camera,people=[]){belt.offset.y=(belt.offset.y-dt*.4)%1;
+  return {group,colliders,points,lights,lanes,
+    update(t,dt,camera,people=[]){
       const near=people.some(p=>Math.abs(p.x-ISLAND.x)<2.6&&Math.abs(p.z-(ISLAND.z+v0))<3.6);doorOpen+=((near?1:0)-doorOpen)*(1-Math.exp(-dt*5));doors.forEach(d=>{d.g.position.x=d.s*(.82+doorOpen*1.55);});
-      scanGlow.emissiveIntensity=1.3+Math.sin(t*9)*.3;return doorOpen;},
+      for(const l of lanes)l.update(t,dt,l.mode);return doorOpen;},
     doorOpen:()=>doorOpen>.6};
 }

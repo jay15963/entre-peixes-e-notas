@@ -243,7 +243,7 @@ export class Viewmodel {
     else{place(arm.sleeve,S,S.clone().lerp(E,.45));}}
   // Objetos na mão em primeira pessoa: violão (tocando), rolo de corda e balde
   setProps(p){this.props=p;this.propRoot=new THREE.Group();this.root.add(this.propRoot);for(const o of Object.values(p)){o.visible=false;o.traverse(c=>{if(c.isMesh)c.frustumCulled=false;});this.propRoot.add(o);}}
-  updateProp(dt,kind,{strum=0,chord=0,bob=0,swing=0}={}){if(!this.props||!this.arms)return false;for(const [k,o]of Object.entries(this.props))if(o.parent===this.propRoot)o.visible=k===kind;if(!kind)return false;
+  updateProp(dt,kind,{strum=0,chord=0,bob=0,swing=0,swipe=0,use=0}={}){if(!this.props||!this.arms)return false;for(const [k,o]of Object.entries(this.props))if(o.parent===this.propRoot)o.visible=k===kind;if(!kind)return false;
     const show=true;for(const s of ['L','R'])for(const m of Object.values(this.arms[s]))if(m&&m.isObject3D)m.visible=show;this.gun.visible=false;
     const o=this.props[kind],e=new THREE.Euler(),q=new THREE.Quaternion(),by=Math.abs(Math.cos(bob))*.01;
     if(kind==='guitar'){
@@ -262,6 +262,13 @@ export class Viewmodel {
       const hp=o.position.clone().add(V(.01,.03,.05));this.placeArm('R',hp,q.setFromEuler(e.set(-.4,0,Math.PI*.55)),[1.3,1.35,1.4,1.45],.1,.9,V(.24,-.5,.1),V(.9,-.7,0));
       // mão esquerda segura a sobra do rolo quando o laço gira
       this.placeArm('L',V(-.02,-.36+sw*.05,-.46),new THREE.Quaternion().setFromEuler(new THREE.Euler(-.2,0,-Math.PI*.4)),[1.2,1.25,1.3,1.35],.3,.6,V(-.22,-.5,-.02),V(-.8,-.8,0));}
+    else if(kind==='item'){// item da loja na mão direita; swipe = passando pelo leitor (da direita para a esquerda, descendo)
+      const k=Math.sin(swipe*Math.PI),x=.2-swipe*.34,y=-.3-k*.12+by-use*.05,z=-.52-k*.06+use*.08;o.position.set(x,y,z);o.rotation.set(-.25-k*.3,.5-swipe*.6+Math.sin(bob)*.03,.1);
+      this.placeArm('R',V(x+.03,y+.02,z+.06),q.setFromEuler(e.set(-.3,0,Math.PI*.55)),[1.25,1.3,1.35,1.4],.2,.8,V(.24,-.5,.05),V(.9,-.6,0));
+      for(const m of Object.values(this.arms.L))if(m&&m.isObject3D)m.visible=false;}
+    else if(kind==='push'){// empurrando o carrinho: as duas mãos no puxador, lá na frente
+      const sw=Math.sin(bob)*.012;this.placeArm('R',V(.2,-.42+by+sw,-.62),q.setFromEuler(e.set(-1.2,0,Math.PI*.5)),[1.3,1.35,1.4,1.4],.2,.8,V(.24,-.5,.05),V(.9,-.5,0));
+      this.placeArm('L',V(-.2,-.42+by-sw,-.62),new THREE.Quaternion().setFromEuler(new THREE.Euler(-1.2,0,-Math.PI*.5)),[1.3,1.35,1.4,1.4],.2,.8,V(-.24,-.5,.05),V(-.9,-.5,0));}
     else if(kind==='bucket'){const sway=Math.sin(bob)*.04;o.position.set(.27+sway*.3,-.68+by,-.55);o.rotation.set(0,.4,sway);
       this.placeArm('R',V(.27+sway*.3,-.28+by,-.55),q.setFromEuler(e.set(Math.PI*.5,0,Math.PI)),[1.4,1.45,1.5,1.5],.1,.9,V(.24,-.5,.05),V(.9,-.4,0));
       for(const m of Object.values(this.arms.L))if(m&&m.isObject3D)m.visible=false;}

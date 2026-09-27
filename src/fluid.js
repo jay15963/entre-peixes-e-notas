@@ -21,14 +21,14 @@ void main(){
   gl_FragColor=vec4(h,v,clamp(foam,0.,1.),1.);
 }`;
 const dropFragment=`precision highp float;
-uniform sampler2D uState;uniform vec2 uCenter;uniform float uRadius,uDepth,uRim,uSize;
+uniform sampler2D uState;uniform vec2 uCenter;uniform float uRadius,uDepth,uRim,uSize,uFoam;
 varying vec2 vUv;
 void main(){
   vec4 s=texture2D(uState,vUv);
   float r=length((vUv-.5)*uSize-uCenter);
   float crater=-uDepth*exp(-pow(r/uRadius,2.));
   float rim=uRim*exp(-pow((r-uRadius*1.35)/(uRadius*.35),2.));
-  gl_FragColor=vec4(s.r+crater+rim,s.g,max(s.b,exp(-pow(r/(uRadius*1.6),2.))),1.);
+  gl_FragColor=vec4(s.r+crater+rim,s.g,max(s.b,exp(-pow(r/(uRadius*1.6),2.))*uFoam),1.);
 }`;
 export class FluidSim {
   constructor(renderer,{resolution=256,size=640}={}){
@@ -37,7 +37,7 @@ export class FluidSim {
     this.targets=[new THREE.WebGLRenderTarget(resolution,resolution,opts),new THREE.WebGLRenderTarget(resolution,resolution,opts)];
     this.camera=new THREE.OrthographicCamera(-1,1,1,-1,0,1);this.scene=new THREE.Scene();
     this.stepMaterial=new THREE.ShaderMaterial({uniforms:{uState:{value:null},uTexel:{value:new THREE.Vector2(1/resolution,1/resolution)},uDt:{value:1/60},uC2:{value:64},uCell:{value:size/resolution},uDamp:{value:.9985}},vertexShader:quadVertex,fragmentShader:stepFragment,depthTest:false,depthWrite:false});
-    this.dropMaterial=new THREE.ShaderMaterial({uniforms:{uState:{value:null},uCenter:{value:new THREE.Vector2()},uRadius:{value:10},uDepth:{value:1},uRim:{value:0},uSize:{value:size}},vertexShader:quadVertex,fragmentShader:dropFragment,depthTest:false,depthWrite:false});
+    this.dropMaterial=new THREE.ShaderMaterial({uniforms:{uState:{value:null},uCenter:{value:new THREE.Vector2()},uRadius:{value:10},uDepth:{value:1},uRim:{value:0},uSize:{value:size},uFoam:{value:1}},vertexShader:quadVertex,fragmentShader:dropFragment,depthTest:false,depthWrite:false});
     this.quad=new THREE.Mesh(new THREE.PlaneGeometry(2,2),this.stepMaterial);this.quad.frustumCulled=false;this.scene.add(this.quad);
     this.uniforms={uSim:{value:this.targets[0].texture},uSimCenter:{value:this.center},uSimSize:{value:size},uSimOn:{value:0}};
     this.clear();
@@ -47,7 +47,7 @@ export class FluidSim {
   stop(){this.active=false;this.uniforms.uSimOn.value=0;}
   pass(material){const [src,dst]=this.targets;material.uniforms.uState.value=src.texture;this.quad.material=material;const old=this.renderer.getRenderTarget();this.renderer.setRenderTarget(dst);this.renderer.render(this.scene,this.camera);this.renderer.setRenderTarget(old);this.targets=[dst,src];this.uniforms.uSim.value=dst.texture;}
   // Perturbação em coordenadas do mundo (x,z).
-  drop(x,z,radius,depth,rim=0){if(!this.active)return;const u=this.dropMaterial.uniforms;u.uCenter.value.set(x-this.center.x,-(z-this.center.y));u.uRadius.value=radius;u.uDepth.value=depth;u.uRim.value=rim;this.pass(this.dropMaterial);}
+  drop(x,z,radius,depth,rim=0,foam=1){if(!this.active)return;const u=this.dropMaterial.uniforms;u.uFoam.value=foam;u.uCenter.value.set(x-this.center.x,-(z-this.center.y));u.uRadius.value=radius;u.uDepth.value=depth;u.uRim.value=rim;this.pass(this.dropMaterial);}
   update(dt){if(!this.active)return;const step=1/60,cell=this.size/this.resolution,c=Math.sqrt(this.stepMaterial.uniforms.uC2.value),maxStep=.45*cell/Math.max(c,1e-3),sub=Math.max(1,Math.ceil(step/maxStep));this.stepMaterial.uniforms.uDt.value=step/sub;this.accumulator=Math.min(this.accumulator+dt,.1);while(this.accumulator>=step){for(let i=0;i<sub;i++)this.pass(this.stepMaterial);this.accumulator-=step;}}
 }
 // GLSL de amostragem usado pelo oceano. A textura usa v invertido (z do mundo cresce para "baixo").

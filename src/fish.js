@@ -82,6 +82,20 @@ function itemModel(kit,mat,sp){
   if(s==='bottle'){kit.add(mat,loft([{y:-.12,rx:.04,rz:.04},{y:.06,rx:.042,rz:.042},{y:.1,rx:.018,rz:.018},{y:.16,rx:.015,rz:.015}],{n:10}),0x3f8a5a,.05);kit.add(mat,loft([{y:.16,rx:.017,rz:.017},{y:.19,rx:.017,rz:.017}],{n:8}),0x8a6a45);kit.add(mat,sculpt(new THREE.CylinderGeometry(.018,.018,.12,8).translate(0,-.03,0),()=>{}),0xefe2b8);return .3;}
   if(s==='chest'){kit.add(mat,box([0,0,0],[.5,.3,.34]),0x6a4428,.08);kit.add(mat,sculpt(new THREE.CylinderGeometry(.17,.17,.5,10,1,false,0,Math.PI).rotateZ(Math.PI/2),()=>{}).translate(0,.15,0),0x7a5030,.08);
     for(const x of [-.2,0,.2])kit.add(mat,box([x,.05,0],[.04,.42,.36]),0xd4a832,.03);kit.add(mat,box([0,.1,.18],[.08,.1,.02]),0xd4a832,.03);for(let i=0;i<8;i++)kit.add(mat,new THREE.CylinderGeometry(.03,.03,.006,10).rotateX(1).translate(-.15+i*.045,.33+(i%3)*.01,(i%2)*.04),0xf0c850,.05);return .55;}
+  if(s==='lobster'){const red=0xa8321f,dark=0x6e1f14;for(let j=0;j<7;j++){const z=-.04-j*.05,r=.05-j*.004;kit.add(mat,ellipsoid([0,.01,z],[r,r*.72,.032],10,6),j%2?red:dark,.06);}
+    kit.add(mat,loft([{z:0,cy:.015,rx:.05,rz:.042},{z:.08,cy:.02,rx:.056,rz:.048},{z:.16,cy:.012,rx:.04,rz:.035},{z:.2,cy:.01,rx:.012,rz:.012}],{axis:'z',n:12}),red,.06);
+    for(let i=0;i<5;i++)kit.add(mat,sculpt(new THREE.ConeGeometry(.03,.08,5).rotateX(Math.PI/2),v=>{v.x*=1+Math.abs(v.z)*6;}).translate(0,.005,-.38-i*.005).rotateY((i-2)*.28),dark,.05);
+    for(const d of [-1,1]){kit.add(mat,limb(V(d*.045,.01,.15),V(d*.13,.02,.25),.014,.018,6),red,.06);kit.add(mat,sculpt(ellipsoid([d*.17,.02,.33],[.045,.025,.09],8,6),v=>{v.x+=Math.sign(v.x-d*.17)*0;}),dark,.06);kit.add(mat,ellipsoid([d*.2,.02,.4],[.018,.012,.05],6,4),red,.06);
+      kit.add(mat,sweep([V(d*.02,.03,.19),V(d*.12,.05,.32),V(d*.2,.02,.5),V(d*.26,-.01,.62)],.004,.004),0x8a2a1a,.05);
+      for(let k=0;k<4;k++)kit.add(mat,sweep([V(d*.04,0,.1-k*.04),V(d*.1,-.03,.11-k*.04),V(d*.13,-.07,.1-k*.045)],.006,.006),dark,.05);
+      kit.add(mat,ellipsoid([d*.022,.05,.17],[.008,.008,.008],6,4),0x111111,.02);}
+    return .5;}
+  if(s==='crab'){const blue=0x2f5c8a,shell=0x3f6f9a;kit.add(mat,sculpt(ellipsoid([0,0,0],[.12,.045,.085],16,8),v=>{v.x*=1+Math.max(0,-Math.abs(v.z)+.02)*2;if(Math.abs(v.x)>.1)v.y*=.7;}),shell,.08);
+    for(const d of [-1,1]){kit.add(mat,sculpt(new THREE.ConeGeometry(.012,.06,5).rotateZ(-d*Math.PI/2).translate(d*.14,.005,0),()=>{}),blue,.05);
+      for(let k=0;k<4;k++){const z=-.05+k*.03;kit.add(mat,sweep([V(d*.09,0,z),V(d*.16,.03,z*1.3),V(d*.2,-.03,z*1.5)],.008,.008),blue,.05);}
+      kit.add(mat,limb(V(d*.07,.005,.07),V(d*.11,.015,.13),.012,.015,6),blue,.05);kit.add(mat,ellipsoid([d*.12,.02,.17],[.03,.022,.045],8,5),0xd9e2ea,.05);kit.add(mat,ellipsoid([d*.14,.02,.2],[.01,.01,.03],6,4),0xc84a2a,.05);
+      kit.add(mat,limb(V(d*.025,.03,.075),V(d*.03,.055,.085),.004,.004,4),0x1a2a3a).add(mat,ellipsoid([d*.03,.058,.085],[.008,.008,.008],6,4),0x111111,.02);}
+    return .32;}
   return .3;
 }
 // Peixe ou objeto pronto para a cena. userData.rigid = objeto (gira em vez de se debater).

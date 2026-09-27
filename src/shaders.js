@@ -8,6 +8,8 @@ export const U={
   uTsuR:{value:0},uTsuH:{value:0},uTsuOn:{value:0},
   uBoat:{value:new THREE.Vector2()},uHeading:{value:0},uSpeed:{value:0},uBoatInverse:{value:new THREE.Matrix4()},
   uIslandMap:{value:null},uIsland:{value:new THREE.Vector3(0,118,230)},
+  // Nessie sob a água: posição, rumo e força da sombra (x,z,rumo,sombra) e da espuma em volta do corpo
+  uBoss:{value:new THREE.Vector4(0,0,0,0)},uBossFoam:{value:0},
 };
 export const noiseGLSL=`
 float hash12(vec2 p){vec3 p3=fract(vec3(p.xyx)*.1031);p3+=dot(p3,p3.yzx+33.33);return fract((p3.x+p3.y)*p3.z);}

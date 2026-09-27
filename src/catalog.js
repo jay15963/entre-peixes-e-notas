@@ -34,6 +34,9 @@ export const CATCHES=[
   {name:'Garrafa com mensagem',kind:'treasure',tier:'raro',kg:[.4,.4],diff:.3,rarity:1.4,fixed:60,shape:'bottle',note:'message'},
   {name:'Baú do tesouro',kind:'treasure',tier:'lendario',kg:[18,18],diff:.9,rarity:.25,fixed:2500,shape:'chest',note:'O mapa estava certo o tempo todo.'},
   {name:'Lata de BALY',kind:'special',tier:'especial',kg:[.5,.5],diff:.35,rarity:3,fixed:8,shape:'baly',note:'30 segundos de energia em TUDO.'},
+  // só vêm da armadilha de lagosta (rarity 0: nunca mordem o anzol)
+  {name:'Lagosta',kind:'crustacean',tier:'raro',kg:[.6,1.8],diff:.3,rarity:0,price:70,shape:'lobster',len:.45,note:'Direto da armadilha. Jantar de rei.'},
+  {name:'Caranguejo-azul',kind:'crustacean',tier:'incomum',kg:[.2,.6],diff:.2,rarity:0,price:40,shape:'crab',len:.25,note:'Anda de lado, mas vende bem.'},
 ];
 export const BALY=CATCHES.findIndex(c=>c.shape==='baly');
 export const MESSAGES=['"Se achar isso, estou na ilha. Traga pão francês."','"Ana, me perdoa. Ass: o cara do barco."','"O tesouro está onde o farol não alcança."','"Aqui não tem sinal de celular. Socorro."','"Não confie nas gaivotas."','"Senha do wi-fi: peixe123"'];

@@ -28,7 +28,7 @@ Abra o endereço informado pelo Vite. **Testar sozinho** inicia o teste solo. O 
 | Tocar o violão | D F J K |
 | Espantar a gaivota que agarrou o balde (segurar) | F |
 | Lançar, fisgar e recolher (segurar) | F |
-| Chamar o meteoro (só o anfitrião, duas vezes seguidas) | TAB |
+| Tela de eventos (só o anfitrião, segurar): tempestade, Nessie, meteoro | TAB |
 | Liberar o cursor e abrir as opções | Esc |
 
 ## A ilha
@@ -99,6 +99,14 @@ Dois rifles de ferrolho ficam no suporte do barco. O modelo tem peças que se mo
 O tiro tem estalo, estrondo, cauda e ecos na água, além de clarão em estrela, fumaça e luz. A luneta aproxima 5x, tem retículo duplex e reduz a sensibilidade do mouse; a respiração balança a mira e Shift a segura. Em terceira pessoa, os outros veem a coronha no ombro e as duas mãos por IK. O rifle é desenhado numa camada própria e nunca atravessa paredes.
 
 As gaivotas circulam bem alto e **não podem ser atingidas** enquanto circulam. Só a **ladra** pode: ela é marcada na tela (com seta na borda quando está fora de vista), mergulha em direção ao balde, paira pegando o peixe e foge devagar, pesada, carregando o peixe. Se for abatida sobre o barco, o peixe volta para o balde. Na tempestade elas não atacam.
+
+## Eventos (TAB)
+
+Nada acontece sozinho: o clima fica calmo até o anfitrião segurar **TAB** e escolher um evento.
+
+- **Tempestade:** vento, chuva, raios e ondas grandes por uns 2 minutos (clique de novo para acalmar).
+- **Nessie:** a Matriarca do Abismo desperta em mar aberto quando o barco se afasta da ilha. São três estágios (A Espreita, A Fúria e A Matriarca Ferida, com céu vermelho e olhos em brasa), 3.000 de vida e nove ataques sem aviso: investidas, golpe de cauda, jato d'água, redemoinho, mordida de baixo para cima, muralha d'água e chuva de espinhos. Os rifles são a arma: olhos ×5, garganta ×3, guelras ×2, corpo ×1 e espinhos ×0,25. Os golpes jogam a tripulação no mar (resgate com a corda). Vencer rende R$ 1.000. O ateliê mostra a luta inteira em funcionamento.
+- **Meteoro:** o fim da partida.
 
 ## O fim
 

@@ -176,6 +176,32 @@ export class Sound {
       this.tinnitusGain.gain.cancelScheduledValues(t);this.tinnitusGain.gain.setValueAtTime(0,t+.2);this.tinnitusGain.gain.linearRampToValueAtTime(.035,t+.6);this.tinnitusGain.gain.exponentialRampToValueAtTime(.0001,t+7);}
     if(name==='flash'){this.burst(this.white,{type:'highpass',freq:8000,dur:.3,gain:.05});}
     if(name==='debris')this.burst(this.brown,{type:'lowpass',freq:500,dur:1.2,gain:.35,pos,reverb:.5});
+    // ----- mercado e itens da Loja do Pescador -----
+    if(name==='beep'){this.tone(2730,{type:'square',dur:.09,attack:.002,gain:.07,pos,reverb:.1});}
+    if(name==='error'){this.tone(330,{type:'square',dur:.18,gain:.07,pos});this.tone(262,{type:'square',dur:.25,gain:.07,pos,when:.2});}
+    if(name==='card'){this.tone(1568,{type:'sine',dur:.08,gain:.08,pos});this.tone(2093,{type:'sine',dur:.12,gain:.08,pos,when:.1});}
+    if(name==='printer'){for(let i=0;i<22;i++)this.burst(this.white,{type:'bandpass',freq:2600+Math.random()*600,q:4,dur:.02,gain:.09,when:i*.035,pos});this.burst(this.white,{type:'highpass',freq:3000,dur:.08,gain:.1,when:.8,pos});}
+    if(name==='gate'){const now=this.ctx.currentTime;for(let i=0;i<4;i++)this.tone(i%2?880:1175,{type:'square',dur:.16,gain:.06,when:i*.18,pos,reverb:.4});}
+    if(name==='pick'){this.burst(this.pink,{type:'bandpass',freq:1100,q:1.5,dur:.08,gain:.2,pos});this.tone(520,{type:'triangle',dur:.06,gain:.05,pos});}
+    if(name==='put'){this.burst(this.brown,{type:'lowpass',freq:700,dur:.1,gain:.35,pos});this.burst(this.pink,{type:'bandpass',freq:900,q:2,dur:.06,gain:.12,pos});}
+    if(name==='cartDrop'){this.burst(this.white,{type:'bandpass',freq:1900,q:3,dur:.06,gain:.3,pos});for(let i=0;i<3;i++)this.tone(1600+Math.random()*900,{type:'triangle',dur:.12,gain:.03,when:.02+i*.04,pos});this.burst(this.brown,{type:'lowpass',freq:500,dur:.12,gain:.25,pos});}
+    if(name==='cartGrab'){this.burst(this.white,{type:'bandpass',freq:2400,q:5,dur:.05,gain:.25,pos});for(let i=0;i<4;i++)this.tone(2200+Math.random()*1500,{type:'triangle',dur:.2,gain:.025,when:i*.03,pos});}
+    if(name==='cartRoll'){const k=o.k||.5;this.burst(this.brown,{type:'lowpass',freq:260+k*200,dur:.3,attack:.05,gain:.12+k*.12,pos});if(Math.random()<.35)this.tone(1800+Math.random()*1400,{type:'triangle',dur:.08,gain:.015*k,pos});}
+    if(name==='zip'){this.burst(this.white,{type:'bandpass',freq:1800,to:4200,q:3,dur:.3,attack:.02,gain:.18,pos});}
+    if(name==='wrench'){for(let i=0;i<5;i++){this.burst(this.white,{type:'bandpass',freq:3200,q:6,dur:.03,gain:.25,when:i*.12,pos});this.tone(1200,{type:'triangle',dur:.05,gain:.04,when:i*.12,pos});}this.tone(880,{type:'triangle',dur:.6,gain:.06,when:.65,pos,reverb:.3});}
+    if(name==='harpoon'){this.burst(this.white,{type:'bandpass',freq:900,to:3000,q:1,dur:.25,attack:.002,gain:.7,pos,reverb:.2});this.burst(this.pink,{type:'bandpass',freq:500,to:2500,q:2,dur:.7,gain:.25,when:.05,pos});this.tone(160,{type:'sine',dur:.2,gain:.3,to:60,pos});}
+    if(name==='knife'){this.burst(this.white,{type:'bandpass',freq:4200,to:2500,q:4,dur:.18,gain:.2,pos});this.burst(this.brown,{type:'lowpass',freq:400,dur:.08,gain:.3,when:.15,pos});}
+    if(name==='shutter'){this.burst(this.white,{type:'bandpass',freq:3500,q:3,dur:.03,gain:.5,pos});this.burst(this.white,{type:'bandpass',freq:2200,q:3,dur:.04,gain:.35,when:.06,pos});this.tone(4000,{type:'sine',dur:.4,gain:.02,to:6000,when:.1});}
+    if(name==='flare'){this.burst(this.white,{type:'lowpass',freq:3000,to:400,dur:.3,attack:.002,gain:1,pos,reverb:.4});this.burst(this.pink,{type:'bandpass',freq:600,to:3000,q:2,dur:1.6,attack:.05,gain:.3,when:.1,pos,reverb:.5});this.burst(this.white,{type:'highpass',freq:4000,dur:6,attack:.5,gain:.05,when:.4,pos});}
+    if(name==='sizzle'){this.burst(this.white,{type:'highpass',freq:3500,dur:2.2,attack:.05,gain:.18,pos});for(let i=0;i<14;i++)this.burst(this.white,{type:'bandpass',freq:5000,q:8,dur:.02,gain:.2,when:Math.random()*2,pos});}
+    if(name==='gulp'){for(let i=0;i<3;i++)this.tone(220,{type:'sine',dur:.12,gain:.18,to:120,when:i*.28,pos});this.burst(this.pink,{type:'lowpass',freq:500,dur:.3,gain:.12,when:.9,pos});}
+    if(name==='glug'){for(let i=0;i<7;i++)this.tone(300+Math.random()*120,{type:'sine',dur:.1,gain:.12,to:140,when:i*.14,pos});}
+    if(name==='click')this.burst(this.white,{type:'bandpass',freq:2800,q:5,dur:.02,attack:.001,gain:.3,pos});
+    if(name==='tent'){this.burst(this.pink,{type:'bandpass',freq:500,to:1300,q:1,dur:.6,attack:.1,gain:.3,pos});this.burst(this.brown,{type:'lowpass',freq:400,dur:.15,gain:.3,when:.6,pos});}
+    if(name==='rattle'){for(let i=0;i<40;i++)this.burst(this.white,{type:'bandpass',freq:1400+Math.random()*800,q:6,dur:.02,gain:.12,when:i*.04,pos});this.tone(55,{type:'sine',dur:3,gain:.3,to:38,when:.4,reverb:.9});}
+    if(name==='anchor'){for(let i=0;i<16;i++)this.burst(this.white,{type:'bandpass',freq:1800+Math.random()*600,q:5,dur:.03,gain:.2,when:i*.06,pos});this.burst(this.brown,{type:'lowpass',freq:600,dur:1,gain:.6,when:1,pos,reverb:.4});}
+    if(name==='winch'){for(let i=0;i<30;i++)this.burst(this.white,{type:'bandpass',freq:2600,q:7,dur:.02,gain:.15,when:i*.11,pos});}
+    if(name==='static'){this.burst(this.white,{type:'bandpass',freq:2500,q:.8,dur:.35,attack:.01,gain:.06});}
     if(name==='hit'){// a onda atinge: um único golpe e silêncio absoluto
       const t=this.ctx.currentTime;this.burst(this.white,{type:'lowpass',freq:3000,dur:.35,attack:.002,gain:1.5,reverb:0});this.burst(this.brown,{type:'lowpass',freq:400,dur:.4,attack:.002,gain:1.8,reverb:0});
       this.cut=true;this.master.gain.cancelScheduledValues(t);this.master.gain.setValueAtTime(this.muted?0:this.volume,t);this.master.gain.setValueAtTime(this.muted?0:this.volume,t+.12);this.master.gain.linearRampToValueAtTime(0,t+.16);

@@ -1,0 +1,84 @@
+/* ---------- Loja do Pescador: barra de itens, dica, carrinho, status, barco e instrumentos ---------- */
+.hotbar{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);display:flex;gap:5px;padding:6px;border-radius:14px;background:#0b1c2bcc;border:1px solid #ffffff1c;box-shadow:0 6px 18px #0007}
+.hotbar .slot{position:relative;width:50px;height:50px;border-radius:10px;background:linear-gradient(180deg,#ffffff14,#ffffff06);border:2px solid #ffffff18;display:grid;place-items:center;transition:transform .12s,border-color .12s}
+.hotbar .slot img{width:44px;height:44px;object-fit:contain;filter:drop-shadow(0 2px 2px #0008)}
+.hotbar .slot small{position:absolute;left:4px;top:1px;font:800 10px Arial;color:#ffffff88}
+.hotbar .slot em{position:absolute;right:3px;bottom:1px;font:800 11px Arial;font-style:normal;color:#ffe9a8;text-shadow:0 1px 2px #000}
+.hotbar .slot.passive{opacity:.8}
+.hotbar .slot.passive::after{content:'';position:absolute;left:4px;bottom:4px;width:6px;height:6px;border-radius:50%;background:#7dff9a;box-shadow:0 0 6px #7dff9a}
+.hotbar .slot.sel{border-color:#ffd23c;transform:translateY(-6px) scale(1.08);background:linear-gradient(180deg,#ffd23c33,#ffd23c0d);box-shadow:0 0 14px #ffd23c66}
+.hotbar .slot.bait{border-color:#6fd07a}
+.item-tip{position:absolute;right:18px;bottom:86px;width:min(360px,40vw);display:flex;gap:12px;padding:12px 14px;border-radius:14px;background:#0b1c2be6;border:1px solid #e5c08c55;box-shadow:0 10px 30px #0009;opacity:0;transform:translateY(8px);transition:opacity .2s,transform .2s}
+.item-tip.show{opacity:1;transform:none}
+.item-tip img{width:72px;height:72px;object-fit:contain;flex:none;background:radial-gradient(#ffffff18,transparent 70%);border-radius:10px}
+.item-tip b{display:block;font:800 16px Georgia;color:#ffe9b8}
+.item-tip i{display:block;font:700 11px Arial;color:#9fc3d6;margin:2px 0 6px;font-style:normal;letter-spacing:.04em}
+.item-tip p{margin:0 0 5px;font:13px/1.35 Arial;color:#e6dccb}
+.item-tip p.rule{color:#bfffcf;font-weight:700}
+.item-tip small{font:700 10px Arial;color:#ffd23c;letter-spacing:.05em}
+.cart-box{position:absolute;right:18px;top:120px;width:250px;padding:10px 12px;border-radius:14px;background:#0b1c2be0;border:1px solid #ffffff22;font:12px Arial}
+.cart-box>b{display:block;font:800 12px Arial;letter-spacing:.06em;color:#ffd23c;margin-bottom:6px}
+.cart-box .ci{display:flex;align-items:center;gap:7px;padding:3px 0;border-bottom:1px solid #ffffff10}
+.cart-box .ci img{width:26px;height:26px;object-fit:contain}
+.cart-box .ci span{flex:1;color:#f1e6d2}
+.cart-box .ci em{font-style:normal;font-weight:800;color:#ffb3a8}
+.cart-box .ci.paid em{color:#7dff9a}
+.cart-box .ci.scanned em{color:#ffe38a}
+.cart-box .tot{margin-top:7px;color:#bcd}
+.cart-box .tot b{color:#fff;font-size:14px}
+.status-box{position:absolute;left:18px;bottom:96px;display:flex;flex-direction:column;gap:5px;width:210px}
+.status-box .st{position:relative;height:16px;border-radius:8px;background:#0008;overflow:hidden;border:1px solid #ffffff22}
+.status-box .st i{position:absolute;inset:0 auto 0 0;background:linear-gradient(90deg,#ff5a5a,#ff9a7a)}
+.status-box .st span{position:relative;display:block;padding-left:8px;font:800 10px/15px Arial;letter-spacing:.05em;color:#fff;text-shadow:0 1px 2px #000}
+.status-box .st.cold i{background:linear-gradient(90deg,#7fd3ff,#e0f6ff)}
+.status-box .st.air i{background:linear-gradient(90deg,#4fa8ff,#9fe0ff)}
+.status-box .st.low{animation:pulse-low .8s infinite}
+@keyframes pulse-low{50%{box-shadow:0 0 12px #ff4a4a}}
+.status-box .chip{align-self:flex-start;padding:3px 9px;border-radius:9px;background:#0b1c2bcc;font:800 11px Arial;color:#ffe9b8}
+.boat-box{position:absolute;left:18px;top:128px;width:220px;padding:9px 11px;border-radius:12px;background:#0b1c2bcc;border:1px solid #ffffff1c}
+.boat-box .bb{display:flex;align-items:center;gap:7px;font:800 10px Arial;letter-spacing:.05em;margin:3px 0}
+.boat-box .bb span{width:84px;color:#bcd}
+.boat-box .bb i{flex:1;height:7px;border-radius:4px;background:#ffffff18;overflow:hidden}
+.boat-box .bb em{display:block;height:100%}
+.boat-box .bb b{width:34px;text-align:right}
+.boat-box .bb.warn b,.boat-box .bb.warn span{color:#ff7a6a}
+.boat-box .flags{font:700 11px Arial;color:#ffe38a;margin-top:4px}
+.boat-box .flags b{color:#ff5a4a}
+.instruments{position:absolute;right:18px;top:120px;display:flex;flex-direction:column;gap:8px}
+.instruments canvas{width:180px;height:180px;border-radius:50%;box-shadow:0 6px 20px #0009}
+.instruments canvas.chart{border-radius:10px}
+.cart-box:not([hidden])~.instruments{top:auto;bottom:90px}
+.compass{position:absolute;left:50%;top:12px;transform:translateX(-50%);width:min(560px,60vw);height:30px;border-radius:8px;background:linear-gradient(90deg,transparent,#0b1c2bcc 15%,#0b1c2bcc 85%,transparent);overflow:hidden}
+.compass .tape span{position:absolute;top:7px;transform:translateX(-50%);font:800 12px Arial;white-space:nowrap;color:#e6dccb}
+.compass .tape span.dir{color:#fff}
+.compass .tape span.home{color:#ffd23c}
+.compass .tape span.mark{color:#ff6a5a}
+.compass .tape span.beacon{color:#ff9a3a}
+.compass .needle{position:absolute;left:50%;top:0;width:2px;height:8px;background:#ffd23c}
+.baro{position:absolute;left:250px;top:128px;width:130px;padding:8px 10px;border-radius:12px;background:#2a1d10dd;border:2px solid #c8a15a;color:#f6e6c4;text-align:center}
+.baro b{font:800 20px Georgia}
+.baro small{margin-left:3px;font:10px Arial}
+.baro span{display:block;font:700 10px Arial;color:#ffd79a;margin-top:3px}
+.baro i{position:absolute;right:9px;top:9px;width:2px;height:14px;background:#ff5a3a;transform-origin:50% 100%}
+.radio{position:absolute;left:50%;top:48px;transform:translateX(-50%);max-width:min(700px,80vw);padding:6px 14px;border-radius:9px;background:#111a;border:1px solid #7dff9a44;font:700 12px monospace;color:#9dffb5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hydro{position:absolute;left:50%;top:92px;transform:translateX(-50%);padding:6px 14px;border-radius:12px;background:#07121cdd;border:1px solid #4fd1ff55;text-align:center;font:12px Arial;color:#bfe9ff}
+.hydro b{display:block;font:800 10px Arial;letter-spacing:.1em;color:#4fd1ff}
+.hydro .arrow{display:inline-block;font-size:22px;color:#ff5a4a;text-shadow:0 0 8px #f00}
+.hydro em{color:#ff7a6a;font-weight:800;font-style:normal}
+.depth-read{position:absolute;left:50%;top:calc(50% + 26px);transform:translateX(-50%);font:800 11px Arial;color:#bfe9ffcc;text-shadow:0 1px 3px #000;letter-spacing:.04em}
+.polaroid{position:absolute;right:30px;bottom:110px;padding:10px 10px 26px;background:#fbfaf4;border-radius:3px;box-shadow:0 12px 30px #000a;transform:rotate(4deg) scale(.6);opacity:0;transition:all .35s}
+.polaroid.show{opacity:1;transform:rotate(-3deg)}
+.polaroid canvas{display:block;width:260px;height:146px}
+.polaroid span{position:absolute;left:0;right:0;bottom:6px;text-align:center;font:italic 13px Georgia;color:#333}
+.photo-flash{position:absolute;inset:0;background:#fff;opacity:0}
+.viewfinder{position:absolute;inset:14% 18%;border:1px solid #fff5}
+.viewfinder i{position:absolute;width:28px;height:28px;border:3px solid #fffc}
+.viewfinder i:nth-child(1){left:-3px;top:-3px;border-right:0;border-bottom:0}
+.viewfinder i:nth-child(2){right:-3px;top:-3px;border-left:0;border-bottom:0}
+.viewfinder i:nth-child(3){left:-3px;bottom:-3px;border-right:0;border-top:0}
+.viewfinder i:nth-child(4){right:-3px;bottom:-3px;border-left:0;border-top:0}
+.viewfinder b{position:absolute;right:10px;top:8px;font:800 12px Arial;color:#ff4a4a}
+body.spyglass::after{content:'';position:fixed;inset:0;pointer-events:none;background:radial-gradient(circle at 50% 50%,transparent 37%,#000 38.5%);z-index:3}
+.scan-ring{position:absolute;left:50%;top:50%;width:60px;height:60px;transform:translate(-50%,-50%)}
+.scan-ring circle{fill:none;stroke:#ff4a3a;stroke-width:5;stroke-dasharray:151;stroke-linecap:round;transform:rotate(-90deg);transform-origin:50% 50%;filter:drop-shadow(0 0 6px #f00)}
+#hud [hidden]{display:none!important}
