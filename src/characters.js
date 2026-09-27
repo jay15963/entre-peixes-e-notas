@@ -1,13 +1,17 @@
 import * as THREE from 'three';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 import {JOINTS,faceMaterial} from './models.js';
-import {Kit,loft,limb,ellipsoid,box,sculpt,paint,tint,reseed,V} from './geometry.js';
+import {Kit,loft,limb,ellipsoid,box,sculpt,sweep,paint,tint,reseed,V} from './geometry.js';
 
 // Personagens esculpidos em código, low poly detalhado. O esqueleto (JOINTS) é o mesmo do ragdoll,
 // e a cabeça mantém o espaço usado pela projeção da foto (olhos em y=1,638, x=±0,061).
 const LOOKS=[
-  {name:'Pescador vermelho',skin:0xc68f71,hair:0x241a17,shirt:0xa3241c,shirtDark:0x7e1a14,trim:0xf1ece2,pants:0x2b2d31,sock:0xefede6,shoe:0x1d1f22,sole:0xf2f0ea,style:'tee'},
-  {name:'Pescador azul',skin:0xd7aa90,hair:0x4a382c,shirt:0x213b52,shirtDark:0x182c3e,trim:0x0f1012,pants:0x25324a,sock:0x2b2d31,shoe:0x2a2c30,sole:0xe9e6de,style:'jacket'},
+  {name:'Pescador vermelho',skin:0xc68f71,hair:0x241a17,shirt:0xa3241c,shirtDark:0x7e1a14,trim:0xf1ece2,pants:0x2b2d31,sock:0xefede6,shoe:0x1d1f22,sole:0xf2f0ea,top:'tee',emblem:true},
+  {name:'Pescador azul',skin:0xd7aa90,hair:0x4a382c,shirt:0x213b52,shirtDark:0x182c3e,trim:0x0f1012,pants:0x25324a,sock:0x2b2d31,shoe:0x2a2c30,sole:0xe9e6de,top:'jacket',long:true,longPants:true},
+  // Boné preto virado para trás, camiseta branca estampada, fone com fio e bermuda jeans
+  {name:'Pescador de boné',skin:0xb47b58,hair:0x17110e,shirt:0xe9e7e1,shirtDark:0xc9c6bd,trim:0xf4f2ec,pants:0x44587a,sock:0xefede6,shoe:0x26282c,sole:0xf2f0ea,top:'tee',print:true,cap:{color:0x15171b,back:true},earphones:true},
+  // Boné trucker branco com emblema, camisa jeans de manga longa lavada, calça escura
+  {name:'Pescador do trucker',skin:0xc7987a,hair:0x2a1d16,shirt:0x2a3a58,shirtDark:0x1d2940,trim:0xcfc4ae,pants:0x26282e,sock:0x2b2d31,shoe:0xe7e3da,sole:0x2a2c30,top:'denim',long:true,longPants:true,cap:{color:0xf1efe9,mesh:0x16181c,patch:true}},
 ];
 const S=v=>new THREE.Vector3(...v);
 function mirror(fn){return [fn(-1),fn(1)];}
@@ -18,7 +22,7 @@ function hairShell(look,index){
   const R=[.134,.176,.152],C=[0,1.645,-.012];
   for(let i=0;i<p.count;i+=3){let cy=0,cz=0,cx=0;const tri=[];for(let j=0;j<3;j++){const x=p.getX(i+j)*R[0],y=p.getY(i+j)*R[1],z=p.getZ(i+j)*R[2];const k=clump(x,y,z);tri.push([C[0]+x*k,C[1]+y*k,C[2]+z*k]);cx+=C[0]+x;cy+=C[1]+y;cz+=C[2]+z;}
     cx/=3;cy/=3;cz/=3;
-    const hairline=index===0?1.735:1.742,face=cz>.015&&cy<hairline+(Math.abs(cx)>.07?-.05:0),ear=Math.abs(cx)>.09&&cy<1.655&&cz>-.07,nape=cy<(cz<0?1.515:1.6);
+    const hairline=[1.735,1.742,1.725,1.73][index]??1.74,face=cz>.015&&cy<hairline+(Math.abs(cx)>.07?-.05:0),ear=Math.abs(cx)>.09&&cy<1.655&&cz>-.07,nape=cy<(cz<0?1.515:1.6);
     if(face||ear||nape)continue;keep.push(...tri.flat());}
   const out=new THREE.BufferGeometry();out.setAttribute('position',new THREE.Float32BufferAttribute(keep,3));out.computeVertexNormals();return out;
 }
@@ -53,16 +57,18 @@ export function makeCharacter(assets,index){
   const look=LOOKS[index],root=new THREE.Group(),joints={};root.name=look.name;reseed(index+1);
   const mat=new THREE.MeshStandardMaterial({vertexColors:true,roughness:.78,metalness:0,flatShading:true});
   const kits=Object.fromEntries(Object.keys(JOINTS).map(k=>[k,new Kit()]));
-  const shirt=look.shirt,jacket=look.style==='jacket';
+  const shirt=look.shirt,jacket=look.top==='jacket',longSleeve=!!look.long,longPants=!!look.longPants;
   // ---------- Torso ----------
   const T=kits.torso;
   T.add(mat,loft([{y:.8,rx:.158,rz:.1},{y:.9,rx:.165,rz:.108},{y:1.0,rx:.16,rz:.104}],{n:16,capStart:true,capEnd:false}),look.pants);
   const body=[{y:.98,rx:.162,rz:.106},{y:1.06,rx:.155,rz:.1},{y:1.14,rx:.168,rz:.11,front:.08},{y:1.23,rx:.186,rz:.122,front:.12},{y:1.3,rx:.19,rz:.118,front:.06},{y:1.36,rx:.158,rz:.1},{y:1.405,rx:.078,rz:.066}];
-  T.add(mat,paint(loft(jacket?body.map(r=>({...r,rx:r.rx+.012,rz:r.rz+.012})):body,{n:18}),v=>v.y<1.0?look.shirtDark:shirt,.05));
+  const printFn=(v,c)=>{if(look.print&&c.z>.07&&c.y>1.06&&c.y<1.3&&Math.abs(c.x)<.12&&Math.sin(c.x*70+Math.sin(c.y*40)*2)*Math.sin(c.y*55)>-.1)return 0x3a3b3f;return c.y<1.0?look.shirtDark:shirt;};
+  T.add(mat,paint(loft(jacket||look.top==='denim'?body.map(r=>({...r,rx:r.rx+.01,rz:r.rz+.01})):body,{n:18}),printFn,look.top==='denim'?.16:.05));
   T.add(mat,limb(V(0,1.36,0),V(0,1.52,.005),.052,.047,10),look.skin);
   if(!jacket){
     T.add(mat,new THREE.TorusGeometry(.07,.013,5,16).rotateX(Math.PI/2).translate(0,1.39,.005),look.trim);
-    T.add(mat,ellipsoid([.075,1.265,.135],[.02,.024,.006],8,6),0xe8d9a8);
+    if(look.emblem)T.add(mat,ellipsoid([.075,1.265,.135],[.02,.024,.006],8,6),0xe8d9a8);
+    if(look.top==='denim'){T.add(mat,box([0,1.2,.13],[.012,.34,.006],[-.08,0,0]),look.trim,.03);for(let i=0;i<5;i++)T.add(mat,ellipsoid([0,1.34-i*.07,.137-i*.004],[.007,.007,.004],5,3),0xd8d0bd);for(const s of [-1,1])T.add(mat,box([s*.085,1.25,.132],[.07,.075,.008],[-.1,0,0]),look.shirtDark,.1);}
     T.add(mat,paint(loft([{y:.97,rx:.168,rz:.112},{y:1.0,rx:.168,rz:.112}],{n:18,capStart:false,capEnd:false}),()=>look.shirtDark));
   }else{
     T.add(mat,box([0,1.2,.128],[.07,.36,.012],[-.08,0,0]),look.trim);
@@ -80,29 +86,46 @@ export function makeCharacter(assets,index){
   if(index===0){
     H.add(mat,sculpt(ellipsoid([-.015,1.785,.06],[.115,.052,.085],12,8),v=>{v.y+=Math.max(0,v.z-.06)*.5;v.x+=Math.max(0,v.z-.06)*-.4;}),look.hair,.1);
     for(const s of [-1,1])H.add(mat,box([s*.124,1.6,.03],[.012,.06,.022]),look.hair,.05);
-  }else{
+  }else if(index===1){
     for(let i=0;i<6;i++){const x=-.085+i*.034;H.add(mat,sculpt(ellipsoid([x,1.748-Math.abs(x)*.25,.1-Math.abs(x)*.25],[.026,.034,.03],6,5),v=>{v.y-=Math.max(0,v.z-.1)*.6;}),look.hair,.1);}
+  }
+  if(look.cap){
+    // Boné: copa em seis gomos (esfera achatada cortada), aba curva e botão; trucker com tela atrás e emblema
+    const c=look.cap,crown=new THREE.SphereGeometry(1,18,10,0,Math.PI*2,0,Math.PI*.52).toNonIndexed();crown.scale(.142,.118,.158);crown.translate(0,1.7,-.005);
+    const dir=c.back?-1:1;
+    H.add(mat,paint(crown,(v,ce)=>c.mesh&&ce.z*dir<-.02?c.mesh:c.color,.05));
+    const brim=new THREE.CylinderGeometry(.12,.12,.012,14,1,false,-Math.PI*.45,Math.PI*.9).toNonIndexed();brim.scale(1.05,1,1.1);sculpt(brim,v=>{v.y-=Math.pow(Math.abs(v.x)/.12,2)*.018;});if(dir<0)brim.rotateY(Math.PI);brim.rotateX(dir*.12);brim.translate(0,1.705,dir*.1);
+    H.add(mat,brim,c.back?c.color:c.mesh||c.color,.03);
+    H.add(mat,ellipsoid([0,1.82,-.005],[.014,.008,.014],6,4),c.mesh||c.color);
+    if(c.patch){H.add(mat,new THREE.CircleGeometry(.045,16).translate(0,1.765,.142).rotateX(-.35),0xf4f2ec,.02);H.add(mat,new THREE.TorusGeometry(.04,.005,4,18).rotateX(-.35).translate(0,1.765,.143),0x121316,.02);H.add(mat,box([0,1.765,.147],[.028,.028,.004],[-.35,0,Math.PI/4]),0x121316,.02);}
+    if(c.back){H.add(mat,box([0,1.695,.135],[.07,.018,.012],[-.2,0,0]),0x0d0e10,.02);for(let i=0;i<4;i++)H.add(mat,ellipsoid([-.024+i*.016,1.725,.13],[.012,.022,.014],5,4),look.hair,.1);}
+  }
+  if(look.earphones){
+    // fones intra-auriculares brancos com fio descendo pelo pescoço até o peito
+    for(const s of [-1,1])H.add(mat,ellipsoid([s*.128,1.61,.01],[.012,.012,.012],6,4),0xf2f2f0,.02);
+    for(const s of [-1,1])T.add(mat,sweep([V(s*.125,1.6,.01),V(s*.1,1.5,.05),V(s*.07,1.4,.1),V(s*.04,1.3,.13),V(0,1.2,.14)],.005,.005),0xefefec,.02);
+    T.add(mat,sweep([V(0,1.2,.14),V(.01,1.1,.13),V(.03,1.02,.12)],.005,.005),0xefefec,.02);
   }
   // ---------- Braços ----------
   for(const s of [-1,1]){const k=s<0?'L':'R',A=kits['arm'+k],F=kits['fore'+k];
     const sh=V(s*.215,1.31,0),el=V(s*.33,1.083,0),wr=V(s*.405,.855,.02),down=wr.clone().sub(el).normalize();
     A.add(mat,ellipsoid([s*.2,1.3,0],[.074,.068,.074],10,8),shirt);
     A.add(mat,limb(sh,el,.064,.052,9),look.skin);
-    if(jacket)A.add(mat,limb(sh,el,.078,.068,9),shirt);else{A.add(mat,limb(sh,sh.clone().lerp(el,.55),.08,.074,9),shirt);A.add(mat,limb(sh.clone().lerp(el,.52),sh.clone().lerp(el,.58),.076,.076,9),look.shirtDark);}
-    F.add(mat,ellipsoid([el.x,el.y,el.z],[.053,.053,.053],8,6),jacket?shirt:look.skin);
+    if(longSleeve)A.add(mat,limb(sh,el,.078,.068,9),shirt,look.top==='denim'?.14:.06);else{A.add(mat,limb(sh,sh.clone().lerp(el,.55),.08,.074,9),shirt);A.add(mat,limb(sh.clone().lerp(el,.52),sh.clone().lerp(el,.58),.076,.076,9),look.shirtDark);}
+    F.add(mat,ellipsoid([el.x,el.y,el.z],[.053,.053,.053],8,6),longSleeve?shirt:look.skin);
     F.add(mat,limb(el,wr,.051,.039,9),look.skin);
-    if(jacket){F.add(mat,limb(el,el.clone().lerp(wr,.82),.068,.06,9),shirt);F.add(mat,limb(el.clone().lerp(wr,.8),el.clone().lerp(wr,.9),.056,.056,9),look.shirtDark);}
+    if(longSleeve){F.add(mat,limb(el,el.clone().lerp(wr,.82),.068,.06,9),shirt,look.top==='denim'?.14:.06);F.add(mat,limb(el.clone().lerp(wr,.8),el.clone().lerp(wr,.9),.056,.056,9),look.shirtDark);}
     hand(F,mat,s,look,[wr.x,wr.y,wr.z],down);
   }
   // ---------- Pernas ----------
   for(const s of [-1,1]){const k=s<0?'L':'R',Th=kits['thigh'+k],Sh=kits['shin'+k];
     const hip=V(s*.095,.9,0),knee=V(s*.105,.574,.01),ankle=V(s*.11,.085,-.005);
     Th.add(mat,limb(hip,knee,.095,.068,10),look.skin);
-    if(jacket)Th.add(mat,limb(hip,knee,.103,.078,10),look.pants);else{Th.add(mat,limb(hip,hip.clone().lerp(knee,.82),.108,.096,10),look.pants);}
-    Sh.add(mat,ellipsoid([knee.x,knee.y,knee.z+.01],[.058,.06,.06],8,6),jacket?look.pants:look.skin);
+    if(longPants)Th.add(mat,limb(hip,knee,.103,.078,10),look.pants);else{Th.add(mat,limb(hip,hip.clone().lerp(knee,.82),.108,.096,10),look.pants);}
+    Sh.add(mat,ellipsoid([knee.x,knee.y,knee.z+.01],[.058,.06,.06],8,6),longPants?look.pants:look.skin);
     Sh.add(mat,limb(knee,ankle,.062,.042,9),look.skin);
-    Sh.add(mat,ellipsoid([knee.x,.42,-.022],[.056,.11,.05],8,6),jacket?look.pants:look.skin);
-    if(jacket){Sh.add(mat,limb(knee,ankle.clone().add(V(0,.03,0)),.078,.07,10),look.pants);}
+    Sh.add(mat,ellipsoid([knee.x,.42,-.022],[.056,.11,.05],8,6),longPants?look.pants:look.skin);
+    if(longPants){Sh.add(mat,limb(knee,ankle.clone().add(V(0,.03,0)),.078,.07,10),look.pants);}
     else Sh.add(mat,limb(V(ankle.x,.09,ankle.z),V(ankle.x,.2,ankle.z),.043,.041,9),look.sock);
     shoe(Sh,mat,look,s);
   }

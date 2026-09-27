@@ -9,6 +9,7 @@ export class Animator{
   constructor(root){this.root=root;this.phase=0;this.speed=0;this.accel=0;this.turn=0;this.prevYaw=null;this.airT=0;this.grounded=true;
     this.land=new Spring(170,13);this.castT=9;this.hookT=9;this.crank=0;this.bend=0;this.tug=new Spring(220,9);this.headYaw=0;this.headPitch=0;this.idleLook=0;this.flinch=new Spring(200,10);this.rest=0;}
   castNow(){this.castT=0;}
+  fire(){(this.recoil=this.recoil||new Spring(260,16)).kick(-7);}
   hookNow(){this.hookT=0;this.tug.kick(-6);}
   update(dt,o){
     const j=this.root.userData.joints,t=o.time||0;for(const g of Object.values(j))g.rotation.set(0,0,0);j.torso.position.y=.98;
@@ -63,6 +64,11 @@ export class Animator{
       this.root.userData.crank.rotation.x=this.crank;
     }
     this.bend=damp(this.bend,bend,14,dt);segs.forEach((s,i)=>{s.rotation.x=this.bend*(.08+i*.05);});
+    // ----- rifle: coronha no ombro, mão de apoio no guarda-mão, mira segue o olhar, recuo com mola -----
+    if(o.rifle){const aim=this.aim=damp(this.aim||0,o.aim?1:0,10,dt),pitch=clamp(o.pitch||0,-.9,1.1),rc=this.recoil=(this.recoil||new Spring(260,16));const r=rc.update(0,dt);
+      j.armL.rotation.x=-1.3-pitch*.85-aim*.12+r*.35;j.armL.rotation.z=-.08;j.foreL.rotation.x=-.45;j.armR.rotation.x=-1.4-pitch*.85+r*.3;j.armR.rotation.z=-.55;j.foreR.rotation.x=-.25;j.foreR.rotation.y=-.35;
+      j.torso.rotation.y+=.18;j.torso.rotation.x+=-r*.08;j.head.rotation.y-=.12;const gun=this.root.userData.gun;if(gun)gun.visible=!o.hideGun;this.root.userData.rod.visible=false;}
+    else if(this.root.userData.gun)this.root.userData.gun.visible=false;
     // ----- tapa: antecipação, golpe rápido, acompanhamento com sobra -----
     if(o.slap>0){const k=1-o.slap;
       // mão do tapa: o braço que aparece à direita da tela em primeira pessoa (esquerdo do modelo)
@@ -77,11 +83,14 @@ export class Animator{
     // ----- cabeça: estabiliza contra o tronco e olha para o alvo (já limitado a ±60°) -----
     const look=o.look;this.idleLook=damp(this.idleLook,Math.sin(t*.31+this.root.userData.index*2)*.25*idle,1.5,dt);
     this.headYaw=damp(this.headYaw,look?look.yaw:this.idleLook+clamp(this.turn*.08,-.35,.35),look?7:4,dt);this.headPitch=damp(this.headPitch,look?look.pitch:0,6,dt);
-    j.head.rotation.y+=this.headYaw-j.torso.rotation.y*.85;j.head.rotation.x+=-(o.pitch||0)*.7+this.headPitch-j.torso.rotation.x*.5;j.head.rotation.z-=j.torso.rotation.z*.6;
+    // além de ~63°, o resto da virada vai para o tronco (pescoço não gira como coruja)
+    const neck=1.1,extra=Math.sign(this.headYaw)*Math.max(0,Math.abs(this.headYaw)-neck);j.torso.rotation.y+=extra*.85;
+    j.head.rotation.y+=this.headYaw-extra*.85-j.torso.rotation.y*.85+extra*.85*.85;j.head.rotation.x+=-(o.pitch||0)*.7+this.headPitch-j.torso.rotation.x*.5;j.head.rotation.z-=j.torso.rotation.z*.6;
   }
 }
-// Olhar entre personagens: só vira se o outro estiver à frente ou um pouco de lado (cone de 75°), com trava de 60°.
-export const LOOK_LIMIT=Math.PI/3,LOOK_CONE=Math.PI*75/180;
+// Olhar entre personagens: vira se o outro estiver à frente ou de lado (cone de 140°), com trava de 100°;
+// a partir de ~63° a torção é dividida com o tronco. Atrás das costas, volta para frente.
+export const LOOK_LIMIT=Math.PI*100/180,LOOK_CONE=Math.PI*140/180;
 export function lookAngles(fromPos,fromYaw,toPos){
   const dx=toPos.x-fromPos.x,dz=toPos.z-fromPos.z,dy=toPos.y-fromPos.y,dist=Math.hypot(dx,dz);if(dist>7||dist<.2)return null;
   let yaw=Math.atan2(dx,dz)-fromYaw;yaw=Math.atan2(Math.sin(yaw),Math.cos(yaw));if(Math.abs(yaw)>LOOK_CONE)return null;

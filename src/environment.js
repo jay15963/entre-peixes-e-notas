@@ -106,7 +106,7 @@ function island(seed,scale){
     for(let k=0;k<3;k++)colors.push(...c.map(x=>x*(0.9+rnd*.2)));}
   g.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));return g;
 }
-function seagull(){
+export function seagull(){
   const g=new THREE.Group(),white=new THREE.MeshStandardMaterial({color:0xf2eee8,flatShading:true,roughness:.8}),grey=new THREE.MeshStandardMaterial({color:0x6f757c,flatShading:true,roughness:.8});
   const body=new THREE.Mesh(new THREE.OctahedronGeometry(.5,0),white);body.scale.set(.28,.26,1);g.add(body);
   const beak=new THREE.Mesh(new THREE.ConeGeometry(.05,.22,4),new THREE.MeshStandardMaterial({color:0xe0a21c,flatShading:true}));beak.rotation.x=Math.PI/2;beak.position.z=.58;g.add(beak);

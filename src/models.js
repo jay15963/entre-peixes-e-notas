@@ -14,23 +14,27 @@ export const JOINTS={
 // Onde cada foto cai na cabeça: centro entre os olhos (u,v a partir do topo) e escala em "unidades de textura por metro".
 // Medido nas fotos: olhos, ponta do nariz, boca e queixo alinhados à malha (olhos do modelo em x=±0,061, y=1,638).
 export const FACE_FIT=[
-  {u:.485,v:.512,su:2.21,sv:1.8,eyeY:1.638,mask:[.118,.158,1.6]},
-  {u:.477,v:.413,su:1.33,sv:1.25,eyeY:1.638,mask:[.112,.155,1.6]},
+  {u:.485,v:.512,su:2.21,sv:1.8,eyeY:1.638,mask:[.118,.158,1.6],tilt:0},
+  {u:.477,v:.413,su:1.33,sv:1.25,eyeY:1.638,mask:[.112,.155,1.6],tilt:0},
+  // foto 3: cabeça inclinada ~5,6° (olho direito mais baixo); foto 4: tirada de baixo, face mais curta entre olhos e nariz
+  {u:.53,v:.5,su:1.23,sv:.86,eyeY:1.638,mask:[.118,.15,1.6],tilt:.09},
+  {u:.6375,v:.38,su:2.34,sv:1.6,eyeY:1.638,mask:[.118,.155,1.6],tilt:.074},
 ];
+export const FACE_FILES=['rosto-01.png','rosto-02.png','rosto-03.jpg','rosto-04.jpg'];
 // A foto já contém olhos, sobrancelhas, boca e barba: essas peças saem para não duplicar o rosto.
 // Média da pele na foto (bochechas e testa), em espaço linear, para equilibrar a cor com a pele do modelo.
 function faceAverage(image,fit){
   const c=document.createElement('canvas');c.width=image.width;c.height=image.height;const x=c.getContext('2d',{willReadFrequently:true});x.drawImage(image,0,0);
   const sum=[0,0,0];let n=0;const lin=v=>{v/=255;return v<=.04045?v/12.92:Math.pow((v+.055)/1.055,2.4);};
-  for(const [dx,dy]of [[-.045,-.04],[.045,-.04],[0,.09],[-.06,-.07],[.06,-.07]]){const cu=fit.u+dx*fit.su,cv=fit.v+dy*fit.sv;const d=x.getImageData(Math.floor(cu*c.width)-3,Math.floor(cv*c.height)-3,6,6).data;for(let i=0;i<d.length;i+=4){sum[0]+=lin(d[i]);sum[1]+=lin(d[i+1]);sum[2]+=lin(d[i+2]);n++;}}
+  for(const [dx,dy]of [[-.045,.035],[.045,.035],[-.05,-.03],[.05,-.03],[0,-.05]]){const cu=fit.u+dx*fit.su,cv=fit.v+dy*fit.sv;const d=x.getImageData(Math.floor(cu*c.width)-3,Math.floor(cv*c.height)-3,6,6).data;for(let i=0;i<d.length;i+=4){sum[0]+=lin(d[i]);sum[1]+=lin(d[i+1]);sum[2]+=lin(d[i+2]);n++;}}
   return new THREE.Vector3(sum[0]/n,sum[1]/n,sum[2]/n);
 }
 export async function loadAssets(){
   const data=window.PESCA;
   const materials=data.materials.map(m=>new THREE.MeshStandardMaterial({color:new THREE.Color(...m.color).convertSRGBToLinear(),roughness:m.rough,metalness:m.metal,flatShading:true,side:THREE.DoubleSide}));
-  const loader=new THREE.TextureLoader(),faces=await Promise.all([1,2].map(i=>loader.loadAsync(`${import.meta.env.BASE_URL}assets/rosto-0${i}.png`)));
+  const loader=new THREE.TextureLoader(),faces=await Promise.all(FACE_FILES.map(f=>loader.loadAsync(`${import.meta.env.BASE_URL}assets/${f}`)));
   faces.forEach(t=>{t.colorSpace=THREE.SRGBColorSpace;t.anisotropy=8;t.wrapS=t.wrapT=THREE.ClampToEdgeWrapping;});
-  const averages=typeof document==='undefined'?[new THREE.Vector3(.5,.4,.35),new THREE.Vector3(.5,.4,.35)]:faces.map((t,i)=>faceAverage(t.image,FACE_FIT[i]));
+  const averages=typeof document==='undefined'?FACE_FIT.map(()=>new THREE.Vector3(.5,.4,.35)):faces.map((t,i)=>faceAverage(t.image,FACE_FIT[i]));
   return {data,materials,faces,averages};
 }
 // Material de pele com a foto projetada na própria malha da cabeça (não é um plano colado):
@@ -41,11 +45,11 @@ export function faceMaterial(assets,index,skin){
   const m=new THREE.MeshStandardMaterial({color:skin.color.clone(),roughness:.62,metalness:0});
   m.userData.face={fit,gain,map:assets.faces[index]};
   m.onBeforeCompile=shader=>{
-    Object.assign(shader.uniforms,{uFace:{value:assets.faces[index]},uFit:{value:new THREE.Vector4(fit.u,fit.v,fit.su,fit.sv)},uEyeY:{value:fit.eyeY-1.43},uMask:{value:new THREE.Vector3(...fit.mask)},uGain:{value:gain}});
+    Object.assign(shader.uniforms,{uFace:{value:assets.faces[index]},uFit:{value:new THREE.Vector4(fit.u,fit.v,fit.su,fit.sv)},uEyeY:{value:fit.eyeY-1.43},uTilt:{value:fit.tilt||0},uMask:{value:new THREE.Vector3(...fit.mask)},uGain:{value:gain}});
     shader.vertexShader=shader.vertexShader.replace('#include <common>','#include <common>\nvarying vec3 vFacePos;varying vec3 vFaceNormal;').replace('#include <begin_vertex>','#include <begin_vertex>\nvFacePos=position;vFaceNormal=normal;');
-    shader.fragmentShader=shader.fragmentShader.replace('#include <common>','#include <common>\nvarying vec3 vFacePos;varying vec3 vFaceNormal;uniform sampler2D uFace;uniform vec4 uFit;uniform float uEyeY;uniform vec3 uMask,uGain;')
+    shader.fragmentShader=shader.fragmentShader.replace('#include <common>','#include <common>\nvarying vec3 vFacePos;varying vec3 vFaceNormal;uniform sampler2D uFace;uniform vec4 uFit;uniform float uEyeY,uTilt;uniform vec3 uMask,uGain;')
       .replace('#include <map_fragment>',`
-      vec2 fuv=vec2(uFit.x+vFacePos.x*uFit.z,1.-(uFit.y+(uEyeY-vFacePos.y)*uFit.w));
+      vec2 fuv=vec2(uFit.x+vFacePos.x*uFit.z,1.-(uFit.y+(uEyeY-vFacePos.y)*uFit.w+vFacePos.x*uTilt));
       // equilíbrio de branco: a média da pele na foto passa a ser exatamente a cor da pele do modelo
       vec3 graded=texture2D(uFace,fuv).rgb*uGain;
       vec2 e=vec2(vFacePos.x/uMask.x,(vFacePos.y-(uEyeY-.03))/uMask.y);

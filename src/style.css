@@ -22,3 +22,9 @@ body.cinematic #crosshair,body.cinematic #lock-hint{display:none}
 @keyframes pulse-text{from{letter-spacing:0}to{letter-spacing:1.5px}}
 #fish-needle{transition:none;box-shadow:0 0 8px #fff8}
 #toast.show{animation:toast-pop .35s cubic-bezier(.2,1.5,.4,1)}@keyframes toast-pop{0%{transform:translateX(-50%) scale(.85)}100%{transform:translateX(-50%) scale(1)}}
+
+.portrait.white{background-image:url('../public/assets/rosto-03.jpg');background-position:center 46%}.portrait.denim{background-image:url('../public/assets/rosto-04.jpg');background-position:center 36%}
+.crew-card.taken{opacity:.55}
+#crosshair.rifle{width:22px;height:22px;margin:-11px 0 0 -11px;background:none;border-radius:0;box-shadow:none;opacity:.9;background:linear-gradient(#fff4dd,#fff4dd) center/2px 8px no-repeat,linear-gradient(#fff4dd,#fff4dd) center/8px 2px no-repeat}
+#hitmark{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) scale(.6);font:700 26px Arial;color:#ff6a4a;opacity:0;text-shadow:0 0 8px #000;transition:opacity .1s,transform .1s}#hitmark.show{opacity:1;transform:translate(-50%,-50%) scale(1.1)}
+#ammo{position:absolute;right:48px;bottom:88px;font:18px monospace;letter-spacing:6px;color:#ffe7b8;text-shadow:0 2px 8px #000}

@@ -1,7 +1,7 @@
 export const CONFIG = Object.freeze({
   stormAt:60, asteroidAt:120, impactAt:137, embraceAt:145, kissAt:152, hitAt:164, titleAt:167.5,
   impactDistance:235, boatScale:2.15, deckY:-.07, eyeHeight:1.62, walkSpeed:1.5, runSpeed:2.45,
-  respawnAfter:3.5, fixedStep:1/60, slapRange:1.7, protocol:2
+  respawnAfter:3.5, fixedStep:1/60, slapRange:1.7, protocol:3, maxPlayers:4, characters:4
 });
 export const clamp=(x,a=0,b=1)=>Math.max(a,Math.min(b,x));
 export const lerp=(a,b,t)=>a+(b-a)*t;
@@ -56,13 +56,15 @@ float tsunamiProfile(float s,float H){
 function hullHalf(zq){const L=(a,b,t)=>a+(b-a)*t;if(zq< -1.65)return L(.48,.67,(zq+2)/.35);if(zq< -1.1)return L(.67,.79,(zq+1.65)/.55);if(zq< -.45)return L(.79,.84,(zq+1.1)/.65);if(zq<.35)return L(.84,.83,(zq+.45)/.8);if(zq<1.05)return L(.83,.71,(zq-.35)/.7);if(zq<1.6)return L(.71,.49,(zq-1.05)/.55);if(zq<2)return L(.49,.2,(zq-1.6)/.4);return L(.2,.025,(zq-2)/.21);}
 export function deckHalfWidth(z){const zq=z/2.15,t=Math.max(0,((-.07+.68)/2.15-(.16+.11*Math.pow(Math.abs(zq)/2.21,3)))/.64);return hullHalf(zq)*(.57+.43*(t+.12))*2.15;}
 export function insideBoat(x,z){return Math.abs(z)<3.6 && Math.abs(x)<deckHalfWidth(z)-.2;}
+// Lobby: de 2 a 4 pescadores, cada um com um personagem diferente; começa quando todos marcam pronto.
 export class Lobby {
   constructor(mode='online'){this.mode=mode;this.players=new Map();}
-  join(id,character){if(![0,1].includes(character))throw Error('Personagem invalido');if(!this.players.has(id)&&this.players.size>=2)throw Error('Barco cheio');for(const [key,p]of this.players)if(key!==id&&p.character===character)throw Error('Personagem ocupado');this.players.set(id,{id,character,ready:false});}
+  join(id,character){if(!Number.isInteger(character)||character<0||character>=CONFIG.characters)throw Error('Personagem invalido');if(!this.players.has(id)&&this.players.size>=CONFIG.maxPlayers)throw Error('Barco cheio');for(const [key,p]of this.players)if(key!==id&&p.character===character)throw Error('Personagem ocupado');const prev=this.players.get(id);this.players.set(id,{id,character,ready:prev?.ready&&prev.character===character||false});}
+  freeCharacter(prefer=0){const used=new Set([...this.players.values()].map(p=>p.character));if(!used.has(prefer))return prefer;for(let c=0;c<CONFIG.characters;c++)if(!used.has(c))return c;return -1;}
   ready(id,value){const p=this.players.get(id);if(p)p.ready=!!value;}
   leave(id){this.players.delete(id);}
-  get canStart(){return this.players.size===(this.mode==='solo'?1:2)&&[...this.players.values()].every(p=>p.ready);}
-  snapshot(){return [...this.players.values()].map(p=>({...p}));}
+  get canStart(){const n=this.players.size;return (this.mode==='solo'?n===1:n>=2)&&[...this.players.values()].every(p=>p.ready);}
+  snapshot(){return [...this.players.values()].map(p=>({...p})).sort((a,b)=>a.id-b.id);}
 }
 // Pesca: cada lançamento sorteia a espécie e o peso. O peixe tem "corridas" (puxões para um lado),
 // o ponteiro tem inércia, a faixa verde encolhe com a dificuldade e fisgar rápido dá vantagem.
@@ -95,7 +97,8 @@ export class Fishing {
     return null;
   }
 }
-export function newPlayer(id,character){return {id,character,x:id===0?-.45:.45,z:-1.1,yaw:0,pitch:0,mode:'walk',fish:0,slap:0,ragTime:0,height:0,vy:0,speed:0,tp:0,cx:0,cz:0};}
+export const SPAWNS=[[-.45,-1.1],[.45,-1.1],[-.45,1.2],[.45,1.2]];
+export function newPlayer(id,character){const s=SPAWNS[id%SPAWNS.length];return {id,character,x:s[0],z:s[1],rifle:-1,ammo:5,reload:0,yaw:0,pitch:0,mode:'walk',fish:0,slap:0,ragTime:0,height:0,vy:0,speed:0,tp:0,cx:0,cz:0};}
 // yaw é relativo ao barco; x/z/h são a posição prevista pelo próprio cliente (movimento com autoridade local).
-export function inputPacket(input){const n=(v,a,b)=>clamp(Number(v)||0,a,b);return {type:'input',v:CONFIG.protocol,x:n(input.x,-1,1),z:n(input.z,-1,1),yaw:n(input.yaw,-1e4,1e4),pitch:n(input.pitch,-1.6,1.6),px:n(input.px,-4,4),pz:n(input.pz,-5,5),ph:n(input.ph,0,3),speed:n(input.speed,0,4),tp:Math.floor(n(input.tp,0,1e6)),run:!!input.run,interact:!!input.interact,cast:!!input.cast,slap:!!input.slap,jump:!!input.jump,reel:!!input.reel,fall:!!input.fall};}
-export function validPacket(p){return p&&p.v===CONFIG.protocol&&['hello','ready','start','input','snapshot','lobby','event','bye'].includes(p.type);}
+export function inputPacket(input){const n=(v,a,b)=>clamp(Number(v)||0,a,b);return {type:'input',v:CONFIG.protocol,x:n(input.x,-1,1),z:n(input.z,-1,1),yaw:n(input.yaw,-1e4,1e4),pitch:n(input.pitch,-1.6,1.6),px:n(input.px,-4,4),pz:n(input.pz,-5,5),ph:n(input.ph,0,3),speed:n(input.speed,0,4),tp:Math.floor(n(input.tp,0,1e6)),run:!!input.run,interact:!!input.interact,cast:!!input.cast,slap:!!input.slap,jump:!!input.jump,reel:!!input.reel,fall:!!input.fall,fire:!!input.fire,aim:!!input.aim,gull:Math.floor(n(input.gull,-1,31)),ray:Array.isArray(input.ray)?input.ray.slice(0,6).map(v=>n(v,-1e4,1e4)):null};}
+export function validPacket(p){return p&&p.v===CONFIG.protocol&&['hello','welcome','pick','ready','start','input','snapshot','lobby','event','bye'].includes(p.type);}

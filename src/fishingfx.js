@@ -13,7 +13,7 @@ export class FishingFX {
     this.scene=scene;this.state=[];this.flights=[];this.bucket=[];this.onCard=null;
     this.spray=new Particles(scene,1600,{kind:2,dark:[.45,.55,.6],light:[.95,.97,1],opacity:.85,near:[.15,.9]});
     this.rings=[];
-    for(let i=0;i<2;i++){
+    for(let i=0;i<4;i++){
       const b=new THREE.Group(),red=new THREE.MeshStandardMaterial({color:0xff5a1f,emissive:0x5a1604,roughness:.35,flatShading:true}),white=new THREE.MeshStandardMaterial({color:0xf4efe6,roughness:.4,flatShading:true});
       const low=new THREE.Mesh(new THREE.SphereGeometry(.06,10,6,0,Math.PI*2,Math.PI/2,Math.PI/2),red);const up=new THREE.Mesh(new THREE.SphereGeometry(.06,10,6,0,Math.PI*2,0,Math.PI/2),white);const stick=new THREE.Mesh(new THREE.CylinderGeometry(.008,.012,.16,6),red);stick.position.y=.1;b.add(low,up,stick);b.visible=false;scene.add(b);
       const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(new Float32Array(SEG*3),3));const line=new THREE.Line(g,new THREE.LineBasicMaterial({color:0xf3e6c0,transparent:true,opacity:.85}));line.frustumCulled=false;line.visible=false;scene.add(line);
@@ -81,6 +81,10 @@ export class FishingFX {
     this.bucket.forEach((f,i)=>{const u=f.userData;u.next=(u.next??Math.random()*3)-dt;if(u.next<0){u.flop=.5;u.next=2+Math.random()*5;}u.flop=Math.max(0,(u.flop||0)-dt);flop(f,dt,u.flop>0?1:.05);f.position.y=u.baseY+(u.flop>0?Math.abs(Math.sin(u.flop*20))*.04:0);});
     this.spray.flush();
   }
+  // Gaivota leva o peixe de cima do balde (o visual volta a bater com a contagem via syncBucket)
+  steal(boat){const f=this.bucket.pop();if(f)boat.remove(f);return !!f;}
+  pendingToBucket(){return this.flights.filter(f=>f.kind!=='dive').length;}
+  syncBucket(count,boat){const target=Math.min(12,Math.max(0,count-this.pendingToBucket()));while(this.bucket.length>target){boat.remove(this.bucket.pop());}while(this.bucket.length<target){const f=makeFish(Math.floor(Math.random()*4));this.toBucket(f,boat);}}
   toBucket(fish,boat){fish.scale.setScalar(.72);const n=this.bucket.length,a=n*2.4;fish.position.copy(boat.userData.bucketLocal).add(V(Math.cos(a)*.07,.14+Math.min(n,10)*.022,Math.sin(a)*.07));fish.rotation.set(-1.2+Math.random()*.4,a,Math.random()*.6);fish.userData.baseY=fish.position.y;boat.add(fish);this.bucket.push(fish);
     if(this.bucket.length>12){const old=this.bucket.shift();boat.remove(old);}}
 }

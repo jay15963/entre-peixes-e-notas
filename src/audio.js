@@ -100,6 +100,15 @@ export class Sound {
     if(name==='run'){for(let i=0;i<26;i++)this.burst(this.white,{type:'bandpass',freq:3200+Math.random()*900,q:6,dur:.014,attack:.001,gain:.13,when:i*.028,reverb:.05});this.tone(1400,{type:'sawtooth',dur:.7,gain:.025,to:600});this.burst(this.white,{type:'bandpass',freq:1600,to:500,q:1,dur:.5,gain:.35,pos,reverb:.3});}
     if(name==='snap'){this.burst(this.white,{type:'highpass',freq:5000,dur:.05,attack:.001,gain:.6,reverb:.2});this.tone(2600,{type:'triangle',dur:.25,gain:.12,to:300});this.burst(this.pink,{type:'bandpass',freq:900,to:3000,q:2,dur:.3,attack:.02,gain:.2});}
     if(name==='bucket'){this.tone(460,{type:'triangle',dur:.35,gain:.12,pos,reverb:.2});this.tone(1120,{type:'sine',dur:.5,gain:.05,pos});this.burst(this.white,{type:'bandpass',freq:1500,q:1.5,dur:.2,gain:.25,pos});for(let i=0;i<4;i++)this.burst(this.brown,{type:'lowpass',freq:700,dur:.06,gain:.25,when:.12+i*.11,pos});}
+    if(name==='gunshot'){// estalo supersônico, corpo grave e eco rolando sobre a água
+      this.burst(this.white,{type:'highpass',freq:2200,dur:.06,attack:.001,gain:1.2,pos,reverb:.2});this.burst(this.brown,{type:'lowpass',freq:1400,to:120,dur:.5,attack:.001,gain:1.6,pos,reverb:.7});this.tone(95,{type:'sine',dur:.35,gain:.7,to:45,pos});
+      for(let i=1;i<4;i++)this.burst(this.pink,{type:'lowpass',freq:900/i,dur:.6,attack:.02,gain:.35/i,when:.25*i+Math.random()*.1,reverb:.9});}
+    if(name==='bolt'){[0,.16,.34,.5].forEach((w,i)=>this.burst(this.white,{type:'bandpass',freq:[2800,1900,2400,3200][i],q:4,dur:.03,attack:.001,gain:.35,when:w,pos,reverb:.05}));}
+    if(name==='reload'){for(let i=0;i<5;i++)this.burst(this.white,{type:'bandpass',freq:2500,q:5,dur:.025,gain:.3,when:.3+i*.28,pos,reverb:.05});this.burst(this.white,{type:'bandpass',freq:1800,q:3,dur:.05,gain:.4,when:1.9,pos});}
+    if(name==='gull'){const now=this.ctx.currentTime,g=this.out(pos,.4);for(let i=0;i<3;i++){const t=now+i*.22,o=this.ctx.createOscillator(),a=this.ctx.createGain(),base=1250+Math.random()*300;o.type='sawtooth';o.frequency.setValueAtTime(base,t);o.frequency.linearRampToValueAtTime(base*1.7,t+.05);o.frequency.exponentialRampToValueAtTime(base*.6,t+.2);const f=this.ctx.createBiquadFilter();f.type='bandpass';f.frequency.value=2200;f.Q.value=2;o.connect(f).connect(a).connect(g);this.env(a,t,.01,.12,.2);o.start(t);o.stop(t+.25);}}
+    if(name==='feathers'){this.burst(this.pink,{type:'bandpass',freq:1200,q:.7,dur:.25,attack:.005,gain:.5,pos});this.gull&&this.effect('gull',{pos});}
+    if(name==='hitmark')this.tone(1800,{type:'square',dur:.05,gain:.08,reverb:0});
+    if(name==='rack'){this.burst(this.white,{type:'bandpass',freq:1500,q:3,dur:.08,gain:.35,pos});this.tone(220,{type:'triangle',dur:.1,gain:.2,pos});}
     if(name==='plop')this.tone(700,{type:'sine',dur:.12,gain:.25,to:180,pos});
     if(name==='bite'){this.tone(620,{type:'sine',dur:.1,gain:.3,to:160,pos});this.tone(520,{type:'sine',dur:.1,gain:.25,to:140,pos,when:.14});this.tone(1318,{type:'triangle',dur:.25,gain:.12,when:.02});}
     if(name==='tick')this.burst(this.white,{type:'highpass',freq:3500,dur:.012,attack:.001,gain:.08,reverb:0});
