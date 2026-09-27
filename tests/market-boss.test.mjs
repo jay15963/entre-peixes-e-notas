@@ -73,9 +73,9 @@ for(const name of ['tail','bite','cannon'])test(`Nessie ${name}: barco básico e
   assert.ok(runAttack(name,false).length>0);assert.equal(runAttack(name,true).length,0);
 });
 test('Nessie: avisos, velocidade e pausas permitem reagir no último estágio',()=>{
-  const f=fightFixture();f.startAttack('tripleRam');assert.equal(f.attack.count,2);assert.ok(f.attack.warn>=3.2);
-  assert.equal(f.warningData().length,4);assert.ok(12*f.speedK()<=12.600001);
-  f.lastName='whirlpool';assert.equal(f.nextAttack(),'cruise');f.startAttack('cruise');assert.ok(f.attack.dur>=4.7);
+  const f=fightFixture();f.startAttack('tripleRam');assert.equal(f.attack.count,4);assert.ok(f.attack.warn>=2.4,'dá tempo de sair da frente');
+  assert.equal(f.warningData().length,0,'sem marcas de aviso na água');assert.ok(f.speedK()>f.warnK(),'nada mais rápido, mas o preparo continua legível');
+  f.lastName='whirlpool';assert.equal(f.nextAttack(),'cruise');f.startAttack('cruise');assert.ok(f.attack.dur>=2&&f.attack.dur<=3.7,'pausas curtas entre os golpes');
 });
 test('Nessie: dano progride de estágio sem invulnerabilidade por sequência pendente',()=>{
   const f=fightFixture(1);f.startAttack('cruise');f.hp=MAX_HP*.66+5;const events=f.damage('eye');

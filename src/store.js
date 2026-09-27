@@ -31,21 +31,21 @@ const D={
   winch:{price:380,kind:'boat',rule:'Recolhe a âncora na hora; peixes de 8 kg+ e o baú do tesouro sobem 50% mais rápido a bordo; +1 captura por armadilha.'},
   motor:{price:900,kind:'boat',rule:'Velocidade máxima 5 → 8,5 m/s. Gasta combustível (vem com o tanque cheio).'},
   propeller:{price:210,kind:'boat',rule:'O barco atravessa as algas sem perder velocidade e ganha 8% de velocidade máxima.'},
-  rudder:{price:170,kind:'boat',rule:'Vira 35% mais rápido e manobra a 1,6 m/s mesmo com o motor afogado.'},
+  rudder:{price:170,kind:'boat',rule:'Leme maior: o barco vira 35% mais rápido (ótimo para desviar da Nessie).'},
   pump:{price:260,kind:'boat',rule:'Tira 3% de água do porão por segundo, automaticamente.'},
-  battery:{price:200,kind:'boat',rule:'Sonar e rádio duram 3× mais com a mesma carga.'},
+  battery:{price:200,kind:'boat',rule:'Sonar e rádio duram 3× mais com a mesma carga (a energia volta com o motor ligado ou atracado).'},
   repair:{price:150,kind:'charges',uses:1,rule:'A bordo e fora de combate: +40% de resistência do casco.'},
   fuel:{price:55,kind:'charges',uses:1,rule:'A bordo: +50% de combustível no Motor Rabeta-40.'},
   drogue:{price:160,kind:'boat',rule:'E na âncora de deriva (popa): deriva ÷5, balanço ÷2 e a proa se alinha às ondas.'},
   lantern:{price:120,kind:'boat',rule:'Luz forte no convés (E liga/desliga). Acesa, peixes pequenos ×1,6 e mordida 15% mais rápida (o dobro na tempestade).'},
   torch:{price:90,kind:'tool',cool:.3,rule:'Clique para acender: ilumina a água e revela tesouros submersos, cardumes e a Nessie sob a superfície.'},
   flask:{price:45,kind:'charges',uses:3,rule:'Um gole: tira o frio, recupera o fôlego e aquece por 90 s.'},
-  stove:{price:190,kind:'tool',cool:4,rule:'Cozinha o último peixe do balde: refeição para quem está perto (até 5 min, melhor com peixe caro): +15% velocidade e pesca, sem frio, recupera vida.'},
+  stove:{price:190,kind:'tool',cool:4,rule:'Cozinha o último peixe do balde: refeição para quem está perto (até 5 min, melhor com peixe caro): +15% de velocidade e de pesca.'},
   medkit:{price:110,kind:'charges',uses:2,rule:'+60 de vida e trata o ferimento (em terra, perto de Laguna, a vida volta sozinha).'},
   vest:{price:130,kind:'passive',rule:'Na água você aguenta 45 s (antes 20 s) e nada 15% mais rápido.'},
   oxygen:{price:240,kind:'passive',rule:'Fôlego debaixo d’água: 12 s → 75 s.'},
   fins:{price:150,kind:'passive',rule:'Nada 2,6× mais rápido e mergulha mais fundo.'},
-  pack:{price:170,kind:'passive',rule:'+4 espaços na mochila; iscas e provisões não molham quando você cai no mar.'},
+  pack:{price:170,kind:'passive',rule:'+4 espaços na mochila; as iscas não molham quando você cai no mar.'},
   tent:{price:260,kind:'place',rule:'Clique em terra para armar a barraca: vira seu ponto de retorno; E nela descansa (vida cheia, sem frio, +10% de velocidade).'},
   lure:{price:60,kind:'bait',uses:5,rule:'Isca: predadores (robalo, espada, garoupa, dourado, atum, marlim) ×3 e metade do lixo.'},
   frog:{price:50,kind:'bait',uses:5,rule:'Isca: nas algas, predadores ×4 e mordida 30% mais rápida; fora delas ×1,3.'},
@@ -58,10 +58,12 @@ const D={
   flare:{price:75,kind:'charges',uses:2,rule:'Dispare para o alto: luz por 15 s, gaivotas e Nessie marcadas para todos e a posição do barco no HUD por 60 s.'},
   trap:{price:210,kind:'place',rule:'Clique na água (até 12 m, 2 m de fundo): a cada 45 s pega uma lagosta ou caranguejo (até 4). E na boia recolhe.'},
 };
-export const ITEMS=Object.fromEntries(STORE_ITEMS.map(it=>[it.id,{...it,...D[it.id],status:'À venda na Loja do Pescador'}]));
+// fora da loja: itens que dependiam de vida, frio, casco ou alagamento (sistemas que o jogo não tem)
+export const REMOVED=new Set(['medkit','flask','repair','pump','tent']);
+export const ITEMS=Object.fromEntries(STORE_ITEMS.filter(it=>!REMOVED.has(it.id)).map(it=>[it.id,{...it,...D[it.id],status:'À venda na Loja do Pescador'}]));
 // isca de corte: sai da faca (não é vendida)
 ITEMS.cut={id:'cut',name:'Isca de corte',description:'Pedaços frescos de peixe.',effect:'Mordida 40% mais rápida.',kind:'bait',uses:3,price:0,rule:'Isca: mordida 40% mais rápida.',category:'Iscas e caçada',number:0};
-export const ITEM_IDS=STORE_ITEMS.map(i=>i.id);
+export const ITEM_IDS=STORE_ITEMS.filter(i=>!REMOVED.has(i.id)).map(i=>i.id);
 export {STORE_CATEGORIES};
 export const BASE_SLOTS=8,PACK_SLOTS=4,CART_MAX=6;
 export const CATEGORY_SHORT=['PESCA DE PRECISÃO','NAVEGAÇÃO E PESQUISA','OFICINA DE BORDO','EXPEDIÇÃO E SOBREVIVÊNCIA','ISCAS E CAÇADA'];

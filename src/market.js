@@ -29,9 +29,9 @@ export function makeCart(){const k=new Kit(),steel=new THREE.MeshStandardMateria
   k.add(plastic,limb(V(-W/2-.03,H1+.06,-L/2-.08),V(W/2+.03,H1+.06,-L/2-.08),.022,.022,12).rotateY(0),0x2c6db8).add(plastic,box([0,H1+.06,-L/2-.08],[.12,.05,.05]),0xf3d73a);
   for(const x of [-W/2,W/2])k.add(steel,limb(V(x*1.06,H1,-L/2*1.04),V(x+Math.sign(x)*.03,H1+.06,-L/2-.08),.01,.01,5),S);
   k.add(plastic,box([0,H1-.12,-L/2+.02],[W-.06,.2,.012]),0xd62028);
-  const g=k.build();g.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;}});g.rotation.y=Math.PI;const root=new THREE.Group();root.add(g);
+  const g=k.build();g.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;}});const root=new THREE.Group();root.add(g);
   const hid=new THREE.MeshBasicMaterial({visible:false});
-  const handle=new THREE.Mesh(new THREE.BoxGeometry(.8,.28,.3),hid);handle.position.set(0,H1+.04,.5);root.add(handle);
+  const handle=new THREE.Mesh(new THREE.BoxGeometry(.8,.28,.3),hid);handle.position.set(0,H1+.04,-.5);root.add(handle);
   const basket=new THREE.Mesh(new THREE.BoxGeometry(.66,.55,.9),hid);basket.position.set(0,.76,0);root.add(basket);
   const load=new THREE.Group();load.position.set(0,H0+.02,0);root.add(load);
   root.userData={handle,basket,load,shown:''};return root;}

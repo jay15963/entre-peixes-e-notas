@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import {Kit,loft,limb,ellipsoid,box,sculpt,V} from './geometry.js';
-import {ITEMS,ITEM_IDS,CATEGORY_SHORT} from './store.js';
+import {ITEMS,ITEM_IDS,CATEGORY_SHORT,STORE_CATEGORIES} from './store.js';
+const idsOf=cat=>ITEM_IDS.filter(id=>ITEMS[id].category===STORE_CATEGORIES[cat]);
 import {money} from './catalog.js';
 
 // Loja do Pescador dentro do Althoff: dois expositores de madeira (quatro faces, uma categoria por face),
@@ -19,7 +20,7 @@ export function buildFixtures({inn,im,imMetal,glass,group,colliders,canvasTex,F}
   const faces=[[-5.5,1,0],[-5.5,-1,1],[5.5,-1,2],[5.5,1,3]];
   for(const su of [-5.5,5.5]){const va=11,vb=20.5,mid=(va+vb)/2,len=vb-va;
     inn.add(im,box([su,F+.09,mid],[1.26,.18,len]),0x2b1d14,.03).add(im,box([su,F+1.2,mid],[.07,2.1,len]),WOOD,.04);
-    for(let k=0;k<=5;k++)inn.add(im,box([su,F+1.13,va+k*COL_W],[1.26,2.1,.05]),WOOD_LIGHT,.03);
+    for(let k=0;k<=5;k+=5)inn.add(im,box([su,F+1.13,va+k*COL_W],[1.26,2.1,.05]),WOOD_LIGHT,.03);
     inn.add(im,box([su,F+2.22,mid],[1.34,.1,len+.12]),0x2b1d14,.02).add(imMetal,box([su,F+2.29,mid],[1.2,.04,len]),BRASS,.02);
     for(const s of [-1,1]){
       // tábuas: fundo (sobre o rodapé) e prateleira do meio, com trilho de latão na frente
@@ -31,9 +32,10 @@ export function buildFixtures({inn,im,imMetal,glass,group,colliders,canvasTex,F}
       const face=faces.find(f=>f[0]===su&&f[1]===s),cat=face[2];
       const sign=new THREE.Mesh(new THREE.PlaneGeometry(len,.36),new THREE.MeshStandardMaterial({map:header(CATEGORY_SHORT[cat],CAT_COLOR[cat]),emissive:0xffffff,emissiveIntensity:.25,roughness:.6}));sign.material.emissiveMap=sign.material.map;
       sign.position.set(su+s*.68,F+2.43,mid);sign.rotation.y=s*Math.PI/2;group.add(sign);inn.add(im,box([su+s*.66,F+2.43,mid],[.03,.42,len+.06]),0x2b1d14,.02);
-      const ids=ITEM_IDS.slice(cat*10,cat*10+10);
-      ids.forEach((id,n)=>{const row=n<5?1:0,col=n%5,v=va+COL_W*(col+.5),base=row?F+1.185:F+.245,h=row?.93:.86;
-        slots.push({id,u:su+s*U_FACE,v,y:base,rot:s*Math.PI/2,w:COL_W-.2,h,d:.52,face:s,axis:'u',cat});
+      // itens da categoria em duas fileiras, colunas do tamanho certo para não sobrar buraco
+      const ids=idsOf(cat),cols=Math.ceil(ids.length/2),cw=len/cols;
+      ids.forEach((id,n)=>{const row=n<cols?1:0,col=n%cols,v=va+cw*(col+.5),base=row?F+1.185:F+.245,h=row?.93:.86;
+        slots.push({id,u:su+s*U_FACE,v,y:base,rot:s*Math.PI/2,w:cw-.2,h,d:.52,face:s,axis:'u',cat});
         const tag=new THREE.Mesh(new THREE.PlaneGeometry(.36,.146),new THREE.MeshStandardMaterial({map:priceTag(canvasTex,ITEMS[id],CAT_COLOR[cat]),roughness:.5,emissive:0xffffff,emissiveIntensity:.18}));tag.material.emissiveMap=tag.material.map;
         tag.position.set(su+s*.626,base-.02,v);tag.rotation.y=s*Math.PI/2;tags.add(tag);});}
     colliders.push({x0:su-.66,x1:su+.66,z0:va,z1:vb});}
@@ -44,7 +46,7 @@ export function buildFixtures({inn,im,imMetal,glass,group,colliders,canvasTex,F}
   inn.add(imMetal,box([0,F+1.43,cv],[cw+.03,.03,1.08]),BRASS,.02);
   const vit=new THREE.Mesh(new THREE.BoxGeometry(cw,.55,1.06),glass);vit.position.set(0,F+1.155,cv);vit.renderOrder=5;group.add(vit);
   const cglow=new THREE.Mesh(new THREE.BoxGeometry(cw-.1,.012,.9),new THREE.MeshStandardMaterial({color:0xfff4d8,emissive:0xffd9a0,emissiveIntensity:2.4}));cglow.position.set(0,F+1.41,cv);group.add(cglow);
-  ITEM_IDS.slice(40,50).forEach((id,n)=>{const side=n<5?-1:1,col=n%5,u=-cw/2+.44+col*.88,v=cv+side*.25;
+  const bait=idsOf(4),half=Math.ceil(bait.length/2);bait.forEach((id,n)=>{const side=n<half?-1:1,col=n%half,u=-cw/2+cw/half*(col+.5),v=cv+side*.25;
     slots.push({id,u,v,y:F+.89,rot:side<0?Math.PI:0,w:.8,h:.5,d:.5,face:side,axis:'v',cat:4});
     const tag=new THREE.Mesh(new THREE.PlaneGeometry(.36,.146),new THREE.MeshStandardMaterial({map:priceTag(canvasTex,ITEMS[id],CAT_COLOR[4]),roughness:.5,emissive:0xffffff,emissiveIntensity:.18}));tag.material.emissiveMap=tag.material.map;
     tag.position.set(u,F+.66,cv+side*.568);tag.rotation.y=side<0?Math.PI:0;tags.add(tag);});

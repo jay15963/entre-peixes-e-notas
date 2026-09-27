@@ -15,7 +15,7 @@ const smooth=(a,b,x)=>{const t=clamp((x-a)/(b-a));return t*t*(3-2*t);};
 const damp=(a,b,k,dt)=>a+(b-a)*(1-Math.exp(-k*dt));
 const angDiff=(a,b)=>Math.atan2(Math.sin(a-b),Math.cos(a-b));
 const rnd=(a=0,b=1)=>a+Math.random()*(b-a);
-export const MAX_HP=500,STAGE_AT=[1,.66,.33],BASE_DMG=10;
+export const MAX_HP=1600,STAGE_AT=[1,.80,.50],BASE_DMG=10;
 export const ZONES={eye:{mult:5,label:'OLHO',color:'#ffd23c'},mouth:{mult:3,label:'GARGANTA',color:'#ff8a3c'},gill:{mult:2,label:'GUELRA',color:'#ff5ad0'},body:{mult:1,label:'CORPO',color:'#ffffff'},spine:{mult:.25,label:'ESPINHOS',color:'#8fa9a3'}};
 export const ZONE_LIST=['eye','mouth','gill','body','spine'];
 export const ATTACK_NAMES={ram:'INVESTIDA SUBMERSA',tripleRam:'INVESTIDA EM SÉRIE',tail:'GOLPE DE CAUDA',emerge:'O RUGIDO',rage:'FÚRIA DA MATRIARCA',cannon:'JATO D\'ÁGUA',whirlpool:'REDEMOINHO',bite:'MORDIDA DO ABISMO',wall:'MURALHA D\'ÁGUA',volley:'CHUVA DE ESPINHOS',death:'',cruise:''};
@@ -96,7 +96,9 @@ export class NessieFight {
     this.neckSpring={v:0,x:0};this.attack=null;}
   begin(x,z){this.reset(x,z);this.alive=true;this.root.visible=true;this.events=[];this.boat={x,z,vx:0,vz:0,heading:0};this.startAttack('rage');}
   end(){for(const [l] of this.lightPairs||[])l.intensity=0;this.alive=false;this.root.visible=false;U.uBoss.value.w=0;U.uBossFoam.value=0;for(const f of this.fx)this.clearEffect(f.obj);this.fx=[];for(const w of this.walls)this.clearEffect(w.mesh);this.walls=[];for(const p of this.projectiles)this.scene.remove(p.mesh);this.projectiles=[];this.rings=[];this.stopDrone();for(const m of this.warningMarkers)m.visible=false;}
-  warningData(){const A=this.attack;if(!A||this.dead)return [];const t=A.t;
+  // sem marcas na água: o jogador lê o golpe pela animação, pelo som e pela esteira
+  warningData(){return [];}
+  telegraphData(){const A=this.attack;if(!A||this.dead)return [];const t=A.t;
     if((A.name==='tail'||A.name==='bite')&&t<A.warn)return [[A.at.x,A.at.z,A.name==='tail'?4.8:3.8,t/A.warn]];
     if(A.name==='cannon'&&t<A.charge)return [[A.aim.x,A.aim.z,4.5,t/A.charge]];
     if((A.name==='ram'||A.name==='tripleRam')&&A.phase===0){return [0,1,2,3].map(i=>[A.start.x+Math.sin(A.heading)*(10+i*10),A.start.z+Math.cos(A.heading)*(10+i*10),3.7,A.pt/A.warn]);}
@@ -107,7 +109,10 @@ export class NessieFight {
   get stageName(){return ['','A ESPREITA','A FÚRIA','A MATRIARCA FERIDA'][this.stage];}
   plan(){return this.stage===1?['cruise','ram','tail','cruise','emerge','ram','bite']:this.stage===2?['tripleRam','cannon','whirlpool','tail','emerge','bite','cannon']:['wall','volley','tripleRam','cannon','bite','emerge','tail','whirlpool'];}
   nextAttack(){if(this.dead)return 'death';if(this.forceNext){const n=this.forceNext;this.forceNext=null;this.lastName=n;return n;}if(this.lastName&&this.lastName!=='cruise'){this.lastName='cruise';return 'cruise';}const p=this.plan(),n=p[this.cursor%p.length];this.cursor++;this.lastName=n;if(this.cursor>=p.length)this.stageDone.add(this.stage);return n;}
-  speedK(){return this.stage===1?.85:this.stage===2?.95:1.05;}
+  // velocidade de nado e investidas (fica mais rápida a cada estágio)…
+  speedK(){return this.stage===1?1.05:this.stage===2?1.2:(this.hp/MAX_HP<.12?1.5:1.35);}
+  // …e o tempo de preparo dos golpes de área (dá para reagir com ~1 s)
+  warnK(){return this.stage===1?.85:this.stage===2?.95:1.05;}
   emit(ev){this.events.push(ev);this.fxEvent(ev);}
   snapshot(){const S=this.S,P=this.P,A=this.attack||{};return {s:[S.x,S.z,S.y,S.heading,S.roll,S.pitch,S.speed].map(v=>+v.toFixed(2)),p:[P.lat,P.vert,P.neckA,P.yawA,P.neckB,P.yawB,P.tailYaw,P.tailPitch,P.gape,P.headPitch,P.headYaw].map(v=>+v.toFixed(3)),a:A.name,t:+(A.t||0).toFixed(2),v:this.warningData(),hp:Math.round(this.hp),st:this.stage,d:this.dead?1:0,e:Object.keys(this.exposed).filter(k=>this.exposed[k]).join(','),w:A.name==='whirlpool'&&A.c?[+A.c.x.toFixed(1),+A.c.z.toFixed(1)]:null};}
   applySnapshot(n){if(!n)return;this.target=n;if(!this.alive){this.alive=true;this.root.visible=true;}const S=this.S;if(!this.attack||this.attack.name!==n.a)this.attack={name:n.a,t:n.t,k:this.speedK()};this.attack.t=n.t;
@@ -143,9 +148,9 @@ export class NessieFight {
   // o boss saiu ou entrou na água: onda, lençol d'água e borrifo ao longo de todo o corpo
   surge(power){for(let i=0;i<14;i++){const p=this.toWorld(V(rnd(-2,2),rnd(3,6),rnd(-16,3)));this.drop(p.x,p.z,3,-.45*power,.35*power,.4);this.burst(V(p.x,this.waterH(p.x,p.z),p.z),36,.8*power);}this.ring(this.S.x,this.S.z,2.2*power,9,7);this.curtain=2.6*power;this.sfx('surge',V(this.S.x,0,this.S.z));}
   // ---------------------------------------------------------------- simulação (anfitrião)
-  startAttack(name){const k=this.speedK(),S=this.S,b=this.boat;this.attack={name,t:0,k};const A=this.attack;const toBoat=Math.atan2(b.x-S.x,b.z-S.z),around=(d)=>{const a=Math.random()*6.283;return V(b.x+Math.cos(a)*d,0,b.z+Math.sin(a)*d);};
-    if(name==='cruise'){A.dur=rnd(5,6.5)/k;A.ang=Math.atan2(S.z-b.z,S.x-b.x);A.dir=Math.random()<.5?1:-1;}
-    if(name==='ram'||name==='tripleRam'){A.count=name==='tripleRam'?2:1;A.i=0;this.setupRam(A);}
+  startAttack(name){const k=this.warnK(),S=this.S,b=this.boat;this.attack={name,t:0,k:this.speedK()};const A=this.attack;const toBoat=Math.atan2(b.x-S.x,b.z-S.z),around=(d)=>{const a=Math.random()*6.283;return V(b.x+Math.cos(a)*d,0,b.z+Math.sin(a)*d);};
+    if(name==='cruise'){A.dur=rnd(2.8,3.8)/A.k;A.ang=Math.atan2(S.z-b.z,S.x-b.x);A.dir=Math.random()<.5?1:-1;}
+    if(name==='ram'||name==='tripleRam'){A.count=name==='tripleRam'?(this.stage>2?4:3):1;A.i=0;this.setupRam(A);}
     if(name==='tail'){A.warn=3.6/k;A.dur=A.warn+1.5;A.heading=toBoat+Math.PI;const tip=V(-.8,2,-17);A.at=V(b.x+b.vx*.35,0,b.z+b.vz*.35);const off=V(tip.x,0,tip.z).applyAxisAngle(V(0,1,0),A.heading);A.pos=A.at.clone().sub(off);this.emit({k:'sfx',n:'growl',x:A.pos.x,y:0,z:A.pos.z});}
     if(name==='emerge'||name==='rage'){A.dur=name==='rage'?4.8:4.6/Math.min(k,1.5);A.pos=around(20);A.heading=Math.atan2(b.x-A.pos.x,b.z-A.pos.z);}
     if(name==='cannon'){A.charge=4/k;A.dur=A.charge+2.2;A.pos=around(24);A.aim=V(b.x,0,b.z);}
@@ -207,7 +212,7 @@ export class NessieFight {
     if(this.stage<3&&this.hp/MAX_HP<=STAGE_AT[this.stage]){this.stage++;this.cursor=0;this.forceNext='rage';ev.push({k:'stage',n:this.stage});}
     if(this.hp<=0&&!this.dead){this.dead=true;this.forceNext='death';this.attack.done=true;ev.push({k:'dying'});}return ev;}
   // raio de tiro (mundo): devolve a parte atingida acima da água
-  raycast(ray,far=220){if(!this.alive||this.dead)return null;let best=null;const test=(c,r,zone)=>{if(c.y<this.waterH(c.x,c.z)-.2)return;const oc=c.clone().sub(ray.origin),tc=oc.dot(ray.direction);if(tc<0||tc>far)return;const d2=oc.lengthSq()-tc*tc;if(d2>r*r)return;const t=tc-Math.sqrt(r*r-d2);if(!best||t<best.t)best={t,zone,point:ray.origin.clone().addScaledVector(ray.direction,t)};};
+  raycast(ray,far=220){if(!this.alive||this.dead)return null;let best=null;const test=(c,r,zone)=>{/* acertável também debaixo d'água */const oc=c.clone().sub(ray.origin),tc=oc.dot(ray.direction);if(tc<0||tc>far)return;const d2=oc.lengthSq()-tc*tc;if(d2>r*r)return;const t=tc-Math.sqrt(r*r-d2);if(!best||t<best.t)best={t,zone,point:ray.origin.clone().addScaledVector(ray.direction,t)};};
     const E=this.exposed;const head=this.rig.head;for(const e of this.rig.eyes)test(head.localToWorld(e.clone()),.55,'eye');if(this.P.gape>.35)test(head.localToWorld(V(0,-.3,2.4)),.9,'mouth');test(head.localToWorld(V(0,.2,1.6)),1.2,'body');
     for(const s of [-1,1])test(this.toWorld(V(s*1.05,5.3,.6)),.95,'gill');for(let i=2;i<SPINE.length-1;i++){const p=V(...SPINE[i]);test(this.toWorld(p),RADII[i]*1.05,'body');if(i<7)test(this.toWorld(p.clone().add(V(0,RADII[i]+.5,0))),.9,'spine');}
     if(best&&best.zone==='gill'&&!E.gill)best.zone='body';return best;}

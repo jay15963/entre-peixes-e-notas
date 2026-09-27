@@ -7,14 +7,15 @@ import {U} from './shaders.js';
 
 // Efeitos dos 50 itens da Loja do Pescador. O anfitrião decide (inventário, dinheiro, barco, Nessie);
 // cada cliente desenha o que vê (luzes, boias, armadilhas, algas, brilhos) e o HUD dos instrumentos.
-// world.eq (snapshot): equipamento do barco e sistemas do mar. Jogador: inv, sel, bait, hp, cold, breath, fed, warm, rested, prov, torch, tent.
+// world.eq (snapshot): equipamento do barco e sistemas do mar. Jogador: inv, sel, bait, breath (mergulho), fed, prov, torch.
+// Sem vida, frio, casco ou alagamento: o único perigo é ficar à deriva no mar.
 const V=(x=0,y=0,z=0)=>new THREE.Vector3(x,y,z);
 const angDiff=(a,b)=>Math.atan2(Math.sin(a-b),Math.cos(a-b));
-export const NEW_EQ=()=>({gear:{},hull:100,bilge:0,fuel:0,energy:100,flooded:0,anchor:0,anchorAt:null,anchorT:0,drogue:0,lamp:1,marks:[],beacons:[],traps:[],chum:[],rattle:0,flare:null,decoy:null,tether:0,gullsOff:0,treasure:{},photos:{},fightId:0});
-export const PLAYER_STATUS=['inv','bait','hp','cold','breath','fed','warm','rested','prov','torch','tent','hold','cartH','ride','wet'];
-export const newStatus=()=>({inv:[],sel:-1,bait:null,hp:100,cold:0,breath:1,fed:0,warm:0,rested:0,prov:0,torch:0,tent:null,hold:null,cartH:-1,ride:-1,wet:0});
+export const NEW_EQ=()=>({gear:{},fuel:0,energy:100,anchor:0,anchorAt:null,anchorT:0,drogue:0,lamp:1,marks:[],beacons:[],traps:[],chum:[],rattle:0,flare:null,decoy:null,tether:0,gullsOff:0,treasure:{},photos:{},fightId:0});
+export const PLAYER_STATUS=['inv','bait','breath','fed','prov','torch','hold','cartH','ride'];
+export const newStatus=()=>({inv:[],sel:-1,bait:null,breath:1,fed:0,prov:0,torch:0,hold:null,cartH:-1,ride:-1});
 // lugares do equipamento instalado no convés (coordenadas do barco) e o tamanho do modelo
-const MOUNTS={motor:[.42,.62,-3.62,.95,Math.PI],propeller:[.42,.08,-4.05,.34,0],rudder:[-.42,.3,-3.72,.75,Math.PI],anchor:[.34,.1,3.78,.62,Math.PI/2],winch:[-.32,.1,3.7,.46,0],sonar:[-.42,.83,-2.84,.36,Math.PI],radio:[.44,.83,-2.84,.32,Math.PI],barometer:[.62,.9,-2.2,.3,-Math.PI/2],battery:[.55,-.07,-2.1,.34,-Math.PI/2],pump:[-.58,-.07,-1.5,.4,Math.PI/2],lantern:[-.5,.83,2.28,.34,0],drogue:[-.55,-.07,-3.2,.42,0]};
+const MOUNTS={motor:[.42,.62,-3.62,.95,Math.PI],propeller:[.42,.08,-4.05,.34,0],rudder:[-.42,.3,-3.72,.75,Math.PI],anchor:[.34,.1,3.78,.62,Math.PI/2],winch:[-.32,.1,3.7,.46,0],sonar:[-.42,.83,-2.84,.36,Math.PI],radio:[.44,.83,-2.84,.32,Math.PI],barometer:[.62,.9,-2.2,.3,-Math.PI/2],battery:[.55,-.07,-2.1,.34,-Math.PI/2],lantern:[-.5,.83,2.28,.34,0],drogue:[-.55,-.07,-3.2,.42,0]};
 const BOAT_TARGET={anchor:40,drogue:41,lantern:42};
 const SPECIES_WATER=['fish','junk','treasure','special'];
 export class Gear {
@@ -45,11 +46,9 @@ export class Gear {
   // ================= barco =================
   boatLimits(){const eq=this.eq,g=eq.gear,L={top:5,accel:1,turn:g.rudder?1.35:1,drift:1,drag:0,stable:1};
     if(g.motor&&eq.fuel>0){L.top=8.5;L.accel=1.6;}if(g.propeller)L.top*=1.08;
-    if(eq.bilge>40)L.top*=1-(eq.bilge-40)/60*.6;if(eq.flooded)L.top=g.rudder?1.6:0;
     if(eq.anchor===1){L.top=Math.min(L.top,.3);L.drift=0;L.stable=.45;}if(eq.drogue){L.top=Math.min(L.top,2);L.drift*=.2;L.stable*=.5;}
     const b=this.c.boatState;if(!g.propeller&&this.inWeeds(b.x,b.z))L.drag=1.6;return L;}
   burn(dt,speed){const eq=this.eq;if(eq.gear.motor&&eq.fuel>0&&speed>.5){eq.fuel=Math.max(0,eq.fuel-dt*(.12+.5*speed/8.5));if(eq.fuel<=0)this.c.stateEvent('gear',{k:'nofuel'});}}
-  damageBoat(amount){const eq=this.eq;eq.hull=clamp(eq.hull-amount,0,100);eq.bilge=clamp(eq.bilge+amount*.6,0,100);}
   inWeeds(x,z){return (this.weeds||[]).some(w=>Math.hypot(w.x-x,w.z-z)<w.r);}
   stability(){const eq=this.eq;return (eq.anchor===1?.45:1)*(eq.drogue?.5:1);}
   // ================= água: nadar, mergulhar, tesouros =================
@@ -60,8 +59,7 @@ export class Gear {
     const fins=invHas(p,'fins'),speed=1.15*(fins?2.6:1)*(invHas(p,'vest')?1.15:1)*(p.breath<=0?.5:1),maxDepth=fins?5:2.8;
     const surf=C.waterAt(T.x,T.z),under=T.y<surf-.55,dive=!!i.dive&&p.breath>0;
     if(!pulled){if(len>.1||dive)C.ragdolls.pull.set(p.id,{x:T.x+(len>.1?mx/len*3:0),z:T.z+(len>.1?mz/len*3:0),speed:len>.1?speed:0,depth:dive?maxDepth:0,float:invHas(p,'vest')?.12:0});else C.ragdolls.pull.delete(p.id);}
-    const maxB=invHas(p,'oxygen')?75:12;if(under){p.breath=Math.max(0,p.breath-dt/maxB);if(p.breath<=0)p.hp=Math.max(1,p.hp-dt*4);}else p.breath=Math.min(1,p.breath+dt/3);
-    p.wet=20;
+    const maxB=invHas(p,'oxygen')?75:12;if(under)p.breath=Math.max(0,p.breath-dt/maxB);else p.breath=Math.min(1,p.breath+dt/3);
     // tesouro no fundo: mergulhe perto do brilho
     if(under)this.treasures.forEach((s,k)=>{if(eq.treasure[k]>C.elapsed)return;if(Math.hypot(s.x-T.x,s.z-T.z)<2.6){eq.treasure[k]=C.elapsed+240;const r=Math.random(),sp=r<.05?24:r<.2?22:r<.4?21:r<.7?20:23;const kg=CATCHES[sp].kg[0];C.world.bucket.push([sp,kg,0]);C.stateEvent('gear',{k:'treasure',id:p.id,sp,at:[s.x,surf,s.z]});}});
     // subir: ESPAÇO perto do casco ou de chão firme
@@ -71,21 +69,16 @@ export class Gear {
   hostTick(dt){const C=this.c,eq=this.eq,t=C.elapsed,g=eq.gear,storm=C.storm(),b=C.boatState;
     const driving=C.players.some(p=>p.mode==='drive'),elec=(g.sonar?.35:0)+(g.radio?.12:0);
     eq.energy=clamp(eq.energy-elec*(g.battery?1/3:1)*dt+(driving&&Math.abs(b.speed)>.8?1.5:0)*dt+(C.docked()?3:0)*dt,0,100);
-    eq.bilge=clamp(eq.bilge+(storm*.2+(100-eq.hull)*.003-(g.pump?3:0)-(C.docked()?1:0))*dt,0,100);
-    if(!eq.flooded&&eq.bilge>=90){eq.flooded=1;C.stateEvent('gear',{k:'flooded',on:1});}if(eq.flooded&&eq.bilge<70){eq.flooded=0;C.stateEvent('gear',{k:'flooded',on:0});}
     if(eq.anchor===2&&t>eq.anchorT){eq.anchor=0;eq.anchorAt=null;C.stateEvent('gear',{k:'anchor',on:0});}
     if(eq.anchor===1&&eq.anchorAt){const dx=b.x-eq.anchorAt[0],dz=b.z-eq.anchorAt[1],d=Math.hypot(dx,dz);if(d>3){b.x-=dx/d*(d-3);b.z-=dz/d*(d-3);b.speed*=.5;}}
     if(eq.drogue&&!driving){const want=Math.atan2(WAVES[0][0],WAVES[0][1]);b.heading+=angDiff(want,b.heading)*dt*.25;}
     eq.chum=eq.chum.filter(c=>c.until>t);if(eq.decoy&&eq.decoy.until<t)eq.decoy=null;if(eq.flare&&t-eq.flare.at>60)eq.flare=null;
     for(const p of C.players){if(p.mode==='gone')continue;
-      p.fed=Math.max(0,(p.fed||0)-dt);p.warm=Math.max(0,(p.warm||0)-dt);p.rested=Math.max(0,(p.rested||0)-dt);p.prov=Math.max(0,(p.prov||0)-dt);p.wet=Math.max(0,(p.wet||0)-dt);
-      const pw=C.worldOf(p),home=p.land&&Math.hypot(pw.x-ISLAND.x,pw.z-ISLAND.z)<ISLAND.size*.5,indoor=p.land&&Math.abs(pw.x-ISLAND.x)<SHOP.u1&&pw.z-ISLAND.z>SHOP.v0&&pw.z-ISLAND.z<SHOP.v1;
-      if(p.mode!=='ragdoll'){p.hp=clamp((p.hp??100)+((home?1.5:0)+(p.fed>0?.5:0))*dt,0,100);if(!p.water)p.breath=Math.min(1,(p.breath??1)+dt/3);}
-      const chill=(indoor||p.warm>0||p.fed>0)?-3:storm>.4?storm*1.1:p.wet>0?.8:-1.5;p.cold=clamp((p.cold||0)+chill*dt,0,100);}
+      p.fed=Math.max(0,(p.fed||0)-dt);p.prov=Math.max(0,(p.prov||0)-dt);if(!p.water)p.breath=Math.min(1,(p.breath??1)+dt/3);}
   }
   // velocidade de quem anda (frio, ferido, refeição, descanso, provisão)
-  speedMul(p){let k=1;if((p.cold||0)>60)k*=.8;if((p.hp??100)<35)k*=.8;if(p.fed>0)k*=1.15;if(p.rested>0)k*=1.1;if(p.prov>0)k*=1.12;if(p.warm>0)k*=1.1;return k;}
-  canRun(p){return (p.cold||0)<=60;}
+  speedMul(p){let k=1;if(p.fed>0)k*=1.15;if(p.prov>0)k*=1.12;return k;}
+  canRun(){return true;}
   // ================= anfitrião: usar item =================
   hostInput(p,i){const C=this.c;if(i.sel!==undefined&&i.sel>=-1)p.sel=i.sel;if(!i.use)return;const e=(p.inv||[])[p.sel];if(!e)return;const id=e[0],it=ITEMS[id];if(!USABLE.has(id))return;
     p.cool2=p.cool2||{};if((p.cool2[id]||0)>C.elapsed)return;p.cool2[id]=C.elapsed+(it.cool||.4);this.use(p,id,i);}
@@ -107,14 +100,10 @@ export class Gear {
         else if(code===2){const q=C.players.find(q=>{const g=C.fishing[q.id];return g?.phase==='reeling'&&['epico','lendario'].includes(CATCHES[g.species]?.tier);});if(q){const g=C.fishing[q.id],k2=key+'f'+q.id+':'+g.caught;if(!eq.photos[k2]){eq.photos[k2]=1;reward=60;}what=CATCHES[g.species].name;}}
         else if(code===3&&C.world.trig&&C.story>=CONFIG.asteroidAt&&C.story<CONFIG.impactAt){if(!eq.photos[key+'m']){eq.photos[key+'m']=1;reward=500;}what='o meteoro';}
         if(reward){C.world.money=Math.round((C.world.money+reward)*100)/100;}ev('photo',{reward,what,money:C.world.money});return;}
-      case 'repair':if(p.land){say('Use o kit a bordo.');return;}if(C.fight?.alive){say('Não dá para consertar o casco no meio da luta!');return;}if(eq.hull>=100){say('O casco está inteiro.');return;}eq.hull=Math.min(100,eq.hull+40);consume(p,id);ev('repair');return;
       case 'fuel':if(!eq.gear.motor){say('Instale o Motor Rabeta-40 primeiro.');return;}if(p.land){say('Abasteça a bordo.');return;}if(eq.fuel>=100){say('Tanque cheio.');return;}eq.fuel=Math.min(100,eq.fuel+50);consume(p,id);ev('fuel');return;
       case 'torch':p.torch=p.torch?0:1;ev('torch',{on:p.torch});return;
-      case 'flask':p.cold=0;p.breath=1;p.warm=90;consume(p,id);ev('flask');return;
       case 'stove':{const k=C.world.bucket.map((q,j)=>[q,j]).reverse().find(([q])=>CATCHES[q[0]]?.kind==='fish'||CATCHES[q[0]]?.kind==='crustacean');if(!k){say('Pesque algo para cozinhar.');return;}C.world.bucket.splice(k[1],1);const v=catchValue(k[0][0],k[0][1]),dur=Math.round(Math.min(300,60+v*4));
-        let n=0;for(const q of C.players){if(q.mode==='gone')continue;if(C.worldOf(q).distanceTo(pw)<8){q.fed=Math.max(q.fed||0,dur);q.hp=Math.min(100,(q.hp??100)+20);q.cold=0;n++;}}ev('cook',{sp:k[0][0],dur,n,at:pw.toArray()});return;}
-      case 'medkit':if((p.hp??100)>=100){say('Você está inteiro.');return;}p.hp=Math.min(100,(p.hp??100)+60);consume(p,id);ev('medkit');return;
-      case 'tent':{if(!aim||aimWater||dist>7||C.ground(aim.x,aim.z)<.1){say('Mire num chão firme em terra, perto de você.');return;}const yaw=C.worldYaw(p)+Math.PI;p.tent=[+aim.x.toFixed(2),+C.ground(aim.x,aim.z).toFixed(2),+aim.z.toFixed(2),+yaw.toFixed(2)];ev('tent',{at:aim.toArray()});return;}
+        let n=0;for(const q of C.players){if(q.mode==='gone')continue;if(C.worldOf(q).distanceTo(pw)<8){q.fed=Math.max(q.fed||0,dur);n++;}}ev('cook',{sp:k[0][0],dur,n,at:pw.toArray()});return;}
       case 'chum':if(!aimWater||dist>20){say('Jogue a ceva na água, até 20 m.');return;}eq.chum.push({x:aim.x,z:aim.z,r:10,until:t+120});consume(p,id);ev('chum',{at:aim.toArray()});return;
       case 'rattle':{if(C.world.nessie&&!C.fight?.alive){const d=Math.hypot(C.boatState.x-ISLAND.x,C.boatState.z-ISLAND.z);if(d<60){say('Perto demais de Laguna: afaste o barco a 60 m da ilha.');return;}consume(p,id);ev('rattle',{nessie:1});C.summonNessie();return;}
         eq.rattle=t+90;consume(p,id);ev('rattle',{nessie:0});return;}
@@ -124,16 +113,16 @@ export class Gear {
     }}
   // ================= alvos no mundo (E) =================
   targets(){const out=[];for(const [id,code]of Object.entries(BOAT_TARGET)){const m=this.mounts[id];if(m&&m.visible)out.push([code,m.userData.hit]);}
-    (this.trapObjs||[]).forEach((o,i)=>{if(o.visible)out.push([50+i,o.userData.hit]);});(this.tentObjs||[]).forEach((o,i)=>{if(o.visible)out.push([30+i,o.userData.hit]);});return out;}
+    (this.trapObjs||[]).forEach((o,i)=>{if(o.visible)out.push([50+i,o.userData.hit]);});return out;}
   pos(code){if(code>=40&&code<=42){const id=Object.keys(BOAT_TARGET).find(k=>BOAT_TARGET[k]===code);return this.mounts[id]?.getWorldPosition(V());}
     if(code>=50&&code<60){const tr=this.eq.traps[code-50];return tr?V(tr.x,this.c.waterAt(tr.x,tr.z),tr.z):null;}
-    if(code>=30&&code<35){const q=this.c.players[code-30];return q?.tent?V(q.tent[0],q.tent[1]+.5,q.tent[2]):null;}return null;}
+    return null;}
   label(code,p){const eq=this.eq,t=this.c.elapsed;
     if(code===40)return eq.anchor===1?[eq.gear.winch?'Recolher a âncora (guincho)':'Recolher a âncora (3,5 s)',1]:eq.anchor===2?['Recolhendo…',0]:['Lançar a âncora',1];
     if(code===41)return [eq.drogue?'Recolher a âncora de deriva':'Lançar a âncora de deriva',1];
     if(code===42)return [eq.lamp?'Apagar o lampião':'Acender o lampião',1];
     if(code>=50&&code<60){const tr=eq.traps[code-50];if(!tr)return null;const n=Math.min(4,Math.floor((t-tr.t)/45));return n>0?[`Puxar a armadilha (${n} ${n===1?'crustáceo':'crustáceos'})`,1]:[`Armadilha vazia · próxima em ${Math.ceil(45-(t-tr.t)%45)} s · E recolhe`,1];}
-    if(code>=30&&code<35)return [(code-30===p.id?'Sua barraca':'Barraca')+' · descansar',1];return null;}
+    return null;}
   interact(p,code){const C=this.c,eq=this.eq,t=C.elapsed;if(!(code>=30&&code<60))return false;const at=this.pos(code);if(!at||at.distanceTo(C.worldOf(p,1.2))>4)return true;
     if(code===40){if(eq.anchor===0){eq.anchor=1;eq.anchorAt=[C.boatState.x,C.boatState.z];C.boatState.speed*=.2;C.stateEvent('gear',{k:'anchor',on:1,id:p.id});}else if(eq.anchor===1){if(eq.gear.winch){eq.anchor=0;eq.anchorAt=null;C.stateEvent('gear',{k:'anchor',on:0,id:p.id});}else{eq.anchor=2;eq.anchorT=t+3.5;C.stateEvent('gear',{k:'anchor',on:2,id:p.id});}}return true;}
     if(code===41){eq.drogue=eq.drogue?0:1;C.stateEvent('gear',{k:'drogue',on:eq.drogue,id:p.id});return true;}
@@ -141,7 +130,7 @@ export class Gear {
     if(code>=50&&code<60){const i=code-50,tr=eq.traps[i];if(!tr)return true;let n=Math.min(4,Math.floor((t-tr.t)/45));
       if(n<=0){if(cannotAdd(p,'trap',eq.gear)){C.toastFor(p.id,'Mochila cheia para recolher a armadilha.');return true;}eq.traps.splice(i,1);addItem(p,'trap',eq.gear);C.stateEvent('gear',{k:'trapBack',id:p.id});return true;}
       if(eq.gear.winch&&!p.land)n++;const got=[];for(let k=0;k<n;k++){const sp=CATCHES.findIndex(c=>c.name===(Math.random()<.4?'Lagosta':'Caranguejo-azul')),c=CATCHES[sp],kg=Math.round((c.kg[0]+Math.random()*(c.kg[1]-c.kg[0]))*100)/100;C.world.bucket.push([sp,kg,0]);got.push(sp);}tr.t=t;C.stateEvent('gear',{k:'haul',id:p.id,got,at:[tr.x,0,tr.z]});return true;}
-    if(code>=30&&code<35){p.hp=100;p.cold=0;p.rested=120;p.breath=1;C.stateEvent('gear',{k:'rest',id:p.id});return true;}return true;}
+    return true;}
   // ================= cliente: controles =================
   localControls(controls,dt,input){const C=this.c,p=C.me();if(!p)return;const inv=p.inv||[];
     if(controls.slot>=0){const s=controls.slot;this.sel=this.sel===s?-1:s;if(this.sel>=inv.length)this.sel=-1;this.onSel();}
@@ -177,14 +166,10 @@ export class Gear {
       case 'mark':C.sound.effect('click',{pos});if(mine)C.toast('Ponto marcado no sextante. Aparece na bússola e na carta para todos.');break;
       case 'beacon':C.sound.effect('plop',{pos:at});if(mine)C.toast('Boia sinalizadora na água: ela pisca e aparece para toda a tripulação.');break;
       case 'photo':C.sound.effect('shutter',{pos});if(mine){this.flashT=.35;if(e.reward){C.world.money=e.money;C.moneyPop('+'+money(e.reward));C.toast(`Foto de ${e.what}! A revista Mistérios do Lago pagou ${money(e.reward)}.`);}else C.toast(e.what?`Foto de ${e.what} (já vendida para a revista).`:'Belo retrato. Ninguém paga por isso.');}break;
-      case 'repair':if(mine)C.toast('Casco remendado: +40%.');break;
       case 'fuel':if(mine)C.toast('Tanque abastecido: +50%.');break;
       case 'torch':C.sound.effect('click',{pos});if(mine)C.toast(e.on?'Lanterna acesa: aponte para a água para ver tesouros, cardumes e silhuetas.':'Lanterna apagada.');break;
-      case 'flask':if(mine)C.toast('Um gole quente: sem frio, fôlego cheio e aquecido por 90 s.');break;
       case 'cook':{C.sound.effect('sizzle',{pos:at});for(let k=0;k<30;k++)C.fx.spray.emit(C.elapsed,at.x+(Math.random()-.5)*.3,at.y-.2,at.z+(Math.random()-.5)*.3,(Math.random()-.5)*.3,.6+Math.random()*.6,(Math.random()-.5)*.3,1.6,1.2,-.05,.08,.3,1);
         C.toast(`${CATCHES[e.sp]?.name||'Peixe'} na brasa! Refeição para ${e.n} ${e.n===1?'pescador':'pescadores'}: ${Math.round(e.dur/60*10)/10} min de +15% velocidade e pesca.`);break;}
-      case 'medkit':if(mine)C.toast('Curativo feito: +60 de vida.');break;
-      case 'tent':C.sound.effect('tent',{pos:at});if(mine)C.toast('Barraca armada: se você se afogar, acorda aqui. E nela descansa.');break;
       case 'chum':C.sound.effect('plop',{pos:at});if(mine)C.toast('Ceva na água: um cardume fica por aqui 2 minutos.');this.splashAt(at,20);break;
       case 'rattle':C.sound.effect('rattle',{pos});C.toast(e.nessie?'O chocalho ecoa no abismo… ALGO RESPONDEU.':'Vibrações no fundo: lendários ×4 e épicos ×2 por 90 s.');break;
       case 'decoy':C.sound.effect('plop',{pos:at});this.splashAt(at,16);C.toast('Chamariz na água! A Nessie vai atrás dele e as gaivotas somem.');break;
@@ -192,13 +177,11 @@ export class Gear {
       case 'trap':C.sound.effect('plop',{pos:at});this.splashAt(at,14);if(mine)C.toast('Armadilha no fundo. A cada 45 s pega um crustáceo (até 4). E na boia puxa.');break;
       case 'trapBack':if(mine)C.toast('Armadilha recolhida para a mochila.');C.sound.effect('pick',{pos});break;
       case 'haul':{C.sound.effect('splash',{pos:at});this.splashAt(at,24);if(mine){const names=e.got.map(s=>CATCHES[s].name);C.toast(`Armadilha: ${names.join(', ')} para o balde!`);C.showCard?.(e.got[0],CATCHES[e.got[0]].kg[1]);}break;}
-      case 'rest':if(mine){C.fade?.(1.2);C.toast('Descansou na barraca: vida cheia, sem frio e +10% de velocidade por 2 min.');}break;
       case 'treasure':{C.sound.effect('reveal',{tier:3,pos:at});this.splashAt(at,20);if(mine){C.showCard?.(e.sp,CATCHES[e.sp].kg[0]);C.toast(`Tesouro submerso! ${CATCHES[e.sp].name} foi para o balde.`);}break;}
       case 'anchor':C.sound.effect(e.on===2?'winch':'anchor',{pos:this.mounts.anchor?.getWorldPosition(V())});C.toast(e.on===1?'Âncora no fundo: o barco não deriva e balança menos.':e.on===2?'Recolhendo a âncora…':'Âncora recolhida.');break;
       case 'drogue':C.sound.effect('splash',{pos:this.mounts.drogue?.getWorldPosition(V())});C.toast(e.on?'Âncora de deriva na água: o barco segura a proa nas ondas.':'Âncora de deriva recolhida.');break;
       case 'lamp':C.sound.effect('click');break;
       case 'nofuel':C.toast('O Motor Rabeta-40 ficou sem combustível. Voltando ao motor antigo.');break;
-      case 'flooded':C.toast(e.on?'PORÃO ALAGADO! O motor afogou. '+(this.eq.gear.pump?'A bomba está tirando água…':'Sem bomba: só atracado a água sai.'):'O porão secou o bastante: motor funcionando.');if(e.on)C.sound.effect('alarm');break;
     }}
   splashAt(at,n){if(at)this.c.fx.splash(at,n,.8);}
   // ================= cliente: visual =================
@@ -221,7 +204,6 @@ export class Gear {
     this.beaconObjs=[];this.trapObjs=[];this.tentObjs=[];this.markObjs=[];
     this.tetherLine=new THREE.Line(new THREE.BufferGeometry().setFromPoints(Array.from({length:24},()=>V())),new THREE.LineBasicMaterial({color:0x3a2a1a}));this.tetherLine.frustumCulled=false;this.tetherLine.visible=false;scene.add(this.tetherLine);
     this.decoyObj=null;this.flareObj=new THREE.Sprite(new THREE.SpriteMaterial({map:C.flareTex(),color:new THREE.Color(4,1,.6),transparent:true,depthWrite:false,blending:THREE.AdditiveBlending}));this.flareObj.scale.setScalar(4);this.flareObj.visible=false;scene.add(this.flareObj);
-    this.deckWater=new THREE.Mesh(new THREE.PlaneGeometry(1.5,6.6,1,1).rotateX(-Math.PI/2),new THREE.MeshStandardMaterial({color:0x2a5a6a,transparent:true,opacity:.7,roughness:.1,metalness:.2}));this.deckWater.visible=false;C.boat.add(this.deckWater);
     this.buildHud();}
   mini(id,size){return this.c.market.mini(id,size);}
   beaconModel(){const g=new THREE.Group(),m=this.mini('beacon',.9);g.add(m);const s=new THREE.Sprite(new THREE.SpriteMaterial({map:this.c.flareTex(),color:new THREE.Color(3,1.6,.3),transparent:true,depthWrite:false,blending:THREE.AdditiveBlending}));s.position.y=.85;s.scale.setScalar(1.6);g.add(s);g.userData.blink=s;return g;}
@@ -233,15 +215,12 @@ export class Gear {
     if(this.mounts.drogue)this.mounts.drogue.visible=!!eq.gear.drogue&&!eq.drogue;
     const lampOn=eq.gear.lantern&&eq.lamp;this.lampLight.intensity=lampOn?(6+C.storm()*6)*(.92+Math.sin(t*23)*.05):0;if(this.mounts.lantern)this.mounts.lantern.getWorldPosition(this.lampLight.position).add(V(0,.4,0));
     // água no porão
-    const bl=eq.bilge/100;this.deckWater.visible=bl>.04;this.deckWater.position.set(0,CONFIG.deckY-.08+bl*.3,0);this.deckWater.scale.set(1,1,1);
     // boias sinalizadoras
     while(this.beaconObjs.length<eq.beacons.length){const o=this.beaconModel();scene.add(o);this.beaconObjs.push(o);}
     this.beaconObjs.forEach((o,i)=>{const b=eq.beacons[i];o.visible=!!b;if(!b)return;o.position.set(b[0],C.waterAt(b[0],b[1])-.25,b[1]);o.rotation.z=Math.sin(t*1.3+i)*.1;o.userData.blink.material.opacity=Math.sin(t*5+i)>.2?1:.05;});
     // armadilhas: boia laranja com a corda
     while(this.trapObjs.length<eq.traps.length){const g=new THREE.Group(),buoy=new THREE.Mesh(new THREE.SphereGeometry(.2,16,12),new THREE.MeshStandardMaterial({color:0xff6a1a,roughness:.4}));g.add(buoy);const flag=new THREE.Mesh(new THREE.BoxGeometry(.02,.5,.02),new THREE.MeshStandardMaterial({color:0x222222}));flag.position.y=.35;g.add(flag);const hit=new THREE.Mesh(new THREE.SphereGeometry(.6,8,6),new THREE.MeshBasicMaterial({visible:false}));g.add(hit);g.userData.hit=hit;scene.add(g);this.trapObjs.push(g);}
     this.trapObjs.forEach((o,i)=>{const tr=eq.traps[i];o.visible=!!tr;if(tr)o.position.set(tr.x,C.waterAt(tr.x,tr.z)+.05,tr.z);});
-    // barracas
-    C.players.forEach((q,i)=>{let o=this.tentObjs[i];if(q.tent&&!o){o=new THREE.Group();o.add(this.mini('tent',1.6));const hit=new THREE.Mesh(new THREE.BoxGeometry(1.6,1,1.4),new THREE.MeshBasicMaterial({visible:false}));hit.position.y=.5;o.add(hit);o.userData.hit=hit;scene.add(o);this.tentObjs[i]=o;}if(o){o.visible=!!q.tent&&!C.island.exploded;if(q.tent){o.position.set(q.tent[0],q.tent[1],q.tent[2]);o.rotation.y=q.tent[3];}}});
     // chamariz, sinalizador, corda do arpão
     if(eq.decoy&&!this.decoyObj){this.decoyObj=this.mini('decoy',.9);scene.add(this.decoyObj);}if(this.decoyObj){this.decoyObj.visible=!!eq.decoy;if(eq.decoy){this.decoyObj.position.set(eq.decoy.x,C.waterAt(eq.decoy.x,eq.decoy.z)-.1,eq.decoy.z);this.decoyObj.rotation.y+=dt*1.5;}}
     const fl=eq.flare,fk=fl?t-fl.at:99;this.flareObj.visible=fk<15;this.flareLight.intensity=fk<15?(1-fk/15)*900*(.8+Math.random()*.3):0;if(fk<15){const y=fl.y+Math.min(fk,1.2)*38-Math.max(0,fk-1.2)*1.6;this.flareObj.position.set(fl.x,y,fl.z);this.flareLight.position.copy(this.flareObj.position);if(Math.random()<.5)C.fx.spray.emit(t,fl.x,y,fl.z,(Math.random()-.5)*.4,-.5,(Math.random()-.5)*.4,1.5,1,-.02,.3,1.2,1);}
@@ -278,16 +257,16 @@ export class Gear {
     const shelf=C.hover&&C.hover.code>=100?ITEMS[C.showroom?.slots[C.hover.code-100]?.id]:null,held=p.hold?ITEMS[p.hold.id]:null,show=shelf||held||(it&&(this.tipT>0||USABLE.has(e[0])));
     const ti=shelf||held||it;const tk=ti?ti.id+(shelf?'s':held?'h':'i')+(held?p.hold.s:''):'';if(tk!==this.tipKey){this.tipKey=tk;if(ti)this.tip.innerHTML=`<img src="${this.icon(ti.id)}"><div><b>${ti.name}</b><i>${ti.category}${ti.price?' · '+money(ti.price):''}${held?(p.hold.s===2?' · PAGO':p.hold.s===1?' · no leitor':' · NÃO PAGO'):''}</i><p>${ti.description}</p><p class="rule">${ti.rule}</p>${!shelf&&!held&&USABLE.has(ti.id)?'<small>BOTÃO ESQUERDO usa · 1–0 ou rodinha troca</small>':''}</div>`;}
     this.tip.classList.toggle('show',!!show);
-    // status do pescador
-    const hp=p.hp??100,cold=p.cold||0,buffs=[];if(p.fed>0)buffs.push(['🍲',p.fed]);if(p.warm>0)buffs.push(['☕',p.warm]);if(p.rested>0)buffs.push(['⛺',p.rested]);if(p.prov>0)buffs.push(['🥩',p.prov]);if(eq.rattle>T)buffs.push(['📳',eq.rattle-T]);
-    const sk=[Math.round(hp),Math.round(cold),Math.round((p.breath??1)*20),p.water?1:0,p.bait,buffs.map(b=>b[0]+Math.ceil(b[1])).join()].join('/');if(sk!==this.statusKey){this.statusKey=sk;
-      this.status.innerHTML=`<div class="st hp${hp<35?' low':''}"><i style="width:${hp}%"></i><span>VIDA ${Math.round(hp)}${hp<35?' · FERIDO':''}</span></div>${cold>5?`<div class="st cold${cold>60?' low':''}"><i style="width:${cold}%"></i><span>FRIO ${Math.round(cold)}%${cold>60?' · sem correr':''}</span></div>`:''}${p.water||(p.breath??1)<1?`<div class="st air"><i style="width:${(p.breath??1)*100}%"></i><span>FÔLEGO</span></div>`:''}${p.bait?`<div class="chip">🪝 ${ITEMS[p.bait]?.name} · ${invUses(p,p.bait)}</div>`:''}${buffs.map(([i,s])=>`<div class="chip">${i} ${Math.ceil(s)} s</div>`).join('')}`;}
-    this.status.hidden=hp>=99.5&&cold<=5&&!p.water&&!p.bait&&!buffs.length&&(p.breath??1)>=1;
-    // painel do barco
-    const onBoat=!p.land||p.mode==='drive',g=eq.gear,bk=[Math.round(eq.hull),Math.round(eq.bilge),Math.round(eq.fuel),Math.round(eq.energy),eq.anchor,eq.drogue,eq.flooded,g.motor,g.sonar||g.radio].join();
+    // status do pescador: só fôlego (mergulho), isca e bônus
+    const buffs=[];if(p.fed>0)buffs.push(['🍲',p.fed]);if(p.prov>0)buffs.push(['🥩',p.prov]);if(eq.rattle>T)buffs.push(['📳',eq.rattle-T]);const air=p.breath??1;
+    const sk=[Math.round(air*20),p.water?1:0,p.bait,invUses(p,p.bait),buffs.map(b=>b[0]+Math.ceil(b[1])).join()].join('/');if(sk!==this.statusKey){this.statusKey=sk;
+      this.status.innerHTML=`${p.water||air<1?`<div class="st air"><i style="width:${air*100}%"></i><span>FÔLEGO</span></div>`:''}${p.bait?`<div class="chip">🪝 ${ITEMS[p.bait]?.name} · ${invUses(p,p.bait)}</div>`:''}${buffs.map(([i,s])=>`<div class="chip">${i} ${Math.ceil(s)} s</div>`).join('')}`;}
+    this.status.hidden=!p.water&&!p.bait&&!buffs.length&&air>=1;
+    // painel do barco: combustível, energia, âncora e deriva
+    const onBoat=!p.land||p.mode==='drive',g=eq.gear,bk=[Math.round(eq.fuel),Math.round(eq.energy),eq.anchor,eq.drogue,g.motor,g.sonar||g.radio].join();
     if(bk!==this.boatKey){this.boatKey=bk;const bar=(l,v,c,warn)=>`<div class="bb${warn?' warn':''}"><span>${l}</span><i><em style="width:${v}%;background:${c}"></em></i><b>${Math.round(v)}%</b></div>`;
-      this.boatBox.innerHTML=bar('CASCO',eq.hull,'#6fd07a',eq.hull<40)+bar('PORÃO',eq.bilge,'#4fa8ff',eq.bilge>50)+(g.motor?bar('COMBUSTÍVEL',eq.fuel,'#ffb627',eq.fuel<15):'')+(g.sonar||g.radio?bar('ENERGIA',eq.energy,'#b98cff',eq.energy<15):'')+`<div class="flags">${eq.anchor===1?'⚓ ancorado':eq.anchor===2?'⚓ recolhendo…':''}${eq.drogue?' · 🪂 deriva':''}${eq.flooded?' · <b>MOTOR AFOGADO</b>':''}</div>`;}
-    this.boatBox.hidden=!(onBoat&&(eq.hull<100||eq.bilge>1||Object.keys(g).length));
+      this.boatBox.innerHTML=(g.motor?bar('COMBUSTÍVEL',eq.fuel,'#ffb627',eq.fuel<15):'')+(g.sonar||g.radio?bar('ENERGIA',eq.energy,'#b98cff',eq.energy<15):'')+`<div class="flags">${eq.anchor===1?'⚓ ancorado':eq.anchor===2?'⚓ recolhendo…':''}${eq.drogue?' · 🪂 deriva':''}</div>`;}
+    this.boatBox.hidden=!(onBoat&&(g.motor||g.sonar||g.radio||eq.anchor||eq.drogue));
     // instrumentos
     const hasSonar=g.sonar&&eq.energy>0,hasChart=invHas(p,'chart');this.sonar.hidden=!hasSonar;this.chart.hidden=!hasChart;if(hasSonar&&C.frame%3===0)this.drawSonar(t);if(hasChart&&C.frame%6===0)this.drawChart();
     this.compass.hidden=!invHas(p,'compass');if(!this.compass.hidden&&C.frame%6===0)this.drawCompass();

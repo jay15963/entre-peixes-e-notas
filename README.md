@@ -25,6 +25,9 @@ Abra o endereço informado pelo Vite. **Testar sozinho** inicia o teste solo. O 
 | Atirar (com rifle) | Botão esquerdo |
 | Usar o que está na mira (leme, rifle, balde, corda, violão, peixaria, padeiro, caixas): o aviso "E" aparece em cima do objeto · largar o que está na mão | E |
 | Girar o laço e soltar (com a corda) | Botão esquerdo, duas vezes |
+| Barra de itens: escolher · usar o item escolhido | 1–0 ou rodinha · botão esquerdo |
+| Passar o item no leitor do autoatendimento | segurar E olhando o leitor |
+| Nadar · mergulhar · subir no barco ou no cais (na água) | WASD · Shift · Espaço |
 | Tocar o violão | D F J K |
 | Espantar a gaivota que agarrou o balde (segurar) | F |
 | Lançar, fisgar e recolher (segurar) | F |
@@ -59,7 +62,8 @@ Andar pela borda do barco não derruba ninguém na água: a borda é uma parede.
 
 - **Deriva:** sem ninguém no leme e sem corda, o barco anda sozinho com o mar. Na tempestade ele vai longe.
 - **Atracar:** a corda fica enrolada na proa. Com ela na mão, mire num cabeço do cais e clique: o laço começa a girar sobre a cabeça. Clique de novo quando o laço estiver na frente (faixa verde). Quanto mais longe, menor a faixa, até o limite de 24 m. Acertando, a corda voa em arco e amarra no cabeço, com física de corda. **E** no cunho da proa ou no cabeço solta de novo.
-- **Morrer e reviver:** o tapa só derruba, e a pessoa levanta onde caiu. Cair no mar é o que conta: o corpo ainda voa no primeiro contato com a água e depois fica boiando. Quem está à deriva tem **20 segundos** (barra na tela) para ser laçado com o mesmo minigame da corda. Laçado, é puxado até quem segura a corda e levanta no barco. Se ninguém laçar a tempo, acorda no cais de Laguna.
+- **Morrer e reviver:** o tapa só derruba, e a pessoa levanta onde caiu. Cair no mar é o que conta: o corpo ainda voa no primeiro contato com a água e depois fica boiando. Quem está à deriva tem **20 segundos** (barra na tela) para ser laçado com o mesmo minigame da corda. Laçado, é puxado até quem segura a corda e levanta no barco. Se ninguém laçar a tempo, acorda no cais de Laguna. Dá também para nadar sozinho até o casco, o cais ou a praia e subir com Espaço. Não existe vida nem frio: o único jeito de "morrer" é ficar à deriva.
+- **Barco abandonado:** se ninguém estiver a bordo por 10 s e o barco estiver longe do cais, ele reaparece amarrado no cais.
 
 ## Pesca
 
@@ -105,8 +109,23 @@ As gaivotas circulam bem alto e **não podem ser atingidas** enquanto circulam. 
 Nada acontece sozinho: o clima fica calmo até o anfitrião segurar **TAB** e escolher um evento.
 
 - **Tempestade:** vento, chuva, raios e ondas grandes por uns 2 minutos (clique de novo para acalmar).
-- **Nessie:** a Matriarca do Abismo desperta em mar aberto quando o barco se afasta da ilha. São três estágios (A Espreita, A Fúria e A Matriarca Ferida, com céu vermelho e olhos em brasa), 3.000 de vida e nove ataques sem aviso: investidas, golpe de cauda, jato d'água, redemoinho, mordida de baixo para cima, muralha d'água e chuva de espinhos. Os rifles são a arma: olhos ×5, garganta ×3, guelras ×2, corpo ×1 e espinhos ×0,25. Os golpes jogam a tripulação no mar (resgate com a corda). Vencer rende R$ 1.000. O ateliê mostra a luta inteira em funcionamento.
+- **Nessie:** a Matriarca do Abismo desperta em mar aberto quando o barco se afasta da ilha. São três estágios (A Espreita, A Fúria e A Matriarca Ferida, com céu vermelho e olhos em brasa), 1.600 de vida e nove ataques sem marcas na tela (lidos pela animação e pelo som), com pausas curtas entre eles: investidas, golpe de cauda, jato d'água, redemoinho, mordida de baixo para cima, muralha d'água e chuva de espinhos. Os rifles são a arma, e ela é acertável até debaixo d'água: olhos ×5, garganta ×3, guelras ×2, corpo ×1 e espinhos ×0,25. Todo golpe que acerta o barco derruba gente no mar, mas nunca a tripulação inteira: 1 pescador, e o golpe forte derruba até metade (resgate com a corda). Vencer rende R$ 1.000. O ateliê mostra a luta inteira em funcionamento.
 - **Meteoro:** o fim da partida.
+
+## Mercado Althoff e Loja do Pescador
+
+- **Carrinhos (estilo REPO):** ficam no abrigo ao lado da entrada. **E** no puxador pega; ele vai na frente e balança nas curvas. Dá para pegar carona no carrinho de outro pescador (E nele; Espaço desce).
+- **Loja do Pescador:** 45 itens em dois expositores e na vitrine de iscas, cada um com modelo 3D, etiqueta de preço e a regra do que faz (aparece ao olhar). **E** num item joga no carrinho que você empurra, ou pega na mão.
+- **Autoatendimento:** segure **E** olhando o leitor para passar um item por vez (o laser acende e a tela lista tudo). **E** na maquininha paga com o caixa da tripulação; a impressora solta o cupom. Sem saldo, a tela avisa.
+- **A porta não deixa sair nada sem pagar:** nem o carrinho, nem o item na mão.
+- **Depois de pagar:** item pessoal vai direto para a mochila (8 espaços; 12 com a mochila estanque). Equipamento de barco fica no carrinho ou na mão: leve até o barco (ou estacione no cais ao lado) e ele é instalado.
+- **O que os itens fazem:**
+  - pesca: vara (11 m), carretilha, linha, iscas, passaguá, bicheiro, arpão, faca, alicate, balança, sonda, ceva, armadilha de lagosta;
+  - navegação: sonar, rádio, barômetro, bússola, carta náutica, sextante, luneta, boia sinalizadora, câmera (fotos pagas);
+  - barco: motor com combustível, hélice antialgas (há algas perto da ilha), leme, âncora, âncora de deriva, guincho, bateria, lampião;
+  - água: colete, nadadeiras, cilindro de mergulho (tesouros no fundo), lanterna;
+  - Nessie: arpão (prende 8 s), chamariz, chocalho, hidrofone, sinalizador.
+- **Sem vida, frio, casco ou alagamento:** kit médico, garrafa térmica, kit de reparos, bomba de porão e barraca saíram da loja.
 
 ## O fim
 
@@ -120,7 +139,13 @@ O anfitrião é a autoridade sobre barco, pesca, gaivotas, venda, padeiro, tapas
 - **Conexão manual:** para 2 jogadores, sem servidor de salas.
 - **Duas abas:** teste local no mesmo navegador.
 
-A sinalização usa o servidor público do PeerJS e os dados vão direto entre os navegadores (WebRTC com STUN). **Não há servidor TURN**, então redes restritivas podem não conectar: 4G/5G com CGNAT, Wi‑Fi de empresa ou de faculdade. Nesse caso, o convidado agora vê uma mensagem explicando o motivo. Trocar de rede ou pedir para outra pessoa criar a sala costuma resolver. Para funcionar em qualquer rede, seria preciso configurar um servidor TURN.
+A sinalização usa o servidor público do PeerJS e os dados vão direto entre os navegadores (WebRTC com STUN). **Não há servidor TURN.** Ao entrar numa sala, três caminhos correm ao mesmo tempo e vale o primeiro que abrir:
+
+1. **Direto:** quem entra liga para o anfitrião.
+2. **Chamada invertida:** se a ligação não abre em 5 s, o anfitrião liga de volta. Em algumas redes só funciona a ligação que o outro lado começa; era o caso de "ele entra na minha sala, mas eu não entro na dele".
+3. **Ponte:** qualquer convidado já conectado repassa os pacotes e também liga de volta se precisar.
+
+O lobby mostra o diagnóstico da sua rede, por exemplo "NAT comum", "NAT simétrico/CGNAT" ou "muitos adaptadores virtuais".
 
 ## Desempenho
 

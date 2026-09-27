@@ -20,3 +20,10 @@ body.spyglass #crosshair{width:60vh;height:60vh;border-radius:50%;box-shadow:0 0
 body:has(.hotbar:not([hidden])) #fishing{bottom:162px}
 @media(max-width:900px){.hotbar{bottom:76px;gap:3px;max-width:95vw}.hotbar .slot{width:36px;height:40px}.item-tip{right:16px;width:245px;font-size:10px}.item-tip>img{width:42px;height:42px}.item-tip b{font-size:15px}.cart-box{right:16px;bottom:135px;width:225px}.status-box{left:16px;bottom:135px;width:165px}.boat-box{left:16px;width:185px}.instruments{left:16px;bottom:245px}.instruments canvas{width:115px;height:115px}.hydro{right:16px;width:165px}.compass{top:188px;width:250px}.radio,.baro{display:none}#boss-attack{font-size:11px;width:80vw}}
 @media(max-height:700px){.item-tip{top:29%;width:240px}.item-tip p{font-size:10px;line-height:1.35}.cart-box{max-height:32vh}.ci img{width:20px;height:20px}.boat-box{top:180px}.instruments{bottom:240px}.instruments canvas{width:110px;height:110px}.radio,.baro{display:none}}
+body:has(.hotbar:not([hidden])) #talk{bottom:158px}
+/* layout dos instrumentos: coluna da esquerda (barco, barômetro, sonar e carta lado a lado), rádio/bússola/hidrofone no alto */
+.boat-box{top:150px}.baro{left:26px;top:232px;width:218px}.baro span{display:inline;margin-left:8px}
+.instruments{left:26px;top:300px;bottom:auto;flex-direction:row}
+.radio{left:50%;top:12px;transform:translateX(-50%);width:auto;max-width:56vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.compass{top:52px}.hydro{left:50%;right:auto;top:92px;transform:translateX(-50%)}
+body:has(#boss-hud:not([hidden])) .compass{top:122px}body:has(#boss-hud:not([hidden])) .hydro{top:160px}
