@@ -173,7 +173,7 @@ export class NessieFight {
       case 'ram':case 'tripleRam':{if(A.phase===0){settle(A.start,A.heading,1.8);A.pt+=dt;T.y=-6.5;T.lat=.9;
           if(A.pt>=A.warn){A.phase=1;A.pt=0;S.heading=A.heading;this.emit({k:'sfx',n:'roarShort',x:S.x,y:0,z:S.z});}}
         else{A.pt+=dt;S.speed=damp(S.speed,12*k,3,dt);S.x+=Math.sin(S.heading)*S.speed*dt;S.z+=Math.cos(S.heading)*S.speed*dt;T.y=-3.6;T.neckA=.8;T.neckB=.3;T.lat=1.1;T.vert=.35;
-          const head=this.headWorld();if(!A.hit&&Math.hypot(head.x-b.x,head.z-b.z)<4.3){A.hit=true;this.events.push({k:'boatHit',power:1.6,x:S.x,z:S.z});this.emit({k:'splash',x:b.x,z:b.z,n:700,p:1.5,col:11,ring:2.2,s:'slam'});}
+          const head=this.headWorld(),nose=V(S.x+Math.sin(S.heading)*6,0,S.z+Math.cos(S.heading)*6);/* a cabeça do rig só se move quando a luta é desenhada: o focinho calculado garante o acerto no anfitrião */if(!A.hit&&(Math.hypot(head.x-b.x,head.z-b.z)<4.3||Math.hypot(nose.x-b.x,nose.z-b.z)<4.3||Math.hypot(S.x-b.x,S.z-b.z)<4.3)){A.hit=true;this.events.push({k:'boatHit',power:1.6,x:S.x,z:S.z});this.emit({k:'splash',x:b.x,z:b.z,n:700,p:1.5,col:11,ring:2.2,s:'slam'});}
           if(A.pt*S.speed>A.len){A.i++;if(A.i<A.count)this.setupRam(A);else A.done=true;}}
         E.body=A.phase===1;break;}
       case 'tail':{settle(A.pos,A.heading,2.8);T.y=-3.9;T.neckA=1.1;T.neckB=.6;const up=smooth(0,A.warn,t),slam=smooth(A.warn,A.warn+.18,t),rec=smooth(A.warn+.6,A.dur,t);T.tailPitch=up*1.35*(1-slam)-.2*slam*(1-rec);T.tailYaw=Math.sin(t*6)*.15*(1-slam);T.lat=.3;

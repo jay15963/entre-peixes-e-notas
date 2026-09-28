@@ -213,10 +213,10 @@ function hostBoss(dt){if(!fight?.alive)return;const vx=Math.sin(boatState.headin
   for(const e of fight.simulate(dt*slow,tgt)){if(dec&&(e.k==='boatHit'||e.k==='boatRide')&&Math.hypot(e.x-boatState.x,e.z-boatState.z)>14)continue;bossBroadcast(e);
     if(e.k==='boatHit'&&elapsed<(world.eq.bossHitUntil||0))continue;
     if(e.k==='boatHit')world.eq.bossHitUntil=elapsed+1.8;
-    if(e.k==='boatHit'||e.k==='boatRide'){const hitK=e.k==='boatHit'?e.power:.5,dx=boatState.x-e.x,dz=boatState.z-e.z,l=Math.hypot(dx,dz)||1;boatState.x+=dx/l*1.2*hitK;boatState.z+=dz/l*1.2*hitK;boatState.speed*=e.k==='boatRide'?.95:.65;boatState.heading+=(Math.random()-.5)*.2*hitK;if(e.k==='boatHit')gear.damageBoat(6*hitK);stateEvent('bossBoat',{power:hitK});
+    if(e.k==='boatHit'||e.k==='boatRide'){const hitK=e.k==='boatHit'?e.power:.5,dx=boatState.x-e.x,dz=boatState.z-e.z,l=Math.hypot(dx,dz)||1;boatState.x+=dx/l*1.2*hitK;boatState.z+=dz/l*1.2*hitK;boatState.speed*=e.k==='boatRide'?.95:.65;boatState.heading+=(Math.random()-.5)*.2*hitK;stateEvent('bossBoat',{power:hitK});
       // quem está no barco voa: o golpe da Nessie joga a tripulação no mar
-      // todo golpe no barco derruba gente, mas nunca a tripulação inteira: 1 pescador (golpe forte: até metade); a onda que só passa derruba às vezes
-      {const aboard=players.filter(q=>!q.land&&q.mode!=='ragdoll'&&q.mode!=='gone'&&q.mode!=='drive'),n=aboard.length;let k=e.k==='boatHit'?(hitK>=1.5?Math.max(1,Math.floor(n/2)):1):(Math.random()<.4?1:0);if(n>1)k=Math.min(k,n-1);
+      // todo golpe que acerta o barco derruba exatamente 1 pescador (nunca todos de uma vez); a onda que só passa por baixo derruba às vezes
+      {const aboard=players.filter(q=>!q.land&&q.mode!=='ragdoll'&&q.mode!=='gone'&&q.mode!=='drive'),n=aboard.length;const k=e.k==='boatHit'?1:(Math.random()<.4?1:0);
         for(const q of aboard.sort(()=>Math.random()-.5).slice(0,k)){const a=Math.random()*6.28;rag(q.id,'boss',[dx/l*6*hitK+Math.cos(a)*3,6+hitK*4,dz/l*6*hitK+Math.sin(a)*3]);}}}
     if(e.k==='finished'){const reward=1000;world.money=Math.round((world.money+reward)*100)/100;world.storm={at:elapsed-(STORM_TIME-20),dur:STORM_TIME};world.nextStorm=elapsed+20+nextStormAt(0);endFightLocal(true);stateEvent('bossEnd',{win:true,reward,money:world.money});}}
   if(fight.pull){const dx=fight.pull.x-boatState.x,dz=fight.pull.z-boatState.z,l=Math.hypot(dx,dz)||1;boatState.x+=dx/l*fight.pull.s*dt;boatState.z+=dz/l*fight.pull.s*dt;}}
@@ -230,7 +230,8 @@ function bossHudTick(dt){if(!fight?.alive){return;}const hp=fight.hp/BOSS_HP;$('
 function runEvent(kind){if(!host||!running||ended||cinematic)return;
   if(kind==='storm'){const on=!(world.storm&&storyTime(elapsed,null,world.storm)>60);world.storm=on?{at:elapsed,dur:STORM_TIME}:{at:elapsed-(STORM_TIME-20),dur:STORM_TIME};stateEvent('storm',{on});}
   if(kind==='nessie'){if(world.trig){toast('O meteoro já está vindo.');return;}if(fight?.alive){toast('A Nessie já está aqui!');return;}world.nessie=1;world.storm={at:elapsed,dur:9999};stateEvent('nessieArmed',{});}
-  if(kind==='meteor'){if(fight?.alive){endFightLocal();stateEvent('bossEnd',{win:false});}triggerMeteor();}}
+  // o fim do mundo pelo TAB é o mesmo do sacrifício: o Eclipse do Coração e, quando ele termina, o meteoro
+  if(kind==='meteor'){if(world.trig||eclipseK()>=0)return;startEclipse(1);}}
 let eventsOpen=false;function openEvents(on){if(on===eventsOpen)return;eventsOpen=on;show('events',on);if(on){expectUnlock=true;input.unlock();$('ev-storm')?.classList.toggle('on',!!(world.storm&&storyTime(elapsed,null,world.storm)>60));$('ev-nessie')?.classList.toggle('on',!!(world.nessie||fight?.alive));$('ev-meteor').disabled=!!world.trig;}else if(running&&!ended&&!cinematic)input.lock();}
 // ---------- Partida ----------
 function start(isSolo,roster){
@@ -813,7 +814,7 @@ function animate(){
   if(fight){fight.render(paused?0:dt,{camera,remote:!host});if(host&&!fight.alive&&fight.rings.length)fight.time+=dt;}bossHudTick(dt);if(fluidOff>0){fluidOff-=dt;if(fluidOff<=0&&!world.impact)fluid.stop();}
   if(battle){battle.stage=fight?.stage||1;battle.tick();}
   const eK=running?eclipseK():-1;const w=environment.update(t,paused?0:dt,boat,camera,{ecl:Eclipse.timeline(eK),paused,story,focus:running&&!cinematic?camera.position:boat.position,red:fight?.alive?fight.redK:undefined,storm:fight?.alive?1:undefined,clearTo:ISLAND,clearK:cloudClear=lerp(cloudClear,running&&(world.temple?.relic>=0||world.temple?.relic===-2||world.trig)?1:0,Math.min(1,dt*.8))});
-  eclipse?.update(eK,dt,camera);if(eK>=0&&!cinematic){const hit=(a)=>eclPrev<a&&eK>=a;if(hit(ECLIPSE.second-.1)||hit(ECLIPSE.third)){jolt(2,0,1.5,6);aberrPulse=Math.max(aberrPulse,.8);}if(hit(ECLIPSE.lock)){jolt(3.5,0,2.5,10);aberrPulse=Math.max(aberrPulse,1.4);}}eclPrev=eK;
+  eclipse?.update(eK,dt,camera);if(eK>=0&&!cinematic){const hit=(a)=>eclPrev<a&&eK>=a;if(hit(ECLIPSE.second-.1)||hit(ECLIPSE.third)){jolt(2,0,1.5,6);aberrPulse=Math.max(aberrPulse,.8);}if(hit(ECLIPSE.lock)){jolt(3.5,0,2.5,10);aberrPulse=Math.max(aberrPulse,1.4);flashScreen('#ffe9c4',3);}}eclPrev=eK;
   if(!paused)fluid.update(dt);cataclysm.update(story,paused?0:dt,boat,camera,t);
   const age=story-CONFIG.impactAt;
   sound.listener(camera);sound.update(story,dt,{running,phase:running?w.phase:'sunset',storm:w.storm,heave:boat.userData.heave,speed:boatState.speed,driving:running&&players.some(p=>p.mode==='drive'),meteor:running&&story>=CONFIG.asteroidAt&&age<0?clamp((story-CONFIG.asteroidAt)/17):0,tsu:running&&age>0?smooth(139,164,story):0});
@@ -928,7 +929,7 @@ function runCheat(kind){if(!host||!running||ended||cinematic)return;const T=chea
   if(kind==='tpFall')tp(V2.x+WF.u-2,V2.z+WF.v+41,{yaw:Math.PI});
   if(kind==='gates'){const open=!world.temple.gates.every(Boolean);world.temple.gates=[open?1:0,open?1:0,open?1:0];sound.effect('anchor');}
   if(/^gate[0-2]$/.test(kind)){const i=+kind[4];world.temple.gates[i]=world.temple.gates[i]?0:1;if(world.temple.gates[i])stateEvent('temple',{k:'gate',i,id:localId});else sound.effect('anchor');}
-  if(kind==='eclipse'){world.eclipse={at:elapsed,meteor:0};stateEvent('eclipse',{at:elapsed,meteor:0});}
+  if(kind==='eclipse'){if(world.trig)return;startEclipse(0);}
   if(kind==='relic'){const p=T[0];if(p&&world.temple.relic!==-2){world.temple.gates=[1,1,1];world.temple.relic=p.id;stateEvent('temple',{k:'relic',id:p.id});}}
   if(kind==='templeReset'){if(world.temple.relic===-2)return;world.temple=NEW_TEMPLE();sound.effect('anchor');}
   if(kind==='tpBoat')T.forEach((p,k)=>{dropAll(p);fishing[p.id].reset();if(p.mode==='ragdoll')ragdolls.remove(p.id);const sp=SPAWNS[k%SPAWNS.length];if(p.land&&p.id===localId)input.yaw-=boatState.heading;if(p.land)p.yaw-=boatState.heading;p.mode='walk';p.land=0;p.x=sp[0];p.z=sp[1];p.height=0;p.vy=0;p.water=0;p.drown=0;p.fly=0;p.tp++;stateEvent('respawn',{id:p.id,water:false});});
@@ -945,7 +946,8 @@ function runCheat(kind){if(!host||!running||ended||cinematic)return;const T=chea
 function triggerMeteor(){if(world.trig||!running)return;world.trig={at:elapsed,from:story};stateEvent('trigger',{});}
 // Sacrifício: o Coração caiu na lava. O meteoro vem para Laguna e o barco espera na praia norte da Ilha do Vulcão,
 // virado para a ilha principal (é de lá que a tripulação assiste ao fim). Quem se sacrificou acorda no cais de Laguna.
-function sacrifice(p){if(fight?.alive){endFightLocal();stateEvent('bossEnd',{win:false});}world.nessie=0;world.storm=null;world.eclipse={at:elapsed,meteor:1};stateEvent('eclipse',{at:elapsed,meteor:1});
+function startEclipse(meteor){if(fight?.alive){endFightLocal();stateEvent('bossEnd',{win:false});}world.nessie=0;world.storm=null;world.eclipse={at:elapsed,meteor};stateEvent('eclipse',{at:elapsed,meteor});}
+function sacrifice(p){startEclipse(1);
   const x=VOLCANO.x-3,z=VOLCANO.z+196;if(Math.hypot(boatState.x-VOLCANO.x,boatState.z-VOLCANO.z)>VOLCANO.size*.7)cheatWarpBoat(x,z,Math.atan2(ISLAND.x-x,ISLAND.z-z),false);
 }
 // segundos desde o começo do eclipse (-1 = nenhum)

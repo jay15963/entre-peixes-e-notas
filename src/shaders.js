@@ -13,7 +13,7 @@ export const U={
   // Nessie sob a água: posição, rumo e força da sombra (x,z,rumo,sombra) e da espuma em volta do corpo
   uBoss:{value:new THREE.Vector4(0,0,0,0)},uBossFoam:{value:0},
   // Eclipse do Coração (sacrifício): escuridão, lua, coroa, anel de diamante, planetas alinhando, auroras, halos
-  uEclOn:{value:0},uEclDark:{value:0},uEclCorona:{value:0},uEclAlign:{value:0},uEclAurora:{value:0},uEclT:{value:0},uEclRing:{value:-1},uEclLine:{value:0},uEclArc:{value:0},
+  uEclOn:{value:0},uEclConst:{value:0},uEclRain:{value:0},uEclDark:{value:0},uEclCorona:{value:0},uEclAlign:{value:0},uEclAurora:{value:0},uEclT:{value:0},uEclRing:{value:-1},uEclLine:{value:0},uEclArc:{value:0},
   uEclMoon:{value:new THREE.Vector3(0,1,0)},uEclDiamond:{value:new THREE.Vector4(0,1,0,0)},uEclAxis:{value:new THREE.Vector3(1,0,0)},uEclTan:{value:new THREE.Vector3(0,1,0)},
   uPlanets:{value:Array.from({length:6},()=>new THREE.Vector4(0,1,0,0))},
 };
@@ -34,7 +34,7 @@ float fbm3(vec3 p){float f=0.,a=.5;for(int i=0;i<5;i++){f+=a*noise3(p);p=p*2.03+
 export const skyGLSL=`
 uniform float uTime,uStorm,uRed,uFlash,uSunset,uMeteorGlow,uImpactAge,uImpactLight;
 uniform vec3 uSunDir,uFlashDir,uMeteorPos,uImpact;
-uniform float uEclOn,uEclDark,uEclCorona,uEclAlign,uEclAurora,uEclT,uEclRing,uEclLine,uEclArc;uniform vec3 uEclMoon,uEclAxis,uEclTan;uniform vec4 uEclDiamond;uniform vec4 uPlanets[6];
+uniform float uEclOn,uEclDark,uEclCorona,uEclAlign,uEclAurora,uEclT,uEclRing,uEclLine,uEclArc,uEclConst,uEclRain;uniform vec3 uEclMoon,uEclAxis,uEclTan;uniform vec4 uEclDiamond;uniform vec4 uPlanets[6];
 ${noiseGLSL}
 vec3 eclPal(float t){return .5+.5*cos(6.2832*(t+vec3(0.,.33,.67)));}
 vec3 skyGradient(vec3 d){
@@ -53,7 +53,7 @@ vec3 skyGradient(vec3 d){
   col=mix(col,vec3(.12,.12,.25),anti*(1.-smoothstep(0.,.06,hp))*.45);
   // Halo de Mie
   float s=max(sd,0.);
-  col+=vec3(1.,.42,.12)*(pow(s,6.)*.45+pow(s,48.)*1.4)*(1.-uStorm*.9);
+  col+=vec3(1.,.42,.12)*(pow(s,6.)*.45+pow(s,48.)*1.4)*(1.-uStorm*.9)*(1.-uEclDark*uEclOn*.97);
   // Tempestade e céu vermelho
   vec3 stormCol=mix(vec3(.06,.075,.1),vec3(.02,.028,.04),smoothstep(0.,.6,hp));
   col=mix(col,stormCol,uStorm*.94);
@@ -90,7 +90,7 @@ vec3 eclipseLayer(vec3 d,vec3 col,float detail){
         float rays=.5+.5*noise(cz*24.+vec2(fk*13.,uEclT*.7));a+=smoothstep(y0-.012,y0+.02,h)*exp(-(h-y0)*mix(6.,3.2,fk))*rays*(k==0?1.:.65);}
       vec3 cA=mix(vec3(.1,1.,.45),vec3(.9,.25,1.),smoothstep(base+.02,base+.32,h));cA=mix(cA,eclPal(cz.x*.35+cz.y*.2+uEclT*.05),.3);add+=cA*a*uEclAurora*1.1;}
     // estrelas cadentes
-    if(detail>.5)for(int k=0;k<6;k++){float fk=float(k),cyc=uEclT*.33+fk*.173,id=floor(cyc),ph=fract(cyc);if(ph>.3)continue;
+    if(detail>.5)for(int k=0;k<12;k++){float fk=float(k);if(fk>=6.+uEclRain*6.)break;float cyc=uEclT*(.33+uEclRain*.5)+fk*.173,id=floor(cyc),ph=fract(cyc);if(ph>.3)continue;
       vec3 a0=normalize(vec3(hash12(vec2(id,fk))*2.-1.,.4+hash12(vec2(fk,id+3.))*.6,hash12(vec2(id+7.,fk))*2.-1.));vec3 dir=normalize(cross(a0,vec3(hash12(vec2(id,2.))-.5,1.,hash12(vec2(4.,id))-.5)));
       float pp=ph/.3;vec3 hd=normalize(a0+dir*pp*.55),tl=normalize(a0+dir*max(pp-.14,0.)*.55),ab=hd-tl;float tt=clamp(dot(d-tl,ab)/max(dot(ab,ab),1e-6),0.,1.),ds=length(d-tl-ab*tt);
       add+=mix(vec3(.6,.8,1.),eclPal(fk*.17),.5)*exp(-ds*ds*3e5)*tt*(1.-pp)*2.5*dk;}}
@@ -120,7 +120,17 @@ vec3 eclipseLayer(vec3 d,vec3 col,float detail){
       float ra=uEclAlign*co;if(ra>0.){float c1=exp(-pow((r-5.6)*9.,2.))*.8+step(abs(r-6.05),.22)*smoothstep(.36,.0,abs(fract(th*36./6.2832+uEclT*.012)-.5))*.9;
         float c2=exp(-pow((r-7.4)*12.,2.))*smoothstep(.3,.0,abs(fract(th*72./6.2832-uEclT*.02)-.5))*1.2;add+=(vec3(1.,.78,.4)*c1+eclPal(th*.3+uEclT*.1)*c2)*ra;}}
     if(uEclRing>=0.)for(int k=0;k<3;k++){float tk=uEclRing-float(k)*.55;if(tk<0.)continue;float rr=1.8+tk*6.;add+=eclPal(r*.035+float(k)*.22+uEclT*.1)*exp(-pow((r-rr)*2.,2.))*exp(-tk*.38)*.55;}
-    col=mix(col,vec3(.004,.004,.009)+vec3(.02,.028,.05)*co*(1.-ml/Rm),mm*smoothstep(0.,.3,uEclOn));}
+    float onSun=1.-smoothstep(.985,1.03,r);float md=mm*mix(onSun,1.,smoothstep(.2,.8,co));
+    col=mix(col,vec3(.004,.004,.009)+vec3(.02,.028,.05)*co*(1.-ml/Rm),md*smoothstep(0.,.3,uEclOn));
+    // vórtice espiral de cores no alinhamento (braços que giram e são sugados para o eclipse)
+    if(uEclLine>0.){float arm=pow(.5+.5*sin(th*3.-log(max(r,1.))*5.2+uEclT*1.3),7.)+.5*pow(.5+.5*sin(th*5.+log(max(r,1.))*3.-uEclT*.8),10.);
+      add+=eclPal(r*.08-uEclT*.15+sin(th)*.1)*arm*smoothstep(1.3,2.6,r)*(1.-smoothstep(8.,15.,r))*uEclLine*.5*(1.-mm);}}
+  // constelação do Coração (◈) desenhada estrela a estrela, do outro lado dos planetas
+  if(uEclConst>0.){vec3 C=normalize(S*cos(.6)+(ux*cos(.95)+uy*sin(.95))*sin(.6)),cu=normalize(cross(C,vec3(0.,1.,0.))),cv=cross(cu,C);vec2 p=vec2(dot(d-C,cu),dot(d-C,cv))/.085;
+    if(dot(p,p)<9.){vec2 P[9]=vec2[9](vec2(0.,1.35),vec2(1.,0.),vec2(0.,-1.35),vec2(-1.,0.),vec2(0.,.56),vec2(.42,0.),vec2(0.,-.56),vec2(-.42,0.),vec2(0.,0.));
+      float g=0.;for(int i=0;i<8;i++){int a=i,b=i<4?(i+1)%4:4+(i-3)%4;float f=clamp(uEclConst*9.-float(i),0.,1.);vec2 A=P[a],Bp=A+(P[b]-A)*f;vec2 ab=Bp-A;float tt=clamp(dot(p-A,ab)/max(dot(ab,ab),1e-5),0.,1.);float dl=length(p-A-ab*tt);g+=(exp(-dl*dl*900.)*.9+exp(-dl*dl*60.)*.15)*step(.001,f);}
+      float st=0.;for(int i=0;i<9;i++){float on=clamp(uEclConst*9.-float(i)+1.,0.,1.);float dd=length(p-P[i]);st+=on*(exp(-dd*dd*500.)*2.5+exp(-dd*dd*30.)*.25);}
+      add+=vec3(1.,.82,.45)*st+mix(vec3(.5,.85,1.),vec3(1.,.6,.3),.5+.5*sin(uEclT*2.))*g;}}
   if(uEclDiamond.w>0.){vec3 D=uEclDiamond.xyz;vec2 fq=vec2(dot(d-D,ux),dot(d-D,uy))/Rs;float dd=length(fq);
     float fl=exp(-dd*dd*30.)*7.+exp(-dd*2.2)*.9+(exp(-abs(fq.y)*50.)*exp(-abs(fq.x)*.6)+exp(-abs(fq.x)*50.)*exp(-abs(fq.y)*.6))*1.3;
     vec2 f2=vec2(fq.x+fq.y,fq.x-fq.y)*.707;fl+=(exp(-abs(f2.y)*70.)*exp(-abs(f2.x)*1.2)+exp(-abs(f2.x)*70.)*exp(-abs(f2.y)*1.2))*.6;

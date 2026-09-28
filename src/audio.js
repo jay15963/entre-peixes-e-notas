@@ -1,5 +1,6 @@
 // Áudio 100% sintetizado: ambiente em camadas, música generativa (violão Karplus-Strong + pads),
 // efeitos posicionais 3D e a trilha do cataclismo, com corte seco quando a onda atinge o barco.
+import {eclipseScore} from './score.js';
 const NOTE=n=>440*Math.pow(2,(n-69)/12);
 const CHORDS={
   sunset:[[43,55,59,62,66],[40,52,55,59,62,66],[36,52,55,59,64],[38,54,57,62,64]],// Gmaj7 Em9 Cmaj7 D6/9
@@ -143,17 +144,8 @@ export class Sound {
     if(name==='lava'){this.burst(this.brown,{type:'lowpass',freq:500,dur:1.2,attack:.02,gain:.9,pos,reverb:.5});this.burst(this.white,{type:'bandpass',freq:900,to:3000,q:.8,dur:1.4,attack:.05,gain:.35,pos});}
     // Eclipse do Coração: ~34 s de trilha. Rumor e coro menor enquanto a lua cobre o sol; acorde imenso, gongo e sinos na totalidade;
     // varredura e resolução no alinhamento dos planetas; anel de diamante; e o presságio grave do meteoro
-    if(name==='eclipse'){const ch=(notes,when,dur,gain,type='triangle',att=1.2)=>notes.forEach((n,i)=>{for(const det of [-.08,.08])this.tone(NOTE(n+det),{type,dur,gain:gain/(1+i*.15),attack:att,when,reverb:.95});});
-      this.tone(41,{type:'sine',dur:12,gain:.5,attack:2,to:55,reverb:.6});this.burst(this.pink,{type:'bandpass',freq:180,to:2400,q:.7,dur:11,attack:6,gain:.35,reverb:.9,when:.5});
-      ch([48,51,55],1,5.5,.05,'sine',2);ch([44,48,51],5,5,.055,'sine',1.6);ch([46,50,53,58],9,4,.06,'triangle',1.2);
-      [[96,11.9],[103,11.95],[91,12.05]].forEach(([n,w])=>this.tone(NOTE(n),{type:'sine',dur:2.2,gain:.07,attack:.005,when:w,reverb:.95}));
-      this.burst(this.brown,{type:'lowpass',freq:160,dur:6,attack:.02,gain:1.3,reverb:.95,when:12});this.tone(98,{type:'sine',dur:6,gain:.35,to:65,when:12,reverb:.95});
-      ch([36,43,48,52,55,59,62,67],12,11,.05,'triangle',.8);
-      for(let i=0;i<34;i++){const n=[72,74,76,79,81,84,86,88,91][Math.floor(Math.random()*9)];this.tone(NOTE(n),{type:'sine',dur:1.6,gain:.035,attack:.005,when:12.5+Math.random()*11,reverb:.95});}
-      this.tone(180,{type:'sawtooth',dur:1.6,gain:.05,to:1800,attack:.2,when:17.6,reverb:.9});this.burst(this.white,{type:'highpass',freq:5000,dur:2.5,attack:.05,gain:.25,reverb:.95,when:19});
-      ch([44,51,56,60,63,67],19,7,.055,'triangle',.3);
-      this.tone(NOTE(96),{type:'sine',dur:2.5,gain:.09,attack:.005,when:24,reverb:.95});this.tone(NOTE(103),{type:'sine',dur:2,gain:.06,attack:.005,when:24.05,reverb:.95});
-      ch([36,39,43],25,9,.05,'sawtooth',1.5);this.tone(65,{type:'sawtooth',dur:9,gain:.05,to:44,attack:2,when:25,reverb:.8});}
+    // Eclipse do Coração: trilha épica em score.js
+    if(name==='eclipse')eclipseScore(this);
     if(name==='sacrifice'){this.burst(this.brown,{type:'lowpass',freq:180,dur:5,attack:.05,gain:1.6,reverb:.95});this.tone(32,{type:'sine',dur:5,gain:.7,to:24});this.burst(this.white,{type:'bandpass',freq:700,to:2600,q:.6,dur:3,attack:.05,gain:.5,reverb:.8});
       [48,55,60,63,67].forEach((n,i)=>this.tone(NOTE(n),{type:'sawtooth',dur:3.5,gain:.035,when:.4+i*.15,reverb:.95}));}
     if(name==='junk'){const now=this.ctx.currentTime;[60,59,58,57].forEach((n,i)=>this.tone(NOTE(n),{type:'sawtooth',dur:.18,gain:.05,when:i*.16,to:NOTE(n)*.97}));this.pluck(48,now+.64,.25);}

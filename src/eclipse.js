@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import {U} from './shaders.js';
-import {VOLCANO,CONE} from './volcano.js';
+import {VOLCANO,CONE,GLYPHS} from './volcano.js';
 
 // ======================================================================================================
 // Eclipse do Coração: o espetáculo depois do sacrifício (e no comando de teste). ~36 s, sincronizado pelo relógio do jogo.
@@ -44,7 +44,22 @@ export class Eclipse {
     // clarão na boca da cratera
     const c=document.createElement('canvas');c.width=c.height=64;const x=c.getContext('2d'),g=x.createRadialGradient(32,32,0,32,32,32);g.addColorStop(0,'rgba(255,255,255,1)');g.addColorStop(.35,'rgba(255,255,255,.4)');g.addColorStop(1,'rgba(255,255,255,0)');x.fillStyle=g;x.fillRect(0,0,64,64);
     this.flare=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(c),color:new THREE.Color(3,1.6,.7),transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,fog:false}));this.flare.visible=false;this.flare.frustumCulled=false;scene.add(this.flare);
-    this.planetDirs=PLANETS.map(()=>V());}
+    this.planetDirs=PLANETS.map(()=>V());
+    // anéis de runas girando e subindo pelo feixe
+    const rc=document.createElement('canvas');rc.width=rc.height=512;const rx=rc.getContext('2d');rx.translate(256,256);rx.strokeStyle='rgba(255,255,255,.9)';rx.lineWidth=5;
+    for(const rr of [175,250]){rx.beginPath();rx.arc(0,0,rr,0,6.283);rx.stroke();}rx.font='bold 46px serif';rx.fillStyle='#fff';rx.textAlign='center';rx.textBaseline='middle';
+    for(let i=0;i<20;i++){rx.save();rx.rotate(i/20*6.283);rx.fillText(GLYPHS[i%GLYPHS.length],0,-212);rx.restore();}
+    const runeTex=new THREE.CanvasTexture(rc);this.runes=Array.from({length:6},(_,i)=>{const m=new THREE.Mesh(new THREE.RingGeometry(6.6,10.2,64,1),new THREE.MeshBasicMaterial({map:runeTex,color:new THREE.Color().setHSL(i/6,.9,.62),transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,side:THREE.DoubleSide,fog:false,opacity:0}));m.visible=false;m.frustumCulled=false;scene.add(m);return m;});
+    // pilares de luz na borda da cratera (acendem no alinhamento)
+    const pg2=new THREE.CylinderGeometry(.5,1.1,340,10,1,true).translate(0,170,0);this.pillarMat=[];
+    this.pillars=Array.from({length:8},(_,i)=>{const a=i/8*6.283,u=CONE.u+Math.cos(a)*(CONE.cr+3),w=CONE.v+Math.sin(a)*(CONE.cr+3);
+      const mat=new THREE.ShaderMaterial({transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,side:THREE.DoubleSide,fog:false,uniforms:{uT:{value:0},uA:{value:0},uC:{value:new THREE.Color().setHSL(i/8,.85,.6)}},
+        vertexShader:'varying vec2 vUv;varying vec3 vN;varying vec3 vW;void main(){vUv=uv;vN=normalize(mat3(modelMatrix)*normal);vec4 w=modelMatrix*vec4(position,1.);vW=w.xyz;gl_Position=projectionMatrix*viewMatrix*w;}',
+        fragmentShader:'uniform float uT,uA;uniform vec3 uC;varying vec2 vUv;varying vec3 vN;varying vec3 vW;void main(){float f=pow(abs(dot(vN,normalize(cameraPosition-vW))),2.);float y=vUv.y;float b=.6+.4*sin(y*60.-uT*9.);float near=smoothstep(20.,120.,length(cameraPosition-vW));gl_FragColor=vec4((uC*1.4+vec3(.2))*f*b*pow(1.-y,1.2)*uA*.55*near,1.);}'});
+      const m=new THREE.Mesh(pg2,mat);m.position.set(VOLCANO.x+u,(volcano?.hAt(u,w)??80)-1,VOLCANO.z+w);m.visible=false;m.frustumCulled=false;scene.add(m);this.pillarMat.push(mat);return m;});
+    // onda de luz que corre pelo mar a partir do vulcão no alinhamento
+    this.wave=new THREE.Mesh(new THREE.RingGeometry(.94,1,160,1).rotateX(-Math.PI/2),new THREE.MeshBasicMaterial({color:new THREE.Color(1.6,1.2,2.2),transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,side:THREE.DoubleSide,fog:false,opacity:0}));
+    this.wave.visible=false;this.wave.frustumCulled=false;scene.add(this.wave);}
   // fatores da linha do tempo em k segundos (também usados pelo ambiente para apagar a luz)
   static timeline(k){const E=ECLIPSE;if(k<0||k>E.dur)return null;
     const s=k<E.second?lerp(3.4,0,sm(2,E.second+.2,k)):k<E.third-.4?0:-lerp(0,3.4,sm(E.third-.4,33,k));
@@ -52,10 +67,11 @@ export class Eclipse {
     return {s,dark,lift:sm(0,6,k)*(1-sm(27,35,k)),corona:sm(E.second-.8,E.second+.4,k)*(1-sm(E.third-.2,E.third+1.6,k)),aurora:sm(E.second+.5,16,k)*(1-sm(25,31,k)),
       align:sm(E.second,E.lock,k),planets:sm(6,10,k)*(1-sm(27,33,k)),line:sm(E.lock,E.lock+.6,k)*(1-sm(E.third,28,k)),ring:k>=E.lock?k-E.lock:-1,
       d2:Math.exp(-Math.pow((k-(E.second-.05))/.32,2))+Math.exp(-Math.pow((k-(E.second-.9))/.18,2))*.25,d3:Math.exp(-Math.pow((k-(E.third+.1))/.32,2)),
+      cons:sm(13,18.5,k)*(1-sm(27,31,k)),rain:sm(E.lock-.5,E.lock+.5,k)*(1-sm(24,28,k)),pillars:sm(E.lock,E.lock+.5,k)*(1-sm(26,31,k)),wave:k>=E.lock?k-E.lock:-1,
       beam:sm(.3,2.5,k)*(1-sm(28,34,k))*(1+.6*Math.exp(-Math.pow((k-E.lock)/.6,2))),on:sm(0,.6,k)*(1-sm(34,E.dur,k))};}
   // k = segundos desde o começo (null/negativo = desligado). Roda depois do ambiente (usa o sol já erguido).
   update(k,dt,camera){const T=Eclipse.timeline(k);U.uEclOn.value=T?T.on:0;
-    if(!T){if(this.k>=0){this.beam.visible=this.sparks.visible=this.flare.visible=false;U.uEclDark.value=0;U.uEclCorona.value=0;U.uEclDiamond.value.w=0;U.uEclLine.value=0;U.uEclRing.value=-1;for(const p of U.uPlanets.value)p.w=0;if(this.v?.lavaMat)this.v.lavaMat.uniforms.uBoost.value=0;}this.k=-1;return;}
+    if(!T){if(this.k>=0){this.beam.visible=this.sparks.visible=this.flare.visible=this.wave.visible=false;for(const m of [...this.runes,...this.pillars])m.visible=false;U.uEclConst.value=0;U.uEclRain.value=0;U.uEclDark.value=0;U.uEclCorona.value=0;U.uEclDiamond.value.w=0;U.uEclLine.value=0;U.uEclRing.value=-1;for(const p of U.uPlanets.value)p.w=0;if(this.v?.lavaMat)this.v.lavaMat.uniforms.uBoost.value=0;}this.k=-1;return;}
     this.k=k;const S=U.uSunDir.value.clone().normalize(),up=V(0,1,0),ux=V().crossVectors(S,up).normalize(),uy=V().crossVectors(ux,S);
     U.uEclT.value=k;U.uEclDark.value=T.dark;U.uEclCorona.value=T.corona;U.uEclAurora.value=T.aurora;U.uEclAlign.value=T.align;U.uEclRing.value=T.ring;U.uEclLine.value=T.line;
     // a lua chega do alto à esquerda e sai pelo outro lado
@@ -72,5 +88,10 @@ export class Eclipse {
     this.beamMat.uniforms.uT.value=k;this.beamMat.uniforms.uA.value=T.beam;
     this.sparks.visible=T.beam>.01;const su=this.sparkMat.uniforms;su.uT.value=k;su.uA.value=Math.min(1,T.beam);su.uO.value.copy(O);su.uD.value.copy(S);su.uX.value.copy(ux);su.uZ.value.copy(uy);
     this.flare.visible=T.beam>.01;this.flare.position.copy(O).add(V(0,3,0));this.flare.scale.setScalar(12+T.beam*14+Math.sin(k*9)*2);this.flare.material.opacity=Math.min(1,T.beam)*.7;
-    if(this.v?.lavaMat)this.v.lavaMat.uniforms.uBoost.value=T.beam*.45;}
+    if(this.v?.lavaMat)this.v.lavaMat.uniforms.uBoost.value=T.beam*.45;
+    U.uEclConst.value=T.cons;U.uEclRain.value=T.rain;
+    const q=new THREE.Quaternion().setFromUnitVectors(V(0,0,1),S);
+    this.runes.forEach((m,i)=>{const ph=(k*.1+i/6)%1,a=Math.sin(ph*Math.PI)*Math.min(1,T.beam)*.42*(1-.6*T.corona);m.visible=a>.01;if(!m.visible)return;m.position.copy(O).addScaledVector(S,8+ph*150);m.quaternion.copy(q);m.rotateZ(k*(i%2?.6:-.6));m.scale.setScalar(.8+ph*1.4);m.material.opacity=a;});
+    this.pillars.forEach((m,i)=>{m.visible=T.pillars>.01;this.pillarMat[i].uniforms.uT.value=k;this.pillarMat[i].uniforms.uA.value=T.pillars*(.75+.25*Math.sin(k*3+i));});
+    this.wave.visible=T.wave>=0&&T.wave<12;if(this.wave.visible){const R=20+T.wave*110;this.wave.position.set(VOLCANO.x+CONE.u,1.2,VOLCANO.z+CONE.v);this.wave.scale.setScalar(R);this.wave.material.opacity=Math.max(0,1-T.wave/12)*1.2;}}
 }
