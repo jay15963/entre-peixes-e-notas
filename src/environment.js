@@ -5,7 +5,7 @@ import {fluidGLSL} from './fluid.js';
 
 // ---------- Oceano low poly facetado ----------
 const oceanVertex=`
-uniform float uTime,uStorm,uTsuR,uTsuH,uTsuOn,uSpeed,uHeading;uniform vec3 uImpact,uIsland;uniform vec2 uBoat;uniform sampler2D uIslandMap;
+uniform float uTime,uStorm,uTsuR,uTsuH,uTsuOn,uSpeed,uHeading;uniform vec3 uImpact,uIsland,uIsland2;uniform vec2 uBoat;uniform sampler2D uIslandMap,uIslandMap2;
 varying vec3 vWorld;varying float vFoam,vCrest,vSim,vWall,vDepth,vShore;varying vec2 vWallUV;
 ${waveGLSL}${tsunamiGLSL}${fluidGLSL}
 void main(){
@@ -15,7 +15,7 @@ void main(){
   vCrest=clamp(h/(a*1.25),-1.,1.5);
   float foam=smoothstep(.72,1.2,vCrest)*(.3+uStorm*.42);
   // Ilha: o fundo sobe, as ondas grandes perdem força e as marolas correm para a praia e quebram
-  vec2 iuv=(p.xz-uIsland.xy)/uIsland.z+.5;float hT=texture2D(uIslandMap,iuv).r*24.-12.;float depth=-hT;vDepth=depth;
+  vec2 iuv=(p.xz-uIsland.xy)/uIsland.z+.5;float hT=texture2D(uIslandMap,iuv).r*24.-12.;vec2 iuv2=(p.xz-uIsland2.xy)/uIsland2.z+.5;if(iuv2.x>0.&&iuv2.x<1.&&iuv2.y>0.&&iuv2.y<1.)hT=max(hT,texture2D(uIslandMap2,iuv2).r*24.-12.);float depth=-hT;vDepth=depth;
   float near=1.-smoothstep(.4,6.,depth);h*=mix(1.,.35,near);
   float ph=depth*2.3+uTime*1.45+sin(p.x*.08+p.z*.05)*1.5;float sw=pow(max(0.,sin(ph)),4.)*(1.-smoothstep(.2,4.,depth))*smoothstep(-.6,.25,depth);
   h+=sw*(.32+uStorm*.4)-.04*near;vShore=sw;foam+=sw*1.4*(1.-smoothstep(.1,2.5,depth))+(1.-smoothstep(-.2,.45,depth))*1.1;
@@ -100,12 +100,15 @@ void main(){
   // Neblina atmosférica que funde o mar ao horizonte do céu
   vec3 fogDir=normalize(vec3(-eye.x,.0,-eye.z));vec3 fogCol=skyGradient(fogDir);
   float fogAmt=1.-exp(-dist*mix(.0024,.005,uStorm)*(1.-smoothstep(.1,.5,vWall)*.6));
+  // fim da distância de renderização (a malha acaba em ~700 m): névoa fecha tudo antes da borda, como no Minecraft
+  fogAmt=max(fogAmt,smoothstep(360.,630.,length(vWorld.xz-cameraPosition.xz)));
   col=mix(col,fogCol,clamp(fogAmt,0.,1.));
   gl_FragColor=vec4(col,1.);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
 }`;
 
+const smooth2=(a,b,x)=>{const t=Math.max(0,Math.min(1,(x-a)/(b-a)));return t*t*(3-2*t);};
 // ---------- Utilidades de geometria low poly ----------
 function hash(n){const s=Math.sin(n*127.1)*43758.5453;return s-Math.floor(s);}
 function vnoise3(x,y,z){const X=Math.floor(x),Y=Math.floor(y),Z=Math.floor(z),fx=x-X,fy=y-Y,fz=z-Z,sx=fx*fx*(3-2*fx),sy=fy*fy*(3-2*fy),sz=fz*fz*(3-2*fz);const h=(i,j,k)=>hash(X+i+(Y+j)*57+(Z+k)*113);const l=(a,b,t)=>a+(b-a)*t;return l(l(l(h(0,0,0),h(1,0,0),sx),l(h(0,1,0),h(1,1,0),sx),sy),l(l(h(0,0,1),h(1,0,1),sx),l(h(0,1,1),h(1,1,1),sx),sy),sz);}
@@ -163,10 +166,18 @@ void main(){vec3 d=normalize(vDirection);vec3 col=min(skyGradient(d),vec3(2.5))*
     // Chuva: traços inclinados pelo vento, em uma única chamada
     const drops=quality==='low'?2500:6000,rpos=[],rseed=[];for(let i=0;i<drops;i++){const x=(Math.random()-.5)*50,y=Math.random()*30,z=(Math.random()-.5)*50,s=Math.random();rpos.push(x,y,z,x,y,z);rseed.push(s,0,s,1);}
     const rg=new THREE.BufferGeometry();rg.setAttribute('position',new THREE.Float32BufferAttribute(rpos,3));rg.setAttribute('seed',new THREE.Float32BufferAttribute(rseed,2));
-    this.rain=new THREE.LineSegments(rg,new THREE.ShaderMaterial({transparent:true,depthWrite:false,uniforms:{uTime:U.uTime,uStorm:U.uStorm,uFlash:U.uFlash,uCam:{value:new THREE.Vector3()},uRoof:{value:new THREE.Vector4(1e5,1e5,-1e5,-1e5)},uRoofY:{value:-1e5}},
+    this.rain=new THREE.LineSegments(rg,new THREE.ShaderMaterial({transparent:true,depthWrite:false,uniforms:{uTime:U.uTime,uStorm:U.uStorm,uFlash:U.uFlash,uCam:{value:new THREE.Vector3()},uRoof:{value:new THREE.Vector4(1e5,1e5,-1e5,-1e5)},uRoofY:{value:-1e5},uRoof2:{value:new THREE.Vector4(1e5,1e5,-1e5,-1e5)},uRoofY2:{value:-1e5},uRoof3:{value:new THREE.Vector4(1e5,1e5,-1e5,-1e5)},uRoofY3:{value:-1e5}},
       vertexShader:`uniform float uTime,uStorm,uRoofY;uniform vec3 uCam;uniform vec4 uRoof;attribute vec2 seed;varying float vFade,vEnd;varying vec3 vRainWorld;void main(){vec3 p=position;float speed=17.+seed.x*6.;p.y=mod(p.y-uTime*speed,30.)-8.;p.x=mod(p.x-uCam.x+uTime*4.5+25.,50.)-25.+uCam.x;p.z=mod(p.z-uCam.z+25.,50.)-25.+uCam.z;p.y+=uCam.y;vec3 wind=vec3(4.5+uStorm*6.,-speed,1.5)*.035*(1.+uStorm);p-=wind*seed.y;vEnd=seed.y;vec4 mv=modelViewMatrix*vec4(p,1.);vFade=(1.-smoothstep(3.,40.,length(mv.xyz)))*smoothstep(.3,1.5,length(mv.xyz));vRainWorld=p;gl_Position=projectionMatrix*mv;}`,
-      fragmentShader:`uniform float uStorm,uFlash,uRoofY;uniform vec4 uRoof;varying vec3 vRainWorld;varying float vFade,vEnd;void main(){if(vRainWorld.x>uRoof.x&&vRainWorld.x<uRoof.z&&vRainWorld.z>uRoof.y&&vRainWorld.z<uRoof.w&&vRainWorld.y<uRoofY)discard;gl_FragColor=vec4(vec3(.62,.7,.8)*(1.+uFlash*3.),smoothstep(.0,.6,uStorm)*.38*vFade*(1.-vEnd*.6));}`}));
+      fragmentShader:`uniform float uStorm,uFlash,uRoofY,uRoofY2,uRoofY3;uniform vec4 uRoof,uRoof2,uRoof3;varying vec3 vRainWorld;varying float vFade,vEnd;bool under(vec4 r,float y){return vRainWorld.x>r.x&&vRainWorld.x<r.z&&vRainWorld.z>r.y&&vRainWorld.z<r.w&&vRainWorld.y<y;}void main(){if(vRainWorld.x>uRoof.x&&vRainWorld.x<uRoof.z&&vRainWorld.z>uRoof.y&&vRainWorld.z<uRoof.w&&vRainWorld.y<uRoofY)discard;if(under(uRoof2,uRoofY2)||under(uRoof3,uRoofY3))discard;gl_FragColor=vec4(vec3(.62,.7,.8)*(1.+uFlash*3.),smoothstep(.0,.6,uStorm)*.38*vFade*(1.-vEnd*.6));}`}));
     this.rain.frustumCulled=false;this.rain.visible=false;scene.add(this.rain);
+    // Mar de nuvens: quanto mais alto o jogador, mais nuvens aparecem abaixo dele (esconde o fim do mar e os detalhes repetidos)
+    this.clouds=[46,55,64].map((y,i)=>{const m=new THREE.Mesh(new THREE.PlaneGeometry(1800,1800,1,1).rotateX(-Math.PI/2),new THREE.ShaderMaterial({transparent:true,depthWrite:false,side:THREE.DoubleSide,fog:false,
+      uniforms:{uTime:U.uTime,uAlpha:{value:0},uSeed:{value:i*7.3},uColA:{value:new THREE.Color()},uColB:{value:new THREE.Color()}},
+      vertexShader:'varying vec3 vW;void main(){vec4 w=modelMatrix*vec4(position,1.);vW=w.xyz;gl_Position=projectionMatrix*viewMatrix*w;}',
+      fragmentShader:`uniform float uTime,uAlpha,uSeed;uniform vec3 uColA,uColB;varying vec3 vW;${noiseGLSL}
+      void main(){vec2 p=vW.xz*.0055+vec2(uTime*.004,uTime*.0025)+uSeed;float n=fbm(p)*.72+fbm(p*3.3+4.)*.28;float c=smoothstep(.42-.16*uAlpha,.68,n);
+        float r=length(vW.xz-cameraPosition.xz);float edge=1.-smoothstep(640.,880.,r);gl_FragColor=vec4(mix(uColB,uColA,smoothstep(.45,.9,n)),clamp(c*uAlpha*edge,0.,1.));}`}));
+      m.userData.y=y;m.renderOrder=3;m.frustumCulled=false;m.visible=false;scene.add(m);return m;});
     // Relâmpagos
     this.boltMat=new THREE.ShaderMaterial({transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,uniforms:{uAlpha:{value:0}},vertexShader:`attribute float width;varying float vW;void main(){vW=width;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`,fragmentShader:`uniform float uAlpha;varying float vW;void main(){gl_FragColor=vec4(vec3(3.,3.4,5.)*uAlpha*(.4+vW),1.);}`});
     this.bolt=new THREE.Mesh(lightningGeometry(1),this.boltMat);this.bolt.visible=false;this.bolt.frustumCulled=false;scene.add(this.bolt);
@@ -202,6 +213,8 @@ void main(){vec3 d=normalize(vDirection);vec3 col=min(skyGradient(d),vec3(2.5))*
     const fogCol=new THREE.Color(lerp(1.0,.07,w.storm),lerp(.42,.08,w.storm),lerp(.18,.1,w.storm)).lerp(new THREE.Color(.55,.07,.03),w.red);this.scene.fog.color.copy(fogCol);this.scene.fog.density=lerp(.0042,.009,w.storm);
     this.envTimer+=dt;if(this.envTimer>(st>118?.8:4)){this.envTimer=0;this.updateEnvMap();}
     this.rain.visible=w.storm>.05;this.rain.material.uniforms.uCam.value.copy(camera.position);
+    {const cy=camera.position.y,g=smooth2(38,100,cy),top=this.scene.fog.color.clone().lerp(new THREE.Color(1,.86,.72),.55*(1-w.storm)),low=this.scene.fog.color.clone().multiplyScalar(.7);
+      for(const c of this.clouds){const a=g*smooth2(5,18,cy-c.userData.y);c.visible=a>.01;if(!c.visible)continue;c.position.set(camera.position.x,c.userData.y,camera.position.z);const u=c.material.uniforms;u.uAlpha.value=a;u.uColA.value.copy(top);u.uColB.value.copy(low);}}
     for(const b of this.birds.children){const d=b.userData,a=t*d.speed+d.phase;b.position.set(boat.position.x+Math.cos(a)*d.radius+Math.sin(d.phase)*6,d.height+Math.sin(t*.7+d.phase)*1.2,boat.position.z+Math.sin(a)*d.radius);b.rotation.set(0,-a,Math.sin(t*.5+d.phase)*.25);const flap=Math.sin(t*(6+d.phase%1*2)+d.phase)*(Math.sin(t*.3+d.phase)>.2?.55:.08);d.wings[0].rotation.z=flap;d.wings[1].rotation.z=-flap;b.visible=w.storm<.55&&w.red<.1;}
     if(this.splash.visible){this.splashTime+=dt;const age=this.splashTime;for(let i=0;i<260;i++){const a=i*2.4,s=1+(i%7)*.32;this.splashArray[i*3]=Math.cos(a)*s*age;this.splashArray[i*3+1]=(3+i%5*.5)*age-5*age*age;this.splashArray[i*3+2]=Math.sin(a)*s*age;}this.splash.geometry.attributes.position.needsUpdate=true;this.splash.material.opacity=.9*(1-age/1.5);if(age>1.5)this.splash.visible=false;}
     return w;

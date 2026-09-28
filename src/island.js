@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import {Kit,loft,limb,ellipsoid,box,sculpt,sweep,paint,tint,reseed,rand,V} from './geometry.js';
-import {ISLAND,DOCK,BERTH,SHOP,HOUSES,CHURCH,LIGHTHOUSE,terrainLocal,groundLocal,flatMask,pathMask,fbm2,shoreRadius,footprint,LANE,BOLLARDS} from './terrain.js';
+import {ISLAND,DOCK,BERTH,SHOP,HOUSES,CHURCH,LIGHTHOUSE,terrainLocal,groundLocal,flatMask,pathMask,fbm2,shoreRadius,footprint,LANE,LINK,BOLLARDS} from './terrain.js';
 import {U} from './shaders.js';
 import {buildShop} from './shop.js';
 
@@ -19,7 +19,7 @@ export function swayMaterial(opts={},strength=1){
       transformed.x+=(g+.35*uStorm)*aSway*str;transformed.z+=sin(uTime*1.07+ph*1.3)*.45*aSway*str;transformed.y-=abs(g)*aSway*aSway*str*.2;`);};
   m.customProgramCacheKey=()=>'sway'+strength;return m;
 }
-function sway(geo,fn){const g=geo.index?geo.toNonIndexed():geo,p=g.attributes.position,a=new Float32Array(p.count),v=V();for(let i=0;i<p.count;i++){v.fromBufferAttribute(p,i);a[i]=fn(v);}g.setAttribute('aSway',new THREE.BufferAttribute(a,1));return g;}
+export function sway(geo,fn){const g=geo.index?geo.toNonIndexed():geo,p=g.attributes.position,a=new Float32Array(p.count),v=V();for(let i=0;i<p.count;i++){v.fromBufferAttribute(p,i);a[i]=fn(v);}g.setAttribute('aSway',new THREE.BufferAttribute(a,1));return g;}
 function canvasTex(w,h,draw,repeat=[1,1],srgb=true){const c=document.createElement('canvas');c.width=w;c.height=h;const x=c.getContext('2d');draw(x,w,h);const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(...repeat);t.anisotropy=8;if(srgb)t.colorSpace=THREE.SRGBColorSpace;return t;}
 const R=(a,b)=>a+(b-a)*rand();
 // Paralelepípedo: pedras irregulares em fiadas desencontradas; o mapa de relevo arredonda cada pedra
@@ -49,7 +49,7 @@ function terrainMesh(){
   const N=170,S=ISLAND.size,step=S/N,pos=[],col=[],c=new THREE.Color(),H=[];
   for(let j=0;j<=N;j++){H.push([]);for(let i=0;i<=N;i++){const u=-S/2+i*step,v=-S/2+j*step;H[j].push(terrainLocal(u,v));}}
   const sand=new THREE.Color(0xe6d3a1),wet=new THREE.Color(0xb99f70),grassA=new THREE.Color(0x6b9a3c),grassB=new THREE.Color(0x4f7f2e),grassC=new THREE.Color(0x8aa94a),dirt=new THREE.Color(0x9b7a4f),rock=new THREE.Color(0x8b857b),seabed=new THREE.Color(0xc9b98f),paved=new THREE.Color(0x6d6a63);
-  const paved2=(u,v)=>(Math.abs(u)<5.6&&v>-46&&v<4)||(u>-33&&u<33&&v>-51.5&&v<-45.5)||(u>-24&&u<24&&v>-11&&v<4)||(u>SHOP.u0-3&&u<SHOP.u1+3&&v>SHOP.v0-1&&v<SHOP.v1+3)||(u>LANE.u0&&u<LANE.u1&&v>LANE.v0&&v<LANE.v1);
+  const paved2=(u,v)=>(Math.abs(u)<5.6&&v>-46&&v<4)||(u>-33&&u<33&&v>-51.5&&v<-45.5)||(u>-24&&u<24&&v>-11&&v<4)||(u>SHOP.u0-3&&u<SHOP.u1+3&&v>SHOP.v0-1&&v<SHOP.v1+3)||(u>LANE.u0&&u<LANE.u1&&v>LANE.v0&&v<LANE.v1)||(u>LINK.u0&&u<LINK.u1&&v>LINK.v0&&v<LINK.v1);
   for(let j=0;j<N;j++)for(let i=0;i<N;i++){
     const quad=[[i,j],[i+1,j],[i+1,j+1],[i,j+1]].map(([a,b])=>V(-S/2+a*step,H[b][a],-S/2+b*step));
     for(const tri of [[0,2,1],[0,3,2]]){const [A,B,C]=tri.map(k=>quad[k]);if(A.y<-2.2&&B.y<-2.2&&C.y<-2.2)continue;
@@ -72,7 +72,7 @@ export function heightTexture(){const N=256,S=ISLAND.size,data=new Uint8Array(N*
   const t=new THREE.DataTexture(data,N,N,THREE.RedFormat,THREE.UnsignedByteType);t.magFilter=t.minFilter=THREE.LinearFilter;t.needsUpdate=true;return t;}
 
 // ---------- Vegetação ----------
-function palm(kit,mat,x,z,y,h,lean,dir,seed){reseed(seed);
+export function palm(kit,mat,x,z,y,h,lean,dir,seed){reseed(seed);
   const base=V(x,y-.2,z),top=V(x+Math.cos(dir)*lean,y+h,z+Math.sin(dir)*lean),ctrl=V(x,y+h*.55,z);
   const pts=[];for(let i=0;i<=9;i++){const t=i/9;pts.push(V().addScaledVector(base,(1-t)*(1-t)).addScaledVector(ctrl,2*t*(1-t)).addScaledVector(top,t*t));}
   for(let i=0;i<9;i++){const r0=.2-i*.011,r1=.2-(i+1)*.011;kit.add(mat,sway(limb(pts[i],pts[i+1],r0*1.08,r1,7),v=>Math.pow(Math.max(0,v.y-y)/h,1.6)*.8),i%2?0x8a6c4c:0x7a5d40,.05);
@@ -86,7 +86,7 @@ function palm(kit,mat,x,z,y,h,lean,dir,seed){reseed(seed);
     kit.add(mat,sway(g,v=>.85+Math.min(.9,top.distanceTo(v)*.25)),rand()<.25?0x7f9a3a:0x4f8a32,.12);
     kit.add(mat,sway(sweep(spine,.03,.02),v=>.85+Math.min(.9,top.distanceTo(v)*.25)),0x6f7f36,.05);}
 }
-function broadTree(kit,mat,x,z,y,h,colors,seed,flowers=false){reseed(seed);
+export function broadTree(kit,mat,x,z,y,h,colors,seed,flowers=false){reseed(seed);
   const trunk=[V(x,y-.2,z),V(x+R(-.3,.3),y+h*.45,z+R(-.3,.3)),V(x+R(-.4,.4),y+h*.7,z+R(-.4,.4))];
   kit.add(mat,sway(limb(trunk[0],trunk[1],.24,.17,7),v=>Math.max(0,v.y-y)/h*.2),0x5a4432,.08).add(mat,sway(limb(trunk[1],trunk[2],.17,.1,6),v=>Math.max(0,v.y-y)/h*.3),0x5a4432,.08);
   for(let b=0;b<4;b++){const a=b*1.7+rand(),end=trunk[1].clone().add(V(Math.cos(a)*h*.28,h*.25,Math.sin(a)*h*.28));kit.add(mat,sway(limb(trunk[1],end,.1,.05,5),v=>Math.max(0,v.y-y)/h*.35),0x5a4432,.08);}
@@ -100,9 +100,9 @@ function araucaria(kit,mat,x,z,y,h,seed){reseed(seed);
   for(let t=0;t<3;t++){const ty=y+h*(.78+t*.08),rr=h*(.32-t*.07);for(let b=0;b<7;b++){const a=b/7*6.28+t*.4,mid=V(x+Math.cos(a)*rr*.6,ty+rr*.12,z+Math.sin(a)*rr*.6),end=V(x+Math.cos(a)*rr,ty+rr*.42,z+Math.sin(a)*rr);
     kit.add(mat,sway(limb(V(x,ty-.2,z),mid,.07,.05,5),()=>.3),0x5d4838,.06);kit.add(mat,sway(sculpt(ellipsoid([end.x,end.y,end.z],[rr*.34,rr*.2,rr*.34],7,4),v=>{v.y+=(rand()-.5)*.08;}),()=>.5),t===2?0x2f5a2a:0x284f26,.1);}}
 }
-function bush(kit,mat,x,z,y,s,color,flower,seed){reseed(seed);for(let k=0;k<4;k++){const g=new THREE.IcosahedronGeometry(s*R(.45,.7),0);g.translate(x+R(-s,s)*.5,y+s*R(.25,.55),z+R(-s,s)*.5);kit.add(mat,sway(g,()=>.25),color,.12);}
+export function bush(kit,mat,x,z,y,s,color,flower,seed){reseed(seed);for(let k=0;k<4;k++){const g=new THREE.IcosahedronGeometry(s*R(.45,.7),0);g.translate(x+R(-s,s)*.5,y+s*R(.25,.55),z+R(-s,s)*.5);kit.add(mat,sway(g,()=>.25),color,.12);}
   if(flower)for(let k=0;k<9;k++)kit.add(mat,sway(ellipsoid([x+R(-s,s)*.6,y+s*R(.5,.95),z+R(-s,s)*.6],[.07,.05,.07],5,3),()=>.3),flower,.08);}
-function rock(kit,mat,x,z,y,s,seed,color=0x8c867c){reseed(seed);const g=sculpt(new THREE.DodecahedronGeometry(1,1),v=>{const n=fbm2(v.x*1.3+seed,v.z*1.3+v.y)-.5;v.multiplyScalar(1+n*.5);v.y*=.62;});g.scale(s,s,s);g.rotateY(rand()*6);g.translate(x,y+s*.15,z);
+export function rock(kit,mat,x,z,y,s,seed,color=0x8c867c){reseed(seed);const g=sculpt(new THREE.DodecahedronGeometry(1,1),v=>{const n=fbm2(v.x*1.3+seed,v.z*1.3+v.y)-.5;v.multiplyScalar(1+n*.5);v.y*=.62;});g.scale(s,s,s);g.rotateY(rand()*6);g.translate(x,y+s*.15,z);
   kit.add(mat,paint(g,(v,c)=>new THREE.Color(color).lerp(new THREE.Color(0x3f5a3a),c.y>y+s*.45?.3:0).multiplyScalar(c.y<.25?.55:1),.08));}
 function grassField(count){
   // Tufo com 3 lâminas: raiz escura, ponta clara; o vento curva mais a ponta
@@ -230,6 +230,7 @@ export class Island {
     const cob=cobbleTextures(),cobMat=new THREE.MeshStandardMaterial({map:cob.col,bumpMap:cob.bump,bumpScale:3,roughness:.85});cob.col.repeat.set(1/3.2,1/3.2);cob.bump.repeat.copy(cob.col.repeat);
     add(texturedBox(cobMat,[7.1,.5,34.4],[0,P-.25+.02,-28.2],1),false);
     add(texturedBox(cobMat,[LANE.u1-LANE.u0,.5,LANE.v1-LANE.v0],[LANE.u,P-.25+.015,(LANE.v0+LANE.v1)/2],1),false);
+    add(texturedBox(cobMat,[LINK.u1-LINK.u0,.5,LINK.v1-LINK.v0],[(LINK.u0+LINK.u1)/2,P-.25+.012,(LINK.v0+LINK.v1)/2],1),false);
     const mos=mosaicTextures(),mosMat=new THREE.MeshStandardMaterial({map:mos.col,bumpMap:mos.bump,bumpScale:1.2,roughness:.7});mos.col.repeat.set(1/2.6,1/2.6);mos.bump.repeat.copy(mos.col.repeat);
     add(texturedBox(mosMat,[66,.6,6.2],[0,P-.3+.03,-48.5],1),false);
     const con=concreteTextures(),conMat=new THREE.MeshStandardMaterial({map:con.col,bumpMap:con.bump,bumpScale:1.5,roughness:.9});con.col.repeat.set(1/2,1/2);con.bump.repeat.copy(con.col.repeat);
@@ -237,6 +238,8 @@ export class Island {
     const asphalt=new THREE.MeshStandardMaterial({map:asphaltTexture(48,15),roughness:.95});const plaza=new THREE.Mesh(new THREE.BoxGeometry(48,.5,15),asphalt);plaza.position.set(0,P-.25+.025,-3.5);plaza.receiveShadow=true;
     // UV da face de cima cobrindo a praça inteira uma vez
     {const uv=plaza.geometry.attributes.uv,p=plaza.geometry.attributes.position,n=plaza.geometry.attributes.normal;for(let i=0;i<uv.count;i++)uv.setXY(i,p.getX(i)/48+.5,n.getY(i)>.5?.5-p.getZ(i)/15:0);}add(plaza,false);
+    // calçada em volta do mercado (lados e fundos): o terreno é recortado 3 m em volta do prédio e ficava um buraco
+    for(const [x0,x1,z0,z1]of [[SHOP.u0-3.2,SHOP.u0,SHOP.v0-1.2,SHOP.v1+3.2],[SHOP.u1,SHOP.u1+3.2,SHOP.v0-1.2,SHOP.v1+3.2],[SHOP.u0,SHOP.u1,SHOP.v1,SHOP.v1+3.2]])add(texturedBox(conMat,[x1-x0,1.6,z1-z0],[(x0+x1)/2,SHOP.floor-.08-.8,(z0+z1)/2],1),false);
     // pad do mercado e muro de arrimo do calçadão com escadas para a areia
     const k=new Kit(),stone=mats.wall;
     k.add(stone,box([0,P-.9,-51.7],[66,1.9,.5]),0xb8ad96,.04);for(const x of [-20,20]){for(let i=0;i<6;i++)k.add(stone,box([x,P-.12-i*.27,-52.2-i*.32],[3,.27,.34]),0xc7bca5,.03);}
@@ -381,9 +384,10 @@ export class Island {
     this.colliders.push({x:ISLAND.x+LIGHTHOUSE.u,z:ISLAND.z+LIGHTHOUSE.v,r:1.8});
   }
   // ---------- consultas ----------
-  ground(x,z){return this.exploded?-99:groundLocal(x-ISLAND.x,z-ISLAND.z);}
+  // y (opcional): altura dos pés; a Ilha do Vulcão tem vários níveis (templo subterrâneo, ponte, pirâmide)
+  ground(x,z,y){if(this.volcano?.contains(x,z))return this.volcano.ground(x,z,y);return this.exploded?-99:groundLocal(x-ISLAND.x,z-ISLAND.z);}
   // Empurra um círculo (jogador) para fora dos obstáculos; devolve a posição corrigida
-  collide(x,z,r=.3){if(this.exploded)return [x,z];
+  collide(x,z,r=.3,y){if(this.volcano?.contains(x,z))return this.volcano.collide(x,z,r,y);if(this.exploded||Math.abs(x-ISLAND.x)>ISLAND.size/2+10||Math.abs(z-ISLAND.z)>ISLAND.size/2+10)return [x,z];
     for(const c of this.colliders){if(c.r){const dx=x-c.x,dz=z-c.z,d=Math.hypot(dx,dz),m=c.r+r;if(d<m&&d>1e-5){x=c.x+dx/d*m;z=c.z+dz/d*m;}}
       else if(x>c.x0-r&&x<c.x1+r&&z>c.z0-r&&z<c.z1+r){const px=Math.min(x-(c.x0-r),(c.x1+r)-x),pz=Math.min(z-(c.z0-r),(c.z1+r)-z);if(px<pz)x=x-(c.x0-r)<(c.x1+r)-x?c.x0-r:c.x1+r;else z=z-(c.z0-r)<(c.z1+r)-z?c.z0-r:c.z1+r;}}
     return [x,z];}

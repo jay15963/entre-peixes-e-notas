@@ -60,7 +60,7 @@ const D={
 };
 // fora da loja: itens que dependiam de vida, frio, casco ou alagamento (sistemas que o jogo não tem)
 export const REMOVED=new Set(['medkit','flask','repair','pump','tent']);
-export const ITEMS=Object.fromEntries(STORE_ITEMS.filter(it=>!REMOVED.has(it.id)).map(it=>{const d=D[it.id];return [it.id,{...it,...d,rule:d.kind==='boat'?d.rule+' Melhoria do barco: com ela na mochila, segure E olhando o barco para instalar (some se o barco reaparecer no cais).':d.rule,status:'À venda na Loja do Pescador'}];}));
+export const ITEMS=Object.fromEntries(STORE_ITEMS.filter(it=>!REMOVED.has(it.id)).map(it=>{const d=D[it.id];return [it.id,{...it,...d,price:Math.round(d.price*2.5/5)*5,rule:d.kind==='boat'?d.rule+' Melhoria do barco: com ela na mochila, segure E olhando o barco para instalar (some se o barco reaparecer no cais).':d.rule,status:'À venda na Loja do Pescador'}];}));
 // isca de corte: sai da faca (não é vendida)
 ITEMS.cut={id:'cut',name:'Isca de corte',description:'Pedaços frescos de peixe.',effect:'Mordida 40% mais rápida.',kind:'bait',uses:3,price:0,rule:'Isca: mordida 40% mais rápida.',category:'Iscas e caçada',number:0};
 export const ITEM_IDS=STORE_ITEMS.filter(i=>!REMOVED.has(i.id)).map(i=>i.id);

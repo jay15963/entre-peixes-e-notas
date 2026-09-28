@@ -140,3 +140,14 @@ label.slider{display:grid;grid-template-columns:1fr auto;align-items:center;gap:
 #boss-banner{position:absolute;top:34%;left:50%;transform:translate(-50%,-50%);text-align:center;opacity:0}#boss-banner.show{animation:bhBanner 3.4s ease-out}#boss-banner b{display:block;font:italic 900 58px Georgia;color:#fff;text-shadow:0 0 30px #ff2a1a,0 4px 10px #000}#boss-banner small{display:block;font:900 14px Arial;letter-spacing:6px;color:#ffb08a;margin-top:6px}
 @keyframes bhBanner{0%{opacity:0;transform:translate(-50%,-50%) scale(1.4)}12%{opacity:1;transform:translate(-50%,-50%) scale(1)}80%{opacity:1}100%{opacity:0}}
 #boss-hits{position:absolute;inset:0;overflow:hidden}.boss-hit{position:absolute;left:0;top:0;font:900 13px Arial;letter-spacing:1px;text-shadow:0 0 8px #000,0 2px 3px #000;white-space:nowrap}.boss-hit.big{font-size:22px;text-shadow:0 0 16px #ffae00,0 2px 3px #000}
+
+/* tela do TAB: meteoro + comandos de teste do anfitrião */
+#events .ev-grid{grid-template-columns:1fr;width:min(460px,92vw);margin-top:6px}#events .ev-card{min-height:0;padding:14px 18px}
+.cheats{width:min(820px,94vw);max-height:56vh;overflow:auto;padding:14px 16px;background:#0e262dee;border:1px solid #7dd3c244;border-radius:6px}
+.ch-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}.ch-head b{font:20px Georgia,serif;color:#f6ead6}.ch-head label{font-size:12px;color:#d7e6e1;display:flex;gap:6px;align-items:center;cursor:pointer}
+.ch-group{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:7px 0;border-top:1px solid #ffffff12}.ch-group>span{width:150px;font:700 10px Arial;letter-spacing:.08em;text-transform:uppercase;color:#9fc3bd}.ch-group>span small{text-transform:none;letter-spacing:0;font-weight:400}
+.ch-group button{padding:7px 11px;font:12px Arial;color:#f1e7d4;background:#153640;border:1px solid #e5c08c44;border-radius:4px;cursor:pointer}.ch-group button:hover{border-color:#e5c08c;background:#1c4652}.ch-group button small{display:block;font-size:9px;color:#a9bcb6}
+.ch-group button.on{background:#2f6a3a;border-color:#7dff9a}
+#events{background:radial-gradient(circle at 50% 45%,#0b2028e8,#030a0df5)}#events~#hud,body:has(#events:not([hidden])) #hud{opacity:.12}
+.cheats{background:#0b1f25}.ch-head label{white-space:nowrap}.ch-group{display:grid;grid-template-columns:150px 1fr;align-items:center}.ch-btns{display:flex;flex-wrap:wrap;gap:6px}
+#fps{position:fixed;top:6px;right:10px;z-index:30;font:600 10px/1 Arial;color:#ffffff8c;letter-spacing:.06em;pointer-events:none;text-shadow:0 1px 2px #0008}

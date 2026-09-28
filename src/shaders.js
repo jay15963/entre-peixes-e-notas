@@ -8,6 +8,8 @@ export const U={
   uTsuR:{value:0},uTsuH:{value:0},uTsuOn:{value:0},
   uBoat:{value:new THREE.Vector2()},uHeading:{value:0},uSpeed:{value:0},uBoatInverse:{value:new THREE.Matrix4()},
   uIslandMap:{value:null},uIsland:{value:new THREE.Vector3(0,118,230)},
+  // segunda ilha (vulcão): mesmo esquema de mapa de altura para o mar raso e as ondas quebrando
+  uIslandMap2:{value:null},uIsland2:{value:new THREE.Vector3(0,1e6,1)},
   // Nessie sob a água: posição, rumo e força da sombra (x,z,rumo,sombra) e da espuma em volta do corpo
   uBoss:{value:new THREE.Vector4(0,0,0,0)},uBossFoam:{value:0},
 };

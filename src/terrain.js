@@ -35,13 +35,14 @@ export const HOUSES=[
   {u:-30,v:-35.5,w:7,d:7.6,rot:Math.PI/2,color:0xf3b0c3,roof:0xa9502d,floors:1,trim:0xffffff,door:0x3c6a9a},
   {u:30,v:-35.5,w:7.2,d:7.6,rot:Math.PI/2,color:0xfaf4e4,roof:0xb65a33,floors:1,trim:0x3a8a5a,door:0x3a8a5a,bougainvillea:true},
   // Rua da Figueira, à esquerda do mercado (quem chega pelo cais): casas dos dois lados de uma travessa de pedra
-  {u:24.6,v:8.5,w:7.2,d:7.6,face:1,color:0xc9e3a4,roof:0xb4552f,floors:1,trim:0xffffff,door:0x7a3b2a},
-  {u:24.6,v:19,w:7,d:7.6,face:1,color:0xf4c7a1,roof:0xa84a2c,floors:2,trim:0xfdf8ec,door:0x2f6d8c,bougainvillea:true},
-  {u:24.6,v:29.5,w:7.2,d:7.4,face:1,color:0xa9c7e8,roof:0xb65a33,floors:1,trim:0xffffff,door:0xc2452f},
-  {u:37.6,v:10,w:7.4,d:7.6,face:-1,color:0xf7ecd0,roof:0xa9502d,floors:2,trim:0x2f6fa8,door:0x2f6fa8},
-  {u:37.6,v:21.5,w:7,d:7.4,face:-1,color:0xe7a3b6,roof:0xb4552f,floors:1,trim:0xffffff,door:0x3c7a5a},
+  {u:23.2,v:8.5,w:7.2,d:7.6,face:1,color:0xc9e3a4,roof:0xb4552f,floors:1,trim:0xffffff,door:0x7a3b2a},
+  {u:23.2,v:19,w:7,d:7.6,face:1,color:0xf4c7a1,roof:0xa84a2c,floors:2,trim:0xfdf8ec,door:0x2f6d8c,bougainvillea:true},
+  {u:23.2,v:29.5,w:7.2,d:7.4,face:1,color:0xa9c7e8,roof:0xb65a33,floors:1,trim:0xffffff,door:0xc2452f},
+  {u:39,v:10,w:7.4,d:7.6,face:-1,color:0xf7ecd0,roof:0xa9502d,floors:2,trim:0x2f6fa8,door:0x2f6fa8},
+  {u:39,v:21.5,w:7,d:7.4,face:-1,color:0xe7a3b6,roof:0xb4552f,floors:1,trim:0xffffff,door:0x3c7a5a},
 ];
-export const LANE={u:31,u0:28.6,u1:33.4,v0:-6,v1:33};
+// travessa de pedra; começa na altura do estacionamento (ligação LINK) para a rua se encontrar com a da frente do mercado
+export const LANE={u:31,u0:28.6,u1:33.4,v0:-9,v1:33},LINK={u0:23.4,u1:28.8,v0:-9,v1:3};
 // igrejinha açoriana de frente para o chafariz da praça
 export const CHURCH={u:-31,v:-4,d:14,w:9};
 export function footprint(h){const r=h.rot??(h.face>0?0:Math.PI),swap=Math.abs(Math.sin(r))>.5;return swap?[h.w/2,h.d/2]:[h.d/2,h.w/2];}
@@ -51,6 +52,7 @@ export function flatMask(u,v){
   m=Math.max(m,box(u,v,-24,24,-11,4,3));// praça e estacionamento
   m=Math.max(m,box(u,v,SHOP.u0-3,SHOP.u1+3,SHOP.v0-1,SHOP.v1+3,3));
   m=Math.max(m,box(u,v,LANE.u0-.5,LANE.u1+.5,LANE.v0,LANE.v1,2.5));
+  m=Math.max(m,box(u,v,LINK.u0,LINK.u1,LINK.v0,LINK.v1,2.5));
   for(const h of HOUSES){const [a,b]=footprint(h);m=Math.max(m,box(u,v,h.u-a-2,h.u+a+2,h.v-b-2,h.v+b+2,2.5));}
   m=Math.max(m,box(u,v,CHURCH.u-CHURCH.d/2-1.5,CHURCH.u+CHURCH.d/2+4,CHURCH.v-CHURCH.w/2-3,CHURCH.v+CHURCH.w/2+2,2.5));
   return m;

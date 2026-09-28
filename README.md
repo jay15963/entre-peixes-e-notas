@@ -104,18 +104,28 @@ O tiro tem estalo, estrondo, cauda e ecos na água, além de clarão em estrela,
 
 As gaivotas circulam bem alto e **não podem ser atingidas** enquanto circulam. Só a **ladra** pode: ela é marcada na tela (com seta na borda quando está fora de vista), mergulha em direção ao balde, paira pegando o peixe e foge devagar, pesada, carregando o peixe. Se for abatida sobre o barco, o peixe volta para o balde. Na tempestade elas não atacam.
 
-## Eventos (TAB)
+## Clima e eventos
 
-Nada acontece sozinho: o clima fica calmo até o anfitrião segurar **TAB** e escolher um evento.
+- **Tempestades naturais:** a cada 4–5 minutos de calmaria chega uma tempestade de 2 minutos (vento, chuva, raios e ondas grandes).
+- **Nessie:** na segunda tempestade (e a cada duas depois disso), a Matriarca do Abismo espera em mar aberto: leve o barco a mais de 150 m de Laguna enquanto a tempestade durar. Na luta, a tempestade continua até ela morrer. São três estágios, 800 de vida e nove ataques sem marcas na tela (lidos pela animação e pelo som). Os rifles acertam até debaixo d'água: olhos ×5, garganta ×3, guelras ×2, corpo ×1 e espinhos ×0,25. Todo golpe no barco derruba gente no mar, mas nunca a tripulação inteira. Vencer rende R$ 1.000.
+- **Meteoro (TAB, só o anfitrião):** o fim da partida.
+- **Comandos de teste (TAB, só o anfitrião):** teleporte (deque de Laguna, entrada da Ilha do Vulcão, escadaria do templo, níveis 1 a 4 do templo, beiral da cratera, topo da cachoeira, para dentro do barco), modo voar (rodinha muda a velocidade, ESPAÇO sobe, C desce, SHIFT turbo), barco no deque ou na boca do rio do vulcão, instalar todas as melhorias, + R$ 5.000, kit de itens, tempestade agora, acalmar, Nessie agora, derrotar a Nessie e abrir/fechar os portões do templo. Valem para todos os pescadores, a não ser que "Afetar apenas o anfitrião" esteja marcado (barco, dinheiro e clima são sempre da tripulação).
 
-- **Tempestade:** vento, chuva, raios e ondas grandes por uns 2 minutos (clique de novo para acalmar).
-- **Nessie:** a Matriarca do Abismo desperta em mar aberto quando o barco se afasta da ilha. São três estágios (A Espreita, A Fúria e A Matriarca Ferida, com céu vermelho e olhos em brasa), 800 de vida e nove ataques sem marcas na tela (lidos pela animação e pelo som), com pausas curtas entre eles: investidas, golpe de cauda, jato d'água, redemoinho, mordida de baixo para cima, muralha d'água e chuva de espinhos. Os rifles são a arma, e ela é acertável até debaixo d'água: olhos ×5, garganta ×3, guelras ×2, corpo ×1 e espinhos ×0,25. Todo golpe que acerta o barco derruba gente no mar, mas nunca a tripulação inteira: 1 pescador, e o golpe forte derruba até metade (resgate com a corda). Vencer rende R$ 1.000. O ateliê mostra a luta inteira em funcionamento.
-- **Meteoro:** o fim da partida.
+## Ilha do Vulcão
+
+Bem longe de Laguna, na direção para onde a doca aponta (uns 800 m). Não tem ninguém morando: praias de areia preta, selva fechada, um vulcão aceso com fumaça e rio de lava antigo.
+- **Rio navegável:** a boca fica na costa norte; o barco sobe o rio, passa por baixo da ponte de cordas e chega à lagoa com cachoeira e píer de pedra.
+- **Trilhas no mato:** da praia norte e do píer da lagoa até o templo, do templo até a borda da cratera (subida em zigue-zague com rampa suave), até o topo da cachoeira e uma travessia pela ponte de cordas. A calçada do templo fica rente ao chão. Há ruínas no caminho (colunas, muros, guardiões, uma estela).
+- **Templo do Coração do Vulcão:** pirâmide de três degraus com escadaria, serpentes, frisos de glifos, máscaras de pedra, santuário no topo e calçada com guardiões e braseiros. Pelo santuário desce-se a um complexo subterrâneo iluminado por tochas: Salão dos Dardos (placas de pressão, paredes furadas), Fosso das Lanças (ponte de uma pedra só), Galeria das Lâminas, Câmara dos Pilares (pilares de glifos e a porta selada), Rampa da Pedra (a bola gigante), Sala dos Espelhos (feixe de luz e disco solar), Sala dos Ladrilhos (glifos sobre canais de lava) e a Câmara do Coração, com o ídolo, o altar e o artefato. Armadilhas e puzzles ainda estão só na estrutura; o funcionamento e o artefato jogado no vulcão vêm depois.
+- **Níveis do templo:** do santuário no topo (altar de oferendas, serpentes, murais) desce uma escada ao **Nível 1 – Salão dos Dardos**. Cada nível termina num portão de pedra; resolver o puzzle do nível ergue o portão e libera a escada para o de baixo: **Nível 2 – Fosso e Galeria das Lâminas**, **Nível 3 – Pilares e Espelhos**, **Nível 4 – Câmara do Coração**, onde fica o artefato. Os puzzles ainda não existem; os portões são abertos pelos comandos de teste e o estado deles é do anfitrião (sincronizado com todos).
+- **Cachoeira:** três cortinas d'água curvas com fluxo animado, rio no topo, rochas molhadas e cipós, poça com espuma, respingos, névoa e arco-íris.
+- **Topo do vulcão:** lava viva na cratera, fluxo de lava, brasas e jorros, torres de basalto, fumarolas de enxofre com vapor, fumaça em duas camadas e o **Beiral do Sacrifício** (plataforma com altar, arco e braseiros sobre a cratera).
+- **Altura e horizonte:** o mar ganha névoa antes de acabar o alcance de desenho, e quanto mais alto você sobe mais nuvens aparecem abaixo, escondendo a borda do mundo.
 
 ## Mercado Althoff e Loja do Pescador
 
 - **Carrinhos (estilo REPO):** ficam no abrigo ao lado da entrada. **E** no puxador pega; ele vai na frente e balança nas curvas. Dá para pegar carona no carrinho de outro pescador (E nele; Espaço desce).
-- **Loja do Pescador:** 45 itens em dois expositores e na vitrine de iscas, cada um com modelo 3D, etiqueta de preço e a regra do que faz (aparece ao olhar). **E** num item joga no carrinho que você empurra, ou pega na mão.
+- **Loja do Pescador:** 45 itens (preços do mercado de verdade: caros) em dois expositores e na vitrine de iscas, cada um com modelo 3D, etiqueta de preço e a regra do que faz (aparece ao olhar). **E** num item joga no carrinho que você empurra, ou pega na mão.
 - **Autoatendimento:** segure **E** olhando o leitor para passar um item por vez (o laser acende e a tela lista tudo). **E** na maquininha paga com o caixa da tripulação; a impressora solta o cupom. Sem saldo, a tela avisa.
 - **A porta não deixa sair nada sem pagar:** nem o carrinho, nem o item na mão.
 - **Depois de pagar:** tudo vai para a mochila (8 espaços; 12 com a mochila estanque). **Melhorias do barco** (sonar, rádio, barômetro, âncora, guincho, motor, hélice, leme, bateria, âncora de deriva, lampião) se instalam uma por vez: com a melhoria na mochila, segure **E** olhando o barco. Ela aparece no convés. Se o barco reaparecer no cais (abandonado), as melhorias instaladas se perdem.
@@ -149,7 +159,9 @@ O lobby mostra o diagnóstico da sua rede, por exemplo "NAT comum", "NAT simétr
 
 ## Desempenho
 
-As luzes nunca mudam de quantidade (as da ilha e da Nessie ficam fixas na cena e só apagam pela intensidade); se mudassem, o three.js recompilaria todos os materiais no meio do jogo, que era o engasgo do meteoro, da explosão e da Nessie. As malhas estáticas da ilha são juntadas por material, o interior do mercado só é desenhado de perto e moradores longe não projetam sombra. Qualidade **Alta** usa resolução até 1,5×, sombras de 2048 px que acompanham o jogador, pós-processamento completo e SMAA. **Leve** reduz resolução, sombras, grama e partículas. Os shaders do clímax são compilados no carregamento.
+Um contador de FPS discreto fica no canto superior direito.
+
+Otimizações: cada objeto só é desenhado se estiver na frente da câmera; a vegetação da Ilha do Vulcão é instanciada com LOD (modelo completo de perto, copa simples mais longe, nada além da névoa) e o templo de dentro só existe com a câmera por perto; Laguna inteira some quando você está longe (e as peças pequenas somem antes das grandes). As luzes nunca mudam de quantidade (as da ilha e da Nessie ficam fixas na cena e só apagam pela intensidade); se mudassem, o three.js recompilaria todos os materiais no meio do jogo, que era o engasgo do meteoro, da explosão e da Nessie. As malhas estáticas da ilha são juntadas por material, o interior do mercado só é desenhado de perto e moradores longe não projetam sombra. Qualidade **Alta** usa resolução até 1,5×, sombras de 2048 px que acompanham o jogador, pós-processamento completo e SMAA. **Leve** reduz resolução, sombras, grama e partículas. Os shaders do clímax são compilados no carregamento.
 
 ## GitHub Pages
 

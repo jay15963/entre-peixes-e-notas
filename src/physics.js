@@ -32,5 +32,10 @@ export class Ragdolls {
     const hf=new CANNON.Body({mass:0});hf.addShape(new CANNON.Heightfield(data,{elementSize:el}));hf.quaternion.setFromEuler(-Math.PI/2,0,0);hf.position.set(x0,0,z0+size);this.world.addBody(hf);this.island=[hf];
     for(const c of colliders){const b=new CANNON.Body({mass:0});if(c.r)b.addShape(new CANNON.Cylinder(c.r,c.r,6,8));else b.addShape(new CANNON.Box(new CANNON.Vec3((c.x1-c.x0)/2,3,(c.z1-c.z0)/2)));
       const x=c.r?c.x:(c.x0+c.x1)/2,z=c.r?c.z:(c.z0+c.z1)/2;b.position.set(x,ground(x,z)+2.9,z);this.world.addBody(b);this.island.push(b);}}
+  // segunda ilha (vulcão): heightfield e colunas próprias, que não somem com a explosão de Laguna
+  addExtra(ground,{x0,z0,size,n=150},colliders=[]){const el=size/n,data=[];for(let i=0;i<=n;i++){const row=[];for(let j=0;j<=n;j++)row.push(Math.max(-8,ground(x0+i*el,z0+size-j*el)));data.push(row);}
+    const hf=new CANNON.Body({mass:0});hf.addShape(new CANNON.Heightfield(data,{elementSize:el}));hf.quaternion.setFromEuler(-Math.PI/2,0,0);hf.position.set(x0,0,z0+size);this.world.addBody(hf);
+    for(const c of colliders){const b=new CANNON.Body({mass:0}),hy=Math.min(6,((c.y1??6)-(c.y0??0))/2);if(c.r)b.addShape(new CANNON.Cylinder(c.r,c.r,hy*2,8));else b.addShape(new CANNON.Box(new CANNON.Vec3((c.x1-c.x0)/2,hy,(c.z1-c.z0)/2)));
+      const x=c.r?c.x:(c.x0+c.x1)/2,z=c.r?c.z:(c.z0+c.z1)/2;b.position.set(x,c.y0!=null&&c.y0>-40?c.y0+hy:ground(x,z)+hy-.1,z);this.world.addBody(b);}}
   removeIsland(){for(const b of this.island||[])this.world.removeBody(b);this.island=[];}
 }

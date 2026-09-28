@@ -12,7 +12,7 @@ import {U} from './shaders.js';
 const V=(x=0,y=0,z=0)=>new THREE.Vector3(x,y,z);
 const angDiff=(a,b)=>Math.atan2(Math.sin(a-b),Math.cos(a-b));
 export const NEW_EQ=()=>({gear:{},fuel:0,energy:100,anchor:0,anchorAt:null,anchorT:0,drogue:0,lamp:1,marks:[],beacons:[],traps:[],chum:[],rattle:0,flare:null,decoy:null,tether:0,gullsOff:0,treasure:{},photos:{},fightId:0});
-export const PLAYER_STATUS=['inv','bait','breath','fed','prov','torch','hold','cartH','ride'];
+export const PLAYER_STATUS=['inv','bait','breath','fed','prov','torch','hold','cartH','ride','fly'];
 export const newStatus=()=>({inv:[],sel:-1,bait:null,breath:1,fed:0,prov:0,torch:0,hold:null,cartH:-1,ride:-1});
 // lugares do equipamento instalado no convés (coordenadas do barco) e o tamanho do modelo
 const MOUNTS={motor:[.42,.62,-3.62,.95,Math.PI],propeller:[.42,.08,-4.05,.34,0],rudder:[-.42,.3,-3.72,.75,Math.PI],anchor:[.34,.1,3.78,.62,Math.PI/2],winch:[-.32,.1,3.7,.46,0],sonar:[-.42,.83,-2.84,.36,Math.PI],radio:[.44,.83,-2.84,.32,Math.PI],barometer:[.62,.9,-2.2,.3,-Math.PI/2],battery:[.55,-.07,-2.1,.34,-Math.PI/2],lantern:[-.5,.83,2.28,.34,0],drogue:[-.55,-.07,-3.2,.42,0]};
@@ -138,7 +138,7 @@ export class Gear {
   // ================= cliente: controles =================
   localControls(controls,dt,input){const C=this.c,p=C.me();if(!p)return;const inv=p.inv||[];
     if(controls.slot>=0){const s=controls.slot;this.sel=this.sel===s?-1:s;if(this.sel>=inv.length)this.sel=-1;this.onSel();}
-    if(controls.wheel&&inv.length&&!this.zoom&&(p.rifle??-1)<0){this.sel=((this.sel??-1)+controls.wheel+inv.length+1)%(inv.length+1);if(this.sel===inv.length)this.sel=-1;this.onSel();}
+    if(controls.wheel&&inv.length&&!this.zoom&&!p.fly&&(p.rifle??-1)<0){this.sel=((this.sel??-1)+controls.wheel+inv.length+1)%(inv.length+1);if(this.sel===inv.length)this.sel=-1;this.onSel();}
     if((this.sel??-1)>=inv.length)this.sel=-1;controls.sel=this.sel??-1;const id=inv[this.sel]?.[0];
     if(this.zoom&&id!=='scope')this.zoom=0;
     const free=(p.rifle??-1)<0&&!(C.world.rope.h===C.localId&&C.world.rope.s!=='tied')&&p.mode!=='guitar'&&!p.hold&&(p.cartH??-1)<0;
@@ -296,7 +296,7 @@ export class Gear {
     for(const s of [...schoolsAt(T),...this.eq.chum]){const [x,y,d]=toS(s.x,s.z);if(d>range)continue;c.fillStyle='rgba(120,255,190,.8)';for(let k=0;k<9;k++){c.beginPath();c.arc(x+Math.sin(k*2.1+T)*5,y+Math.cos(k*1.7+T*1.3)*4,1.6,0,6.283);c.fill();}}
     const f=C.fight;if(f?.alive){const [x,y,d]=toS(f.S.x,f.S.z);if(d<range*1.6){const k=Math.min(1,range/d);c.save();c.translate(x*k,y*k);c.rotate(f.S.heading-b.heading);c.fillStyle='rgba(255,70,50,.85)';c.beginPath();c.ellipse(0,0,6,18,0,0,6.283);c.fill();c.restore();}}
     c.fillStyle='#bfffe0';c.beginPath();c.moveTo(0,-7);c.lineTo(4,5);c.lineTo(-4,5);c.fill();c.restore();c.fillStyle='rgba(191,255,224,.8)';c.font='bold 10px Arial';c.fillText('SONAR · 120 m',10,172);c.fillText(Math.round(this.eq.energy)+'%',150,14);}
-  drawChart(){const C=this.c,c=this.chart.getContext('2d'),W=180,S=700/W,cx=ISLAND.x,cz=ISLAND.z-40;
+  drawChart(){const C=this.c,c=this.chart.getContext('2d'),W=180,S=1250/W,cx=ISLAND.x,cz=(ISLAND.z+(-760))/2;
     if(!this.chartBase){const b=document.createElement('canvas');b.width=b.height=W;const x=b.getContext('2d'),img=x.createImageData(W,W);for(let j=0;j<W;j++)for(let i=0;i<W;i++){const wx=cx+(i-W/2)*S,wz=cz+(j-W/2)*S,g=C.island.exploded?-99:C.island.ground(wx,wz),o=(j*W+i)*4;const land=g>-.35;const d=land?0:Math.min(1,-g/8);img.data[o]=land?214:lerp(120,28,d);img.data[o+1]=land?196:lerp(180,70,d);img.data[o+2]=land?150:lerp(200,120,d);img.data[o+3]=255;}x.putImageData(img,0,0);this.chartBase=b;}
     const P=(x,z)=>[(x-cx)/S+W/2,(z-cz)/S+W/2];c.drawImage(this.chartBase,0,0);c.fillStyle='rgba(250,240,210,.12)';c.fillRect(0,0,W,W);
     c.strokeStyle='rgba(90,40,20,.8)';c.setLineDash([3,3]);c.lineWidth=1.3;c.beginPath();this.trail.forEach(([x,z],i)=>{const [a,b]=P(x,z);i?c.lineTo(a,b):c.moveTo(a,b);});c.stroke();c.setLineDash([]);

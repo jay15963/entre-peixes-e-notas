@@ -9,7 +9,7 @@ import {NessieFight,MAX_HP} from '../src/nessie-fight.js';
 
 function marketFixture(){
   const p={id:0,net:0,x:ISLAND.x,z:ISLAND.z+8,height:SHOP.floor,land:1,mode:'walk',yaw:0,tp:0,...newStatus()};
-  const events=[],c={world:{mk:NEW_MARKET(),eq:NEW_EQ(),money:1000},players:[p],localId:0,elapsed:10,
+  const events=[],c={world:{mk:NEW_MARKET(),eq:NEW_EQ(),money:10000},players:[p],localId:0,elapsed:10,
     boatState:{x:200,z:0},island:{collide:(x,z)=>[x,z]},ground:()=>SHOP.floor,
     worldOf:(q,h=0)=>new THREE.Vector3(q.x,q.height+h,q.z),worldYaw:q=>q.yaw,
     shopLanes:[{u:0,v:8,scan:[0,2,8],pay:[0,2,8]}],
@@ -39,10 +39,10 @@ test('Carrinho cheio recusa item também pelo puxador, sem perder a mão',()=>{
 });
 test('Autoatendimento exige leitura, limita repetição e cobra uma única vez',()=>{
   const {p,c,market,cart,item}=marketFixture();cart.it.push(item('rod'),item('reel'));
-  market.pay(p);assert.equal(c.world.money,1000);
+  market.pay(p);assert.equal(c.world.money,10000);
   market.scan(p);market.scan(p);assert.deepEqual(cart.it.map(q=>q.s),[1,0]);
   c.elapsed+=SCAN_TIME+.01;market.scan(p);market.pay(p);
-  assert.equal(c.world.money,1000-ITEMS.rod.price-ITEMS.reel.price);assert.equal(cart.it.length,0);
+  assert.equal(c.world.money,10000-ITEMS.rod.price-ITEMS.reel.price);assert.equal(cart.it.length,0);
   assert.deepEqual(p.inv.map(q=>q[0]),['rod','reel']);const paid=c.world.money;market.pay(p);assert.equal(c.world.money,paid);
 });
 test('Saldo insuficiente não libera mercadoria e caixa abandonado desfaz leituras',()=>{

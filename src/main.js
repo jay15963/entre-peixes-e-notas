@@ -2,7 +2,7 @@ import './style.css';
 import './items.css';
 import * as THREE from 'three';
 import {mergeGeometries} from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import {CONFIG,SPAWNS,Lobby,Fishing,newPlayer,weatherAt,waveHeight,tsunamiHeight,insideBoat,smooth,clamp,lerp,inputPacket,storyTime,STORM_TIME,ROPE,ropeWindow,ropeAngle,ropeHit,driftAt,Shoo,DROWN_TIME} from './core.js';
+import {CONFIG,SPAWNS,Lobby,Fishing,newPlayer,weatherAt,waveHeight,tsunamiHeight,insideBoat,smooth,clamp,lerp,inputPacket,storyTime,STORM_TIME,ROPE,ropeWindow,ropeAngle,ropeHit,driftAt,Shoo,DROWN_TIME,STORM_DUR,nextStormAt} from './core.js';
 import {loadAssets,setFirstPerson} from './models.js';
 import {makeCharacter,addBakerOutfit,LOOKS} from './characters.js';
 import {makeBoat,addHelm,addLantern,addMotor,makeBucket,makeGuitar} from './boat.js';
@@ -31,12 +31,13 @@ import {Showroom,renderIcons,cutIcon} from './storefront.js';
 import {makeStoreItem} from './store-models.js';
 import {Market,NEW_MARKET} from './market.js';
 import {Gear,NEW_EQ,newStatus,PLAYER_STATUS} from './items.js';
+import {VolcanoIsland,VOLCANO,TEMPLE,LEVELS,WF,LEDGE} from './volcano.js';
 
 const $=id=>document.getElementById(id),show=(id,value=true)=>$(id).hidden=!value;
 const Y=new THREE.Vector3(0,1,0),V=(x=0,y=0,z=0)=>new THREE.Vector3(x,y,z);
 let renderer,scene,camera,environment,cataclysm,fluid,post,assets,boat,helm,lantern,motor,fx,ragdolls,gulls,rackRifles=[],viewmodel,shotFX,menuCharacters=[],island,story=45;
 let running=false,solo=false,host=true,localId=0,selected=0,elapsed=0,menuTime=0,paused=false,cinematic=false,ended=false,blackout=false,titleShown=false,engineDead=false;
-const NEW_WORLD=()=>({storm:null,nessie:0,impact:null,bucket:[],rifles:[-1,-1],money:0,trig:null,stolen:{},bucketAt:-1,bucketPos:null,rope:{s:'tied',h:-1,tgt:1,pid:-1,t:0,ok:true,from:null,to:null},guitar:-1,shoo:null,talk:null,eq:NEW_EQ(),mk:NEW_MARKET()});
+const NEW_WORLD=()=>({storm:null,nessie:0,impact:null,bucket:[],rifles:[-1,-1],money:0,trig:null,stolen:{},bucketAt:-1,bucketPos:null,rope:{s:'tied',h:-1,tgt:1,pid:-1,t:0,ok:true,from:null,to:null},guitar:-1,shoo:null,talk:null,eq:NEW_EQ(),mk:NEW_MARKET(),nextStorm:nextStormAt(0),stormCount:0,temple:{gates:[0,0,0]}});
 // Balde: -1 no barco, -2 no chão (bucketPos), ou o id de quem carrega. Corda: 'boat' (rolo no convés), 'held', 'fly', 'tied' (no cabeço), 'pull' (resgate)
 let players=[],models=[],fishing=[],remoteInputs={},netTick=0,lastPhase='sunset',world=NEW_WORLD(),pred=null,boatTarget=null,myNet=0,hitMarkT=0;
 let lobby=new Lobby(),codeAction='',expectUnlock=false;
@@ -47,7 +48,7 @@ let stepDist=0,bobPhase=0,shockAt=Infinity,reelTick=0,hold=null,warned=false,tab
 // Padeiro da padaria do mercado (NPC): trabalha no balcão, voa com o tapa e volta andando
 const baker={mode:'work',x:0,y:0,z:0,yaw:Math.PI,t:0,path:[],model:null};
 // Itens do barco: balde, corda (física de Verlet), violão; minigames locais (laço, espantar gaivota, violão)
-let shopDetail=[],lightPins=[],showroom=null,market=null,gear=null,icons={},vmItem='',fight=null,battle=null,bossHud=null,bossMarkers=[],fluidOff=0,villagers=null,hull=null,bucketObj=null,rope=null,guitarStand=null,ropeGame=null,shooGame=new Shoo(),gh=new GuitarHero(),ghCanvas=null,driftT=0,talkShown=null;
+let fpsAcc=0,fpsN=0,volcano=null,partCull=[],shopDetail=[],lightPins=[],showroom=null,market=null,gear=null,icons={},vmItem='',fight=null,battle=null,bossHud=null,bossMarkers=[],fluidOff=0,villagers=null,hull=null,bucketObj=null,rope=null,guitarStand=null,ropeGame=null,shooGame=new Shoo(),gh=new GuitarHero(),ghCanvas=null,driftT=0,talkShown=null;
 const GUITAR_SPOT={x:-.62,z:-.26},ROPE_HOME={x:-.45,z:2.9},BOW_CLEAT={x:0,y:.9,z:4.55};
 // Juice: hit-stop, câmera lenta e molas de câmera (tranco, aterrissagem, soco de FOV)
 let breath=1,hitStop=0,slowMo=0,aberrPulse=0,runFov=0,strafeRoll=0,prevGrounded=true,prevSlap=0,prevHeading=0,steerVis=0,lastVy=0,lastControls={};
@@ -131,7 +132,7 @@ function event(name,p){
   if(name==='bossBoat'){const k=p.power;boat.userData.kickRoll=(boat.userData.kickRoll||0)+(Math.random()<.5?-1:1)*.35*k;boat.userData.kickPitch=(boat.userData.kickPitch||0)-.2*k;if(!me()?.land)jolt(6*k,(Math.random()-.5)*6,4*k,-10);aberrPulse=Math.max(aberrPulse,.5*k);sound.effect('thud',{pos:boat.position});}
   if(name==='bakerTalk'){world.talk={at:elapsed,id:p.id};}
   if(name==='bakerVanish'){const at=V(...p.at);sound.effect('leave',{pos:at});sound.effect('puff',{pos:at});for(let i=0;i<60;i++){const a=Math.random()*6.28,r=Math.random()*.6,h=Math.random()*1.8;fx.spray.emit(elapsed,at.x+Math.cos(a)*r*.4,at.y+h,at.z+Math.sin(a)*r*.4,Math.cos(a)*r*1.4,.3+Math.random()*.8,Math.sin(a)*r*1.4,1.4+Math.random()*1.2,1.2,-.02,.22,.55,1);}}
-  if(name==='boatHome'){if(!host){boatState=BERTH_STATE();boatTarget=null;}sound.effect('ropeTie',{pos:boat.position});}
+  if(name==='boatHome'){if(!host){boatState=p.x!=null?{x:p.x,z:p.z,heading:p.h,speed:0}:BERTH_STATE();boatTarget=null;}sound.effect('ropeTie',{pos:boat.position});}
   if(name==='mk')market.event(p);if(name==='gear')gear.event(p);
   if(name==='bakerBack'){sound.effect('join',{pos:V(baker.x,baker.y+1,baker.z)});sound.effect('door',{pos:V(baker.x,baker.y+1,baker.z)});}
 }
@@ -174,7 +175,7 @@ function receive(p,from){
 }
 function applySnapshot(p){
   const drift=p.time-elapsed;if(Math.abs(drift)>.6)elapsed=p.time;else elapsed+=drift*.15;
-  boatTarget=p.boat;boatState.heading=p.boat.heading;boatState.speed=p.boat.speed;if(p.bucket)world.bucket=p.bucket;if(p.rifles)world.rifles=p.rifles;world.bucketAt=p.bucketAt??-1;world.bucketPos=p.bucketPos||null;if(p.rope)world.rope=p.rope;if(p.eq)world.eq=p.eq;if(p.mk)world.mk=p.mk;world.guitar=p.guitar??-1;world.shoo=p.shoo||null;world.talk=p.talk||null;world.money=p.money??world.money;world.trig=p.trig||null;world.storm=p.storm||null;world.nessie=p.nessie||0;if(p.boss){ensureFight();if(!fight.alive)startFightLocal(p.boss.s[0],p.boss.s[1]);fight.applySnapshot(p.boss);}else if(fight?.alive&&!p.boss)endFightLocal();if(p.baker)Object.assign(baker,{mode:p.baker[0],x:p.baker[1],y:p.baker[2],z:p.baker[3],yaw:p.baker[4]});
+  boatTarget=p.boat;boatState.heading=p.boat.heading;boatState.speed=p.boat.speed;if(p.bucket)world.bucket=p.bucket;if(p.rifles)world.rifles=p.rifles;world.bucketAt=p.bucketAt??-1;world.bucketPos=p.bucketPos||null;if(p.rope)world.rope=p.rope;if(p.eq)world.eq=p.eq;if(p.temple)world.temple=p.temple;if(p.mk)world.mk=p.mk;world.guitar=p.guitar??-1;world.shoo=p.shoo||null;world.talk=p.talk||null;world.money=p.money??world.money;world.trig=p.trig||null;world.storm=p.storm||null;world.nessie=p.nessie||0;if(p.boss){ensureFight();if(!fight.alive)startFightLocal(p.boss.s[0],p.boss.s[1]);fight.applySnapshot(p.boss);}else if(fight?.alive&&!p.boss)endFightLocal();if(p.baker)Object.assign(baker,{mode:p.baker[0],x:p.baker[1],y:p.baker[2],z:p.baker[3],yaw:p.baker[4]});
   if(p.impact){if(!world.impact||world.impact.d!==p.impact.d){world.impact={...p.impact};cataclysm.setImpact(world.impact);}}
   for(const sp of p.players){const q=players[sp.id];if(!q)continue;
     if(sp.id===localId){const {x,z,height,yaw,pitch,speed,...rest}=sp;Object.assign(q,rest,{x,z,height});pred.mode=sp.mode;pred.fish=sp.fish;pred.slap=sp.slap;pred.rifle=sp.rifle;pred.ammo=sp.ammo;pred.reload=sp.reload;pred.baly=sp.baly;pred.water=sp.water;pred.drown=sp.drown;for(const k of PLAYER_STATUS)pred[k]=sp[k];if(sp.mode!=='walk'||sp.tp!==pred.tp){if(pred.land!==sp.land)input.yaw+=(sp.land?1:-1)*boatState.heading;pred.x=x;pred.z=z;pred.height=height;pred.land=sp.land;pred.vy=0;pred.tp=sp.tp;}}
@@ -184,7 +185,7 @@ function applySnapshot(p){
   if(p.ragdolls)ragdolls.sync(p.ragdolls,id=>id==='baker'?baker.model:String(id).startsWith('npc')?villagers?.list[+String(id).slice(3)]?.model:models[id]);
   gulls.apply(p.gulls);
 }
-function snapshot(){return {type:'snapshot',time:elapsed,eq:world.eq,mk:world.mk,storm:world.storm,nessie:world.nessie,boss:fight?.alive?fight.snapshot():null,boat:boatState,impact:world.impact,bucket:world.bucket,money:world.money,trig:world.trig,bucketAt:world.bucketAt,bucketPos:world.bucketPos,rope:world.rope,guitar:world.guitar,shoo:world.shoo,talk:world.talk,baker:[baker.mode,+baker.x.toFixed(2),+baker.y.toFixed(2),+baker.z.toFixed(2),+baker.yaw.toFixed(2)],rifles:world.rifles,gulls:gulls.snapshot(),players,ragdolls:ragdolls.active.size?ragdolls.snapshot():null,fishing:fishing.map(f=>({phase:f.phase,progress:f.progress,tension:f.tension,target:f.target,needle:f.needle,vel:f.vel,run:f.run,species:f.species,caught:f.caught,combo:f.combo,weight:f.weight}))};}
+function snapshot(){return {type:'snapshot',time:elapsed,temple:world.temple,eq:world.eq,mk:world.mk,storm:world.storm,nessie:world.nessie,boss:fight?.alive?fight.snapshot():null,boat:boatState,impact:world.impact,bucket:world.bucket,money:world.money,trig:world.trig,bucketAt:world.bucketAt,bucketPos:world.bucketPos,rope:world.rope,guitar:world.guitar,shoo:world.shoo,talk:world.talk,baker:[baker.mode,+baker.x.toFixed(2),+baker.y.toFixed(2),+baker.z.toFixed(2),+baker.yaw.toFixed(2)],rifles:world.rifles,gulls:gulls.snapshot(),players,ragdolls:ragdolls.active.size?ragdolls.snapshot():null,fishing:fishing.map(f=>({phase:f.phase,progress:f.progress,tension:f.tension,target:f.target,needle:f.needle,vel:f.vel,run:f.run,species:f.species,caught:f.caught,combo:f.combo,weight:f.weight}))};}
 function changeCharacter(i){selected=i;if(net.connected){if(net.host){try{lobby.join(0,i);}catch{toast('Esse personagem já foi escolhido.');}broadcastLobby();}else net.send({type:'pick',character:i});return;}lobby=new Lobby();lobby.join(0,i);updateLobby();}
 
 // ---------- Nessie na partida ----------
@@ -192,8 +193,13 @@ function ensureFight(){if(fight)return fight;fight=new NessieFight(scene,{fluid,
 function startFightLocal(x,z){ensureFight();if(!fluid.active||!world.impact){fluid.start(new THREE.Vector2(boatState.x,boatState.z),9);}fluidOff=0;fight.begin(x,z);show('boss-hud');if(sound.ctx&&!battle)battle=new BattleMusic(sound);if(battle)battle.playing=true;}
 function endFightLocal(win=false){if(!fight)return;fight.end();show('boss-hud',false);if(battle)battle.playing=false;fluidOff=8;if(win)bossBanner('A MATRIARCA CAIU','A tripulação sobreviveu. A Nessie afundou no abismo.');}
 // o anfitrião começa a luta quando o barco chega em mar aberto (longe da ilha)
+// tempestades chegam sozinhas; na segunda (quarta, sexta…) a Nessie espera o barco em mar aberto durante a tempestade.
+// Na luta a tempestade dura enquanto ela estiver viva; o meteoro continua sendo só do anfitrião (TAB).
+function stormTick(){if(world.trig||fight?.alive||island.exploded)return;const st=world.storm;if(st&&elapsed<st.at+(st.dur??STORM_TIME))return;
+  if(world.nessie&&st){world.nessie=0;}
+  if(elapsed>=world.nextStorm){world.stormCount=(world.stormCount||0)+1;world.storm={at:elapsed,dur:STORM_DUR};const boss=world.stormCount%2===0;if(boss)world.nessie=1;world.nextStorm=elapsed+STORM_DUR+(nextStormAt(0));stateEvent('storm',{on:true,n:world.stormCount,boss});if(boss)stateEvent('nessieArmed',{});}}
 function summonNessie(){nessieCheck(true);}
-function nessieCheck(force=false){if(!world.nessie||fight?.alive||world.trig||island.exploded)return;const d=Math.hypot(boatState.x-ISLAND.x,boatState.z-ISLAND.z);if(d<(force?60:150))return;world.eq.fightId++;
+function nessieCheck(force=false){if(!world.nessie||fight?.alive||world.trig||island.exploded)return;const d=Math.hypot(boatState.x-ISLAND.x,boatState.z-ISLAND.z);if(d<(force?60:150))return;if(Math.hypot(boatState.x-VOLCANO.x,boatState.z-VOLCANO.z)<VOLCANO.size*.62)return;world.eq.fightId++;
   world.nessie=0;const a=boatState.heading+Math.PI*.6;const x=boatState.x+Math.sin(a)*45,z=boatState.z+Math.cos(a)*45;world.storm={at:elapsed-20,dur:9999};startFightLocal(x,z);stateEvent('bossStart',{x,z});}
 function bossBroadcast(e){if(!solo&&host&&['splash','ring','beam','wall','spine','sfx','surge','attack','stage','dying'].includes(e.k))net.send({type:'event',name:'boss',payload:e,v:CONFIG.protocol});if(['attack','stage','dying'].includes(e.k))bossUI(e);}
 function hostBoss(dt){if(!fight?.alive)return;const vx=Math.sin(boatState.heading)*boatState.speed,vz=Math.cos(boatState.heading)*boatState.speed;
@@ -208,7 +214,7 @@ function hostBoss(dt){if(!fight?.alive)return;const vx=Math.sin(boatState.headin
       // todo golpe no barco derruba gente, mas nunca a tripulação inteira: 1 pescador (golpe forte: até metade); a onda que só passa derruba às vezes
       {const aboard=players.filter(q=>!q.land&&q.mode!=='ragdoll'&&q.mode!=='gone'&&q.mode!=='drive'),n=aboard.length;let k=e.k==='boatHit'?(hitK>=1.5?Math.max(1,Math.floor(n/2)):1):(Math.random()<.4?1:0);if(n>1)k=Math.min(k,n-1);
         for(const q of aboard.sort(()=>Math.random()-.5).slice(0,k)){const a=Math.random()*6.28;rag(q.id,'boss',[dx/l*6*hitK+Math.cos(a)*3,6+hitK*4,dz/l*6*hitK+Math.sin(a)*3]);}}}
-    if(e.k==='finished'){const reward=1000;world.money=Math.round((world.money+reward)*100)/100;world.storm={at:elapsed-(STORM_TIME-20),dur:STORM_TIME};endFightLocal(true);stateEvent('bossEnd',{win:true,reward,money:world.money});}}
+    if(e.k==='finished'){const reward=1000;world.money=Math.round((world.money+reward)*100)/100;world.storm={at:elapsed-(STORM_TIME-20),dur:STORM_TIME};world.nextStorm=elapsed+20+nextStormAt(0);endFightLocal(true);stateEvent('bossEnd',{win:true,reward,money:world.money});}}
   if(fight.pull){const dx=fight.pull.x-boatState.x,dz=fight.pull.z-boatState.z,l=Math.hypot(dx,dz)||1;boatState.x+=dx/l*fight.pull.s*dt;boatState.z+=dz/l*fight.pull.s*dt;}}
 function bossUI(e){if(e.k==='attack'){gear?.onBossAttack(e.name);/* sem o nome do ataque no meio da tela: o golpe se lê pela animação e pelo som */if(battle&&['ram','tripleRam','tail','cannon','bite','wall','volley','rage'].includes(e.name))battle.riser();if(e.name==='rage'&&e.stage===1)bossBanner('NESSIE','A MATRIARCA DO ABISMO DESPERTOU');}
   if(e.k==='stage'){bossBanner(`ESTÁGIO ${e.n}`,['','A ESPREITA','A FÚRIA','A MATRIARCA FERIDA'][e.n]);battle?.hit();}if(e.k==='splash'&&e.col>15){battle?.hit();const d=Math.hypot(e.x-camera.position.x,e.z-camera.position.z);if(d<60)jolt(4*(1-d/60),(Math.random()-.5)*4,3*(1-d/60),-6);}}
@@ -221,7 +227,7 @@ function runEvent(kind){if(!host||!running||ended||cinematic)return;
   if(kind==='storm'){const on=!(world.storm&&storyTime(elapsed,null,world.storm)>60);world.storm=on?{at:elapsed,dur:STORM_TIME}:{at:elapsed-(STORM_TIME-20),dur:STORM_TIME};stateEvent('storm',{on});}
   if(kind==='nessie'){if(world.trig){toast('O meteoro já está vindo.');return;}if(fight?.alive){toast('A Nessie já está aqui!');return;}world.nessie=1;world.storm={at:elapsed,dur:9999};stateEvent('nessieArmed',{});}
   if(kind==='meteor'){if(fight?.alive){endFightLocal();stateEvent('bossEnd',{win:false});}triggerMeteor();}}
-let eventsOpen=false;function openEvents(on){if(on===eventsOpen)return;eventsOpen=on;show('events',on);if(on){expectUnlock=true;input.unlock();$('ev-storm').classList.toggle('on',!!(world.storm&&storyTime(elapsed,null,world.storm)>60));$('ev-nessie').classList.toggle('on',!!(world.nessie||fight?.alive));$('ev-meteor').disabled=!!world.trig;}else if(running&&!ended&&!cinematic)input.lock();}
+let eventsOpen=false;function openEvents(on){if(on===eventsOpen)return;eventsOpen=on;show('events',on);if(on){expectUnlock=true;input.unlock();$('ev-storm')?.classList.toggle('on',!!(world.storm&&storyTime(elapsed,null,world.storm)>60));$('ev-nessie')?.classList.toggle('on',!!(world.nessie||fight?.alive));$('ev-meteor').disabled=!!world.trig;}else if(running&&!ended&&!cinematic)input.lock();}
 // ---------- Partida ----------
 function start(isSolo,roster){
   if(running)return;solo=isSolo;host=isSolo||net.host;const ros=[...roster].sort((a,b)=>a.id-b.id);localId=isSolo?0:Math.max(0,ros.findIndex(r=>r.id===(host?0:myNet)));roster=ros;running=true;paused=false;elapsed=0;ended=false;cinematic=false;boatState=BERTH_STATE();
@@ -273,8 +279,11 @@ function floorAt(x,z){const benches=[[-2.84,1.29],[-.258,1.48],[2.279,1.225]];fo
 // Movimento com autoridade local (anfitrião para si; convidado com predição e envio da posição).
 function moveLocal(p,i,dt,t){
   p.yaw=i.yaw??p.yaw;p.pitch=i.pitch??p.pitch;if(p.mode!=='walk'){p.speed=0;return;}
+  // modo voar (comando de teste): anda para onde olha, ESPAÇO sobe, C desce, SHIFT turbo, sem gravidade nem colisão
+  if(p.fly){const sp=flySpeed*(i.run?2.5:1),cp=Math.cos(p.pitch||0),fx=Math.sin(p.yaw)*cp,fz=Math.cos(p.yaw)*cp,fy=Math.sin(p.pitch||0),rx=-Math.cos(p.yaw),rz=Math.sin(p.yaw);
+    p.x+=(fx*(i.z||0)+rx*(i.x||0))*sp*dt;p.z+=(fz*(i.z||0)+rz*(i.x||0))*sp*dt;p.height=clamp(p.height+(fy*(i.z||0)+(i.upHeld?1:0)-(i.downHeld?1:0))*sp*dt,-30,590);p.vy=0;p.speed=0;p.fall=false;return;}
   const boost=(p.baly>0?1.7:1)*gear.speedMul(p)*((p.cartH??-1)>=0?.9:1),fx=Math.sin(p.yaw),fz=Math.cos(p.yaw),rx=-Math.cos(p.yaw),rz=Math.sin(p.yaw);let mx=fx*(i.z||0)+rx*(i.x||0),mz=fz*(i.z||0)+rz*(i.x||0);const len=Math.hypot(mx,mz);
-  const floorHere=()=>p.land?island.ground(p.x,p.z):floorAt(p.x,p.z);
+  const floorHere=()=>p.land?island.ground(p.x,p.z,p.height):floorAt(p.x,p.z);
   const grounded=p.height<=floorHere()+.02;if(i.jump&&grounded){p.vy=4.6*(p.baly>0?1.2:1);}
   p.speed=0;
   if(len){mx/=len;mz/=len;const speed=(i.run&&gear.canRun(p)?CONFIG.runSpeed:CONFIG.walkSpeed)*boost,dx=mx*speed*dt,dz=mz*speed*dt;
@@ -282,7 +291,7 @@ function moveLocal(p,i,dt,t){
     if(moved)p.speed=speed;else if(!p.land&&displayTick%90===0&&floorAt(p.x+mx*.5,p.z+mz*.5)>.1)toast('ESPAÇO para pular o banco.');}
   p.vy-=10*dt;p.height+=p.vy*dt;const floor=floorHere();if(p.height<floor){if(p.vy<-3.2)sound.effect('land');p.height=floor;p.vy=0;}
   // pulou para fora do cais ou do barco e caiu no mar: vira ragdoll na água (o anfitrião confirma)
-  if(p.land&&floor<-.35&&!p.fall&&p.height<waveHeight(p.x,p.z,t,weatherAt(story).storm)-.25){p.fall=true;p.vy=0;}
+  if(p.land&&floor<-.35&&island.ground(p.x,p.z)<-.35&&!p.fall&&p.height<waveHeight(p.x,p.z,t,weatherAt(story).storm)-.25){p.fall=true;p.vy=0;}
   const w=weatherAt(story);if(!p.land&&w.storm>.25){const ox=p.x,oz=p.z;p.x+=Math.sin(t*2.1)*w.storm*.17*dt;p.z+=Math.cos(t*1.7)*w.storm*.13*dt;if(!insideBoat(p.x,p.z)){p.x=ox;p.z=oz;}}
   if(p.speed&&grounded){stepDist+=p.speed*dt;if(stepDist>(i.run?1.55:.8)){stepDist=0;sound.effect('step');}}
 }
@@ -302,14 +311,14 @@ function boatMove(p,dx,dz,air=false){
 }
 // Em terra: colide com paredes, balcões, casas e árvores; não entra no mar; volta ao barco pisando no convés
 function landMove(p,dx,dz,air=false){
-  let [nx,nz]=island.collide(p.x+dx,p.z+dz,.3);if(villagers&&!island.exploded)[nx,nz]=villagers.push(nx,nz);
+  let [nx,nz]=island.collide(p.x+dx,p.z+dz,.3,p.height);if(villagers&&!island.exploded)[nx,nz]=villagers.push(nx,nz);
   // carrinho e item sem pagar: a porta do mercado segura
   if(!market.canMove(p,nx,nz))return false;
   // do cais para o barco: o convés pode estar a ~60 cm (vão entre a borda do cais e a borda caminhável)
   const dl=Math.hypot(dx,dz)||1;let l=null;for(const k of [0,.25,.5,.75,1]){const c=boat.worldToLocal(V(nx+dx/dl*k,p.height,nz+dz/dl*k));if(insideBoat(c.x,c.z)){l=c;break;}}
   if(l){const f=floorAt(l.x,l.z),deck=boat.localToWorld(V(l.x,CONFIG.deckY+f,l.z)).y;if(p.height-deck<1.4&&p.height-deck>-.6){const wy=p.yaw;p.land=0;p.x=l.x;p.z=l.z;p.height=Math.max(f,p.height-deck+f);p.vy=Math.min(p.vy,0);p.yaw=wy-boatState.heading;if(p===me())input.yaw-=boatState.heading;return true;}}
   // na praia a água continua bloqueada; do cais (ou já sobre a água) dá para pular no mar
-  const g=island.ground(nx,nz),u=p.x-ISLAND.x,v=p.z-ISLAND.z,onDock=u>=DOCK.u0-.1&&u<=DOCK.u1+.1&&v>=DOCK.v0-.1&&v<=DOCK.rampFrom,overSea=island.ground(p.x,p.z)<-.35;
+  const g=island.ground(nx,nz,p.height),u=p.x-ISLAND.x,v=p.z-ISLAND.z,onDock=u>=DOCK.u0-.1&&u<=DOCK.u1+.1&&v>=DOCK.v0-.1&&v<=DOCK.rampFrom,overSea=island.ground(p.x,p.z,p.height)<-.35;
   if(g<-.35&&!(air&&(onDock||overSea))||g>p.height+.55)return false;
   p.x=nx;p.z=nz;return true;
 }
@@ -455,7 +464,7 @@ function ropeTick(dt){const r=world.rope;
 // Espantar a gaivota: o anfitrião dá 8 s; o cliente de quem segura o balde joga e manda o resultado
 function resolveShoo(stole){const sh=world.shoo;if(!sh)return;world.shoo=null;const took=stole&&world.bucket.length>0;if(took){const item=world.bucket.pop();world.stolen[sh.gull]=item;}gulls.resolve(sh.gull,took);}
 const HULL_PTS=[[0,4.5],[0,-3.9],[1.55,0],[-1.55,0],[1.25,2.6],[-1.25,2.6],[1.25,-2.6],[-1.25,-2.6]];
-function boatHits(){if(island.exploded)return false;const h=boatState.heading,c=Math.cos(h),s=Math.sin(h);for(const [lx,lz]of HULL_PTS){if(island.ground(boatState.x+lx*c+lz*s,boatState.z-lx*s+lz*c)>-.85)return true;}return false;}
+function boatHits(){const h=boatState.heading,c=Math.cos(h),s=Math.sin(h);for(const [lx,lz]of HULL_PTS){if(island.ground(boatState.x+lx*c+lz*s,boatState.z-lx*s+lz*c,-1)>-.85)return true;}return false;}
 let emptyBoatT=0;
 function boatHome(){if(fight?.alive){endFightLocal();stateEvent('bossEnd',{win:false});world.storm=null;}boatState=BERTH_STATE();world.rope={s:'tied',h:-1,tgt:1,pid:-1,t:elapsed,ok:true,from:null,to:null};world.eq.anchor=0;world.eq.anchorAt=null;world.eq.drogue=0;world.eq.gear={};world.eq.fuel=0;world.eq.energy=100;stateEvent('boatHome',{});}
 function hostTick(dt,local){
@@ -492,7 +501,7 @@ function hostTick(dt,local){
     stateEvent('explode',{});}
   // barco abandonado (ninguém a bordo) longe do cais: em 10 s ele reaparece amarrado no cais de Laguna
   if(!island.exploded&&!world.trig&&!players.some(q=>!q.land&&q.mode!=='ragdoll'&&q.mode!=='gone')&&!docked()){emptyBoatT+=dt;if(emptyBoatT>10){emptyBoatT=0;boatHome();}}else emptyBoatT=0;
-  nessieCheck();hostBoss(dt);
+  stormTick();nessieCheck();hostBoss(dt);
   bakerTick(dt);
   netTick+=dt;if(!solo&&netTick>.05){netTick=0;net.send(snapshot());}
 }
@@ -537,7 +546,7 @@ function cinematicUpdate(t,dt){
 function fpCamera(t,dt){
   const p=me();if(!p)return;
   if(p.mode==='ragdoll'&&ragdolls.active.has(localId)){const torso=ragdolls.active.get(localId).bodies.torso.position,target=V(torso.x,torso.y,torso.z);const back=V(Math.sin(input.yaw+boatState.heading),0,Math.cos(input.yaw+boatState.heading)).multiplyScalar(-4.5).add(V(0,2.2,0));camera.position.lerp(target.clone().add(back),1-Math.exp(-dt*4));camera.lookAt(target);camera.fov=lerp(camera.fov,70,.1);return;}
-  const floorP=p.land?island.ground(p.x,p.z):floorAt(p.x,p.z),grounded=p.height<=floorP+.05,moving=p.speed>0&&grounded;
+  const floorP=p.land?island.ground(p.x,p.z,p.height):floorAt(p.x,p.z),grounded=p.height<=floorP+.05,moving=p.speed>0&&grounded;
   // aterrissagem: mergulho da câmera proporcional à queda; pulo: leve subida
   if(!grounded)lastVy=Math.min(lastVy,p.vy||0);
   if(grounded&&!prevGrounded){kick.dip.kick(-(1.2+Math.min(4,-lastVy)*.7));kick.x.kick(-1.4);lastVy=0;}else if(!grounded&&prevGrounded&&(p.vy||0)>0){kick.x.kick(1);kick.dip.kick(.8);}
@@ -626,7 +635,7 @@ function renderPlayers(t,dt){
     // pose do rifle (ciclo do ferrolho depois do tiro, recarga)
     const hasRifle=(p.id===localId?me().rifle:p.rifle)>=0,since=(p.baly>0?.62:.85)-(p.cool||0)-.14;
     const rig=!hasRifle?null:p.reload>0?rigState('reload',RELOAD-p.reload):since>0&&since<CYCLE&&(p.cool||0)>0?rigState('cycle',since):rigState('idle',0);
-    const floorH=src.land?island.ground(src.x,src.z):floorAt(src.x,src.z),boost=src.baly>0?1.6:1;
+    const floorH=src.land?island.ground(src.x,src.z,src.height):floorAt(src.x,src.z),boost=src.baly>0?1.6:1;
     anim.update(dt*boost,{time:t+p.id*1.3,speed:p.id===localId?src.speed||0:Math.min(sp,8),strafe:sp>.1?(vx*Math.cos(bodyYaw)-vz*Math.sin(bodyYaw))/sp:0,yaw:bodyYaw,grounded:src.height<=floorH+.04,
       fishing:phase,tension:f?.tension||0,reelHeld:p.id===localId?!!lastControls.reel:(f?.vel||0)>0,slap:p.slap,drive:p.mode==='drive',steer:steerVis,pitch:p.id===localId?input.pitch:p.pitch,look,roll:src.land?0:boat.userData.roll||0,rifle:hasRifle,aim:p.id===localId?!!lastControls.aim:false,rig,hideGun:p.id===localId&&!window.__peixesThirdPerson,carry:world.bucketAt===p.id||!!src.hold||(src.cartH??-1)>=0,rope:world.rope.h===p.id&&world.rope.s!=='tied'?((p.id===localId?!!ropeGame:p.swing)?'swing':'hold'):null,guitar:p.mode==='guitar'?(model.userData.guitarProp||null):null,strum:p.id===localId?strumT:(anim.strumT=(anim.strumT??9)+dt)});}
 }
@@ -659,8 +668,8 @@ function updateHUD(t){const p=me(),f=fishing[localId];if(!p||!f)return;
   const nearBucket=free&&world.bucketAt<0&&Math.hypot(pw2.x-bw.x,pw2.z-bw.z)<1.3&&Math.abs(pw2.y-bw.y)<1.4,nearCoil=!p.land&&free&&world.rope.s==='boat'&&Math.hypot(p.x-ROPE_HOME.x,p.z-ROPE_HOME.z)<1.2,nearGuitar=!p.land&&free&&world.guitar<0&&Math.hypot(p.x-GUITAR_SPOT.x,p.z-GUITAR_SPOT.z)<1.2;
   const cleatW=boat.localToWorld(V(BOW_CLEAT.x,BOW_CLEAT.y,BOW_CLEAT.z)),nearTie=free&&world.rope.s==='tied'&&(Math.hypot(pw2.x-cleatW.x,pw2.z-cleatW.z)<1.5||Math.hypot(pw2.x-bollardPos(world.rope.tgt).x,pw2.z-bollardPos(world.rope.tgt).z)<1.5);
   const nearBaker=p.land&&baker.mode==='work'&&!world.talk&&Math.hypot(pw2.x-baker.x,pw2.z-baker.z)<2.6,holdBucket=world.bucketAt===localId,holdRope=world.rope.h===localId&&world.rope.s==='held';
-  $('context').textContent=p.mode==='ride'?'DE CARONA NO CARRINHO · ESPAÇO desce':(p.cartH??-1)>=0?'CARRINHO · ande para empurrar · E nas prateleiras joga o item dentro · no caixa segure E no leitor · E solta':p.hold?`${ITEMS[p.hold.id].name.toUpperCase()} NA MÃO · ${p.hold.s===2?'PAGO':'NÃO PAGO: a porta não deixa sair'} · E num carrinho guarda · no caixa segure E no leitor`:p.mode==='guitar'?(gh.state==='play'?'VIOLÃO · D F J K no tempo das notas · Q volta à lista · E larga':'VIOLÃO · W/S escolhe a música · ENTER toca · E larga'):holdBucket?'BALDE NA MÃO · olhe para a peixaria do mercado e aperte E · E larga':holdRope?'CORDA · mire num cabeço do cais ou num pescador na água e clique · E devolve':holding?'RIFLE · botão direito mira (luneta) · botão esquerdo atira · SHIFT segura a respiração · E devolve':p.mode==='drive'?`NO LEME · W/S acelerar · A/D virar · E soltar · ${Math.abs(boatState.speed*1.94).toFixed(1)} nós`:p.mode==='ragdoll'?'RETORNO AÉREO EM ANDAMENTO…':p.mode==='fish'?'F pescar · WASD cancelar':
-    target?'BOTÃO DIREITO · dar um tapa':bakerNear?'BOTÃO DIREITO · dar um tapa no padeiro (por quê?)':outward?'F · lançar a linha na direção da mira':p.land?'Laguna · o mercado Althoff fica no fim da rua':'Olhe para o mar para lançar · ESPAÇO pula bancos';
+  $('context').textContent=p.fly?`VOANDO · ${flySpeed.toFixed(0)} m/s · rodinha muda a velocidade · ESPAÇO sobe · C desce · SHIFT turbo`:p.mode==='ride'?'DE CARONA NO CARRINHO · ESPAÇO desce':(p.cartH??-1)>=0?'CARRINHO · ande para empurrar · E nas prateleiras joga o item dentro · no caixa segure E no leitor · E solta':p.hold?`${ITEMS[p.hold.id].name.toUpperCase()} NA MÃO · ${p.hold.s===2?'PAGO':'NÃO PAGO: a porta não deixa sair'} · E num carrinho guarda · no caixa segure E no leitor`:p.mode==='guitar'?(gh.state==='play'?'VIOLÃO · D F J K no tempo das notas · Q volta à lista · E larga':'VIOLÃO · W/S escolhe a música · ENTER toca · E larga'):holdBucket?'BALDE NA MÃO · olhe para a peixaria do mercado e aperte E · E larga':holdRope?'CORDA · mire num cabeço do cais ou num pescador na água e clique · E devolve':holding?'RIFLE · botão direito mira (luneta) · botão esquerdo atira · SHIFT segura a respiração · E devolve':p.mode==='drive'?`NO LEME · W/S acelerar · A/D virar · E soltar · ${Math.abs(boatState.speed*1.94).toFixed(1)} nós`:p.mode==='ragdoll'?'RETORNO AÉREO EM ANDAMENTO…':p.mode==='fish'?'F pescar · WASD cancelar':
+    target?'BOTÃO DIREITO · dar um tapa':volcano?.contains(pw.x,pw.z)&&p.land?'Ilha do Vulcão · siga as trilhas no mato até o templo':bakerNear?'BOTÃO DIREITO · dar um tapa no padeiro (por quê?)':outward?'F · lançar a linha na direção da mira':p.land?'Laguna · o mercado Althoff fica no fim da rua':'Olhe para o mar para lançar · ESPAÇO pula bancos';
   $('tab-hint').hidden=!(host&&!ended);
   show('fishing',f.phase!=='idle');const fz2=$('fishing');
   if(f.phase!=='idle'){const sp=CATCHES[f.species],z=f.zone??.18,reeling=f.phase==='reeling',tier=sp?TIERS[sp.tier]:TIERS.comum,rank=sp?RANK[sp.tier]:0,combo=f.combo||0;
@@ -754,6 +763,7 @@ function animate(){
   // mira local: raio da câmera (com dispersão se não estiver mirando) e a gaivota na linha de tiro
   if(controls.fire&&running&&(me()?.rifle??-1)>=0){const spread=(1-viewmodel.aim)*.018+.002,dir=camera.getWorldDirection(V()).add(V((Math.random()-.5)*spread,(Math.random()-.5)*spread,(Math.random()-.5)*spread)).normalize();const ray=new THREE.Ray(camera.position.clone(),dir);controls.ray=[...ray.origin.toArray(),...dir.toArray()];controls.gull=gulls.pick(ray,v=>boat.localToWorld(v));controls.boss=-1;if(fight?.alive){const bh=fight.raycast(ray);if(bh){controls.boss=ZONE_LIST.indexOf(bh.zone);controls.bossPt=bh.point.toArray().map(v=>+v.toFixed(2));controls.gull=-1;}}}
   const live=running&&!paused&&!ended;
+  if(live&&!cinematic&&me()?.fly&&controls.wheel){flySpeed=clamp(flySpeed*(controls.wheel<0?1.25:.8),2,250);controls.wheel=0;}
   if(live&&!cinematic){market.localControls(controls,dt,hover,input.keys);gear.localControls(controls,dt,input);localItems(controls,dt);if(controls.interact)controls.target=hover?hover.code:-1;}
   if(live&&!cinematic){if(host)hostTick(dt,controls);else guestTick(dt,controls);}
   else if(live&&cinematic){elapsed+=dt;story=storyTime(elapsed,world.trig,world.storm);if(host&&!solo){netTick+=dt;if(netTick>.1){netTick=0;net.send(snapshot());}}}
@@ -780,6 +790,11 @@ function animate(){
   villagers.update(running?elapsed:menuTime,dt,camera,island.exploded,displayTick);
   // moradores longe não projetam sombra (o passe de sombra desenhava todos, sempre)
   if(displayTick%30===0)for(const n of villagers.list){const far=n.model.getWorldPosition(V()).distanceTo(camera.position)>35;if(n.model.userData.farSh!==far){n.model.userData.farSh=far;n.model.traverse(o=>{if(o.isMesh)o.castShadow=!far;});}}
+  if(volcano){volcano.gateOpen=world.temple?.gates||volcano.gateOpen;volcano.update(t,dt,camera);environment.ocean.visible=!volcano.inside(camera.position);}
+  // não desenhar o que está longe: Laguna inteira some além de 650 m (a névoa já a esconde) e as peças pequenas somem antes das grandes
+  if(displayTick%10===0&&!island.exploded){const cp=camera.position,far=Math.hypot(cp.x-ISLAND.x,cp.z-ISLAND.z)>650;island.group.visible=!far;villagers.group&&(villagers.group.visible=!far);
+    if(!partCull.length)for(const part of island.parts){if(part===island.shop.group)continue;const b=new THREE.Box3().setFromObject(part);if(b.isEmpty())continue;const sp=b.getBoundingSphere(new THREE.Sphere());partCull.push({o:part,c:sp.center,r:sp.radius});}
+    if(!far)for(const q of partCull){const d=cp.distanceTo(q.c)-q.r;q.o.visible=d<Math.max(90,q.r*40);}}
   island.update(t,dt,camera,running?players.filter(p=>p.mode!=='gone').map(p=>worldOf(p.id===localId?me():p)).concat(baker.mode==='walk'?[V(baker.x,baker.y,baker.z)]:[]):[]);
   for(const p of lightPins){p.a.getWorldPosition(p.l.position);let vis=!island.exploded,q=p.a;for(;q&&q!==scene;q=q.parent)if(!q.visible){vis=false;break;}if(q!==scene)vis=false;if(!vis){if(p.saved==null)p.saved=p.l.intensity;p.l.intensity=0;}else if(p.saved!=null){p.l.intensity=p.saved;p.saved=null;}}
   if(fight){fight.render(paused?0:dt,{camera,remote:!host});if(host&&!fight.alive&&fight.rings.length)fight.time+=dt;}bossHudTick(dt);if(fluidOff>0){fluidOff-=dt;if(fluidOff<=0&&!world.impact)fluid.stop();}
@@ -792,6 +807,8 @@ function animate(){
   if(running)updatePost(story,dt);
   if(!blackout||!running){post.render(dt);gear?.afterRender();}
   frameTimes.push(dt);if(frameTimes.length>120)frameTimes.shift();
+  // contador de FPS discreto (canto superior direito)
+  fpsAcc+=rdt;fpsN++;if(fpsAcc>=.5){const el=$('fps');if(el)el.textContent=Math.round(fpsN/fpsAcc)+' FPS';fpsAcc=0;fpsN=0;}
 }
 function resize(){if(!renderer)return;renderer.setSize(innerWidth,innerHeight,false);camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();post?.setSize(innerWidth,innerHeight);}
 async function init(){
@@ -806,6 +823,10 @@ async function init(){
   $('loading-text').textContent='Construindo a vila…';island=new Island(scene,quality);U.uIslandMap.value=island.heightTex;U.uIsland.value.set(ISLAND.x,ISLAND.z,ISLAND.size);
   island.onSplash=(p,size)=>{fx.splash(p,20+size*6,2.5+size*.4,4+size);if(size>2)fluid.drop(p.x,p.z,3+size,3+size,1);sound.effect('debris',{pos:p});};
   ragdolls.addIsland((x,z)=>island.ground(x,z),{x0:ISLAND.x-ISLAND.size/2,z0:ISLAND.z-ISLAND.size/2,size:ISLAND.size,n:115},island.colliders.filter(c=>!c.dock));
+  // Ilha do Vulcão: longe, na direção para onde a doca aponta
+  $('loading-text').textContent='Erguendo a Ilha do Vulcão…';await new Promise(r=>setTimeout(r,0));volcano=new VolcanoIsland(scene,quality);island.volcano=volcano;U.uIslandMap2.value=volcano.heightTex;U.uIsland2.value.set(VOLCANO.x,VOLCANO.z,VOLCANO.size);
+  ragdolls.addExtra((x,z)=>volcano.physicsGround(x,z),volcano.physicsRect,volcano.colliders.filter(c=>!c.r||c.r>=.3).map(c=>c.r?{...c,x:c.x+VOLCANO.x,z:c.z+VOLCANO.z}:{...c,x0:c.x0+VOLCANO.x,x1:c.x1+VOLCANO.x,z0:c.z0+VOLCANO.z,z1:c.z1+VOLCANO.z}));
+  {const u=environment.rain.material.uniforms,tx=VOLCANO.x+TEMPLE.u,tz=VOLCANO.z+TEMPLE.v;u.uRoof2.value.set(tx-13,tz-101,tx+49,tz+9);u.uRoofY2.value=TEMPLE.y0+.3;u.uRoof3.value.set(tx-5.5,tz-5.5,tx+5.5,tz+5.5);u.uRoofY3.value=TEMPLE.y0+20.4;}
   $('loading-text').textContent='Chamando os moradores de Laguna…';villagers=new Villagers(scene,assets,{quality});
   baker.model=addBakerOutfit(spawn(0));scene.add(baker.model);{const h=bakerHome();baker.x=h.x;baker.y=h.y;baker.z=h.z;}
   {const hid=new THREE.MeshBasicMaterial({visible:false}),sp=island.shop.points.sell;/* leme: disco invisível no aro (o raio passaria entre os raios da roda) */const hp=new THREE.Mesh(new THREE.CylinderGeometry(.36,.36,.08,16).rotateX(Math.PI/2),hid);helm.add(hp);
@@ -871,6 +892,35 @@ async function init(){
   window.__peixes={get state(){return {running,solo,host,localId,time:elapsed,phase:weatherAt(elapsed).phase,players:structuredClone(players),fishing:fishing.map(f=>({phase:f.phase,caught:f.caught,progress:f.progress})),lobby:lobby.snapshot(),impact:world.impact,drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles,meanFps:1/(frameTimes.reduce((a,b)=>a+b,0)/(frameTimes.length||1))}},get renderer(){return renderer;},get scene(){return scene;},get post(){return post;},get input(){return input;},get camera(){return camera;},get environment(){return environment;},get cataclysm(){return cataclysm;},get sound(){return sound;},get fx(){return fx;},get models(){return models;},get fishing(){return fishing;},get gulls(){return gulls;},get world(){return world;},get players(){return players;},get boat(){return boat;},get island(){return island;},get boatState(){return boatState;},get baker(){return baker;},get ragdolls(){return ragdolls;},get villagers(){return villagers;},get fight(){return fight;},get market(){return market;},get gear(){return gear;},get showroom(){return showroom;},give(id){if(solo){const w=gear.addItem(players[0],id);return w||'ok';}},cash(v){if(solo)world.money+=v;},get items(){return {bucketObj,rope,gh,ropeGame,shooGame,guitarStand,coilHand,hull};},get viewmodel(){return viewmodel;},get story(){return story;},testRag(v){if(solo)rag(0,"slap",v||[1,2,0]);},testDummy(){if(!solo||players.length>1)return;const q={...newPlayer(1,1),...newStatus(),net:1};players.push(q);fishing.push(new Fishing());models.push(spawn(1));return q;},testRagOf(id,v){if(solo)rag(id,'slap',v);},setStory(v){if(solo)world.trig={at:elapsed-(v-CONFIG.asteroidAt+CONFIG.rampTime),from:CONFIG.asteroidAt};},me,jump(t){if(solo){elapsed=t;hold=null;}},hold(t){if(solo){hold=t;elapsed=t;}},look(yaw,pitch){input.yaw=yaw;input.pitch=pitch;}};
 }
 let flareTex=null;function flareTexture(){if(flareTex)return flareTex;const c=document.createElement('canvas');c.width=c.height=64;const x=c.getContext('2d'),g=x.createRadialGradient(32,32,0,32,32,32);g.addColorStop(0,'rgba(255,255,255,1)');g.addColorStop(.25,'rgba(255,255,255,.55)');g.addColorStop(1,'rgba(255,255,255,0)');x.fillStyle=g;x.fillRect(0,0,64,64);flareTex=new THREE.CanvasTexture(c);return flareTex;}
+// ---------- comandos de teste do anfitrião (tela do TAB) ----------
+// Valem para todos os pescadores, a não ser que "Afetar apenas o anfitrião" esteja marcado. Barco, dinheiro e clima são da tripulação.
+let flySpeed=12;
+const cheatTargets=()=>players.filter(p=>p.mode!=='gone'&&(!$('cheat-host').checked||p.id===localId));
+function cheatPlace(p,x,z,{y=null,yaw=Math.PI,k=0}={}){dropAll(p);fishing[p.id].reset();if(p.mode==='ragdoll'){ragdolls.pull.delete(p.id);ragdolls.remove(p.id);}
+  const ox=(k%3-1)*1.3,oz=Math.floor(k/3)*1.3,[cx,cz]=island.collide(x+ox,z+oz,.3,y??undefined);p.mode='walk';p.land=1;p.x=cx;p.z=cz;p.height=y??island.ground(cx,cz);p.vy=0;p.water=0;p.drown=0;p.rescued=0;p.ride=-1;p.yaw=yaw;p.tp++;
+  if(p.id===localId){input.yaw=yaw;input.pitch=-.05;}stateEvent('respawn',{id:p.id,water:false});}
+function cheatWarpBoat(x,z,h,tied){boatState.x=x;boatState.z=z;boatState.heading=h;boatState.speed=0;world.rope=tied?{s:'tied',h:-1,tgt:1,pid:-1,t:elapsed,ok:true,from:null,to:null}:{s:'boat',h:-1,tgt:-1,pid:-1,t:0};stateEvent('boatHome',{x,z,h});}
+function startNessieNow(){if(fight?.alive||island.exploded)return;world.nessie=0;world.eq.fightId++;const a=boatState.heading+Math.PI*.6,x=boatState.x+Math.sin(a)*45,z=boatState.z+Math.cos(a)*45;world.storm={at:elapsed-20,dur:9999};startFightLocal(x,z);stateEvent('bossStart',{x,z});}
+function runCheat(kind){if(!host||!running||ended||cinematic)return;const T=cheatTargets(),V2=VOLCANO;
+  const tp=(x,z,o)=>T.forEach((p,k)=>cheatPlace(p,x,z,{...o,k}));
+  if(kind==='tpDock')tp(ISLAND.x,ISLAND.z+DOCK.v0+10,{yaw:0});
+  if(kind==='tpVolcano')tp(V2.x-34,V2.z+166,{yaw:Math.PI});
+  if(kind==='tpTemple')tp(V2.x+TEMPLE.u,V2.z+TEMPLE.v+34,{yaw:Math.PI});
+  const lv=[[0,-22],[0,-49.5],[0,-99],[17,-128.5]];lv.forEach(([x,z],i)=>{if(kind==='tpL'+(i+1))tp(V2.x+TEMPLE.u+x,V2.z+TEMPLE.v+z,{y:LEVELS[i],yaw:Math.PI});});
+  if(kind==='tpRim')tp(V2.x+LEDGE.u,V2.z+LEDGE.v0-3,{yaw:Math.PI});
+  if(kind==='tpFall')tp(V2.x+WF.u-2,V2.z+WF.v+41,{yaw:Math.PI});
+  if(kind==='gates'){const open=!world.temple.gates.every(Boolean);world.temple.gates=[open?1:0,open?1:0,open?1:0];sound.effect('anchor');}
+  if(kind==='tpBoat')T.forEach((p,k)=>{dropAll(p);fishing[p.id].reset();if(p.mode==='ragdoll')ragdolls.remove(p.id);const sp=SPAWNS[k%SPAWNS.length];if(p.land&&p.id===localId)input.yaw-=boatState.heading;if(p.land)p.yaw-=boatState.heading;p.mode='walk';p.land=0;p.x=sp[0];p.z=sp[1];p.height=0;p.vy=0;p.water=0;p.drown=0;p.fly=0;p.tp++;stateEvent('respawn',{id:p.id,water:false});});
+  if(kind==='fly'){const on=!T.some(p=>p.fly);for(const p of T){if(on&&!p.land){const w=worldOf(p);p.yaw+=boatState.heading;if(p.id===localId)input.yaw+=boatState.heading;p.land=1;p.x=w.x;p.z=w.z;p.height=w.y+.5;}if(p.mode==='ragdoll'){ragdolls.remove(p.id);p.mode='walk';}if(on)dropAll(p);p.fly=on?1:0;p.vy=0;p.tp++;}$('cheat-fly').classList.toggle('on',on);}
+  if(kind==='boatDock')cheatWarpBoat(ISLAND.x+BERTH.u,ISLAND.z+BERTH.v,BERTH.heading,true);
+  if(kind==='boatVolcano')cheatWarpBoat(V2.x-3,V2.z+196,Math.PI,false);
+  if(kind==='upgrades'){for(const id of Object.keys(ITEMS))if(ITEMS[id].kind==='boat')gear.install(id);sound.effect('wrench');}
+  if(kind==='money'){world.money=Math.round((world.money+5000)*100)/100;stateEvent('sold',{id:localId,total:5000,count:0,best:null,money:world.money});}
+  if(kind==='kit')for(const p of T)for(const id of ['pack','rod','reel','line','scale','compass','chart','depth','camera','harpoon','lure','shrimp','flare','hydrophone','torch'])gear.addItem(p,id);
+  if(kind==='storm'){world.storm={at:elapsed,dur:STORM_DUR};stateEvent('storm',{on:true});}
+  if(kind==='calm'){if(world.storm)world.storm={at:elapsed-(STORM_DUR-20),dur:STORM_DUR};world.nessie=0;stateEvent('storm',{on:false});}
+  if(kind==='nessie')startNessieNow();
+  if(kind==='killNessie'&&fight?.alive&&!fight.dead){fight.stage=3;fight.stageDone.add(1);fight.stageDone.add(2);fight.hp=1;const evs=fight.damage('eye',99)||[];stateEvent('bossHit',{id:localId,zone:'eye',pos:fight.headWorld().toArray(),hp:fight.hp});for(const e of evs)bossBroadcast(e);}}
 function triggerMeteor(){if(world.trig||!running)return;world.trig={at:elapsed,from:story};stateEvent('trigger',{});}
 function setupUI(){
   $('open-lobby').onclick=()=>{show('lobby');sound.start()};$('lobby-close').onclick=()=>{show('lobby',false);if(!running)menuCharacters.forEach(m=>m.visible=true);};for(let i=0;i<CONFIG.characters;i++)$('char'+i).onclick=()=>changeCharacter(i);
@@ -900,7 +950,8 @@ function setupUI(){
   // TAB (segurar): tela de eventos do anfitrião — tempestade, Nessie e meteoro não acontecem mais sozinhos
   window.addEventListener('keydown',e=>{if(e.code!=='Tab'||!running)return;e.preventDefault();if(e.repeat||ended||cinematic)return;if(!host){toast('Só o anfitrião abre a tela de eventos.');return;}openEvents(true);});
   window.addEventListener('keyup',e=>{if(e.code==='Tab'&&eventsOpen){e.preventDefault();openEvents(false);}});
-  for(const [id,kind]of [['ev-storm','storm'],['ev-nessie','nessie'],['ev-meteor','meteor']])$(id).onclick=()=>{runEvent(kind);openEvents(false);};
+  for(const [id,kind]of [['ev-meteor','meteor']])$(id).onclick=()=>{runEvent(kind);openEvents(false);};
+  for(const b of document.querySelectorAll('[data-cheat]'))b.onclick=()=>runCheat(b.dataset.cheat);
   $('fall-test').onclick=()=>{if(!solo)return;settings(false);players[0].x=2;models[0].position.x=2;models[0].updateMatrixWorld(true);rag(0,'water',[3,1,0]);};
   $('restart').onclick=()=>location.reload();window.addEventListener('resize',resize);
   document.addEventListener('visibilitychange',()=>{if(document.hidden&&!window.__peixesNoPause){input.clear();if(running&&solo&&!cinematic&&!ended)settings(true);}});window.addEventListener('beforeunload',()=>net.send({type:'bye'}));
