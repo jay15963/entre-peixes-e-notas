@@ -257,9 +257,9 @@ export class Gear {
   icon(id){return this.c.icons[id]||'';}
   hud(t,dt){const C=this.c,p=C.me(),eq=this.eq;if(!p||!this.bar)return;const inv=p.inv||[],sel=this.sel??-1,T=C.elapsed;
     // barra de itens
-    const key=inv.map(e=>e.join(':')).join('|')+'/'+sel+'/'+p.bait+'/'+slotsOf(p);if(key!==this.barKey){this.barKey=key;const n=Math.max(slotsOf(p),inv.length);let h='';
+    const relic=C.world.temple?.relic===p.id;const key=inv.map(e=>e.join(':')).join('|')+'/'+sel+'/'+p.bait+'/'+slotsOf(p)+'/'+relic;if(key!==this.barKey){this.barKey=key;const n=Math.max(slotsOf(p),inv.length);let h=relic?`<div class="slot relic" title="Coração do Vulcão"><img src="${this.icon('relic')}" alt=""></div>`:'';
       for(let i=0;i<n;i++){const e=inv[i],it=e&&ITEMS[e[0]];h+=`<div class="slot${i===sel?' sel':''}${e&&p.bait===e[0]?' bait':''}${it&&!USABLE.has(e[0])?' passive':''}">${i<10?`<small>${(i+1)%10}</small>`:''}${it?`<img src="${this.icon(e[0])}" alt="">${it.uses?`<em>${e[1]}</em>`:''}`:''}</div>`;}this.bar.innerHTML=h;}
-    this.bar.hidden=!inv.length&&!C.inStore();
+    this.bar.hidden=!inv.length&&!C.inStore()&&!relic;
     const e=inv[sel],it=e&&ITEMS[e[0]];this.tipT=Math.max(0,(this.tipT||0)-dt);
     const shelf=C.hover&&C.hover.code>=100?ITEMS[C.showroom?.slots[C.hover.code-100]?.id]:null,held=p.hold?ITEMS[p.hold.id]:null,show=shelf||held||(it&&(this.tipT>0||USABLE.has(e[0])));
     const ti=shelf||held||it;const tk=ti?ti.id+(shelf?'s':held?'h':'i')+(held?p.hold.s:''):'';if(tk!==this.tipKey){this.tipKey=tk;if(ti)this.tip.innerHTML=`<img src="${this.icon(ti.id)}"><div><b>${ti.name}</b><i>${ti.category}${ti.price?' · '+money(ti.price):''}${held?(p.hold.s===2?' · PAGO':p.hold.s===1?' · no leitor':' · NÃO PAGO'):''}</i><p>${ti.description}</p><p class="rule">${ti.rule}</p>${!shelf&&!held&&USABLE.has(ti.id)?'<small>BOTÃO ESQUERDO usa · 1–0 ou rodinha troca</small>':''}</div>`;}

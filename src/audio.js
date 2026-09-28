@@ -132,6 +132,30 @@ export class Sound {
       const tier=o.tier||0,now=this.ctx.currentTime,notes=[[72,76,79],[72,76,79,84],[72,76,79,84,88],[72,76,79,83,86,91],[72,76,79,84,88,91,96]][Math.min(4,tier)];
       notes.forEach((n,i)=>{this.pluck(n,now+i*.06,.3,(i%2?.3:-.3));this.tone(NOTE(n),{type:'triangle',dur:.25,gain:.05+tier*.015,when:i*.06,reverb:.5});});
       if(tier>=3){for(let i=0;i<14;i++)this.tone(2000+Math.random()*3000,{type:'sine',dur:.12,gain:.03,when:.3+Math.random()*.9,reverb:.6});this.burst(this.white,{type:'highpass',freq:6000,dur:1.2,attack:.2,gain:.08,reverb:.8});}}
+    // templo: dardos, lanças, lâminas, pedra arrastando, sinos dos botões, erro, o Coração, lava e o sacrifício
+    if(name==='darts'){for(let i=0;i<12;i++)this.burst(this.white,{type:'bandpass',freq:2200+Math.random()*1800,q:4,dur:.08,attack:.002,gain:.28,pos,when:i*.035,reverb:.3});this.burst(this.brown,{type:'lowpass',freq:400,dur:.12,gain:.4,pos,reverb:.4});}
+    if(name==='spikes'){this.burst(this.brown,{type:'lowpass',freq:260,dur:.3,attack:.002,gain:1,pos,reverb:.5});for(let i=0;i<5;i++)this.tone(1800+Math.random()*1400,{type:'triangle',dur:.12,gain:.06,to:900,pos,when:i*.03});}
+    if(name==='clang'){this.tone(620,{type:'square',dur:.5,gain:.09,to:590,pos,reverb:.7});this.tone(1340,{type:'triangle',dur:.9,gain:.08,pos,reverb:.8});this.burst(this.white,{type:'highpass',freq:3000,dur:.05,gain:.6,pos});this.burst(this.brown,{type:'lowpass',freq:300,dur:.25,gain:.6,pos});}
+    if(name==='stone'){const big=o.big?1:0;this.burst(this.brown,{type:'lowpass',freq:big?220:420,dur:big?2.6:.45,attack:.08,gain:big?1.1:.5,pos,reverb:.7});this.burst(this.pink,{type:'bandpass',freq:big?160:340,q:1.2,dur:big?2.4:.4,attack:.1,gain:big?.4:.2,pos,reverb:.6});if(big)this.tone(48,{type:'sine',dur:2.6,gain:.35,to:40,pos});}
+    if(name==='chime'){const n=[72,76,79,84][Math.max(0,Math.min(3,(o.n||1)-1))];this.tone(NOTE(n),{type:'sine',dur:1.4,gain:.12,pos,reverb:.9});this.tone(NOTE(n+12),{type:'sine',dur:.9,gain:.05,pos,reverb:.9});}
+    if(name==='wrong'){this.tone(110,{type:'sawtooth',dur:.6,gain:.1,to:70,pos,reverb:.6});this.tone(116,{type:'sawtooth',dur:.6,gain:.08,to:74,pos,reverb:.6});this.burst(this.brown,{type:'lowpass',freq:300,dur:.5,gain:.5,pos,reverb:.5});}
+    if(name==='relic'){[60,67,72,75,79].forEach((n,i)=>this.tone(NOTE(n),{type:'sine',dur:2.4,gain:.08,when:i*.12,reverb:.95}));this.tone(36,{type:'sine',dur:4,gain:.5,to:30});this.burst(this.brown,{type:'lowpass',freq:120,dur:4,attack:.6,gain:1.2,reverb:.9});}
+    if(name==='lava'){this.burst(this.brown,{type:'lowpass',freq:500,dur:1.2,attack:.02,gain:.9,pos,reverb:.5});this.burst(this.white,{type:'bandpass',freq:900,to:3000,q:.8,dur:1.4,attack:.05,gain:.35,pos});}
+    // Eclipse do Coração: ~34 s de trilha. Rumor e coro menor enquanto a lua cobre o sol; acorde imenso, gongo e sinos na totalidade;
+    // varredura e resolução no alinhamento dos planetas; anel de diamante; e o presságio grave do meteoro
+    if(name==='eclipse'){const ch=(notes,when,dur,gain,type='triangle',att=1.2)=>notes.forEach((n,i)=>{for(const det of [-.08,.08])this.tone(NOTE(n+det),{type,dur,gain:gain/(1+i*.15),attack:att,when,reverb:.95});});
+      this.tone(41,{type:'sine',dur:12,gain:.5,attack:2,to:55,reverb:.6});this.burst(this.pink,{type:'bandpass',freq:180,to:2400,q:.7,dur:11,attack:6,gain:.35,reverb:.9,when:.5});
+      ch([48,51,55],1,5.5,.05,'sine',2);ch([44,48,51],5,5,.055,'sine',1.6);ch([46,50,53,58],9,4,.06,'triangle',1.2);
+      [[96,11.9],[103,11.95],[91,12.05]].forEach(([n,w])=>this.tone(NOTE(n),{type:'sine',dur:2.2,gain:.07,attack:.005,when:w,reverb:.95}));
+      this.burst(this.brown,{type:'lowpass',freq:160,dur:6,attack:.02,gain:1.3,reverb:.95,when:12});this.tone(98,{type:'sine',dur:6,gain:.35,to:65,when:12,reverb:.95});
+      ch([36,43,48,52,55,59,62,67],12,11,.05,'triangle',.8);
+      for(let i=0;i<34;i++){const n=[72,74,76,79,81,84,86,88,91][Math.floor(Math.random()*9)];this.tone(NOTE(n),{type:'sine',dur:1.6,gain:.035,attack:.005,when:12.5+Math.random()*11,reverb:.95});}
+      this.tone(180,{type:'sawtooth',dur:1.6,gain:.05,to:1800,attack:.2,when:17.6,reverb:.9});this.burst(this.white,{type:'highpass',freq:5000,dur:2.5,attack:.05,gain:.25,reverb:.95,when:19});
+      ch([44,51,56,60,63,67],19,7,.055,'triangle',.3);
+      this.tone(NOTE(96),{type:'sine',dur:2.5,gain:.09,attack:.005,when:24,reverb:.95});this.tone(NOTE(103),{type:'sine',dur:2,gain:.06,attack:.005,when:24.05,reverb:.95});
+      ch([36,39,43],25,9,.05,'sawtooth',1.5);this.tone(65,{type:'sawtooth',dur:9,gain:.05,to:44,attack:2,when:25,reverb:.8});}
+    if(name==='sacrifice'){this.burst(this.brown,{type:'lowpass',freq:180,dur:5,attack:.05,gain:1.6,reverb:.95});this.tone(32,{type:'sine',dur:5,gain:.7,to:24});this.burst(this.white,{type:'bandpass',freq:700,to:2600,q:.6,dur:3,attack:.05,gain:.5,reverb:.8});
+      [48,55,60,63,67].forEach((n,i)=>this.tone(NOTE(n),{type:'sawtooth',dur:3.5,gain:.035,when:.4+i*.15,reverb:.95}));}
     if(name==='junk'){const now=this.ctx.currentTime;[60,59,58,57].forEach((n,i)=>this.tone(NOTE(n),{type:'sawtooth',dur:.18,gain:.05,when:i*.16,to:NOTE(n)*.97}));this.pluck(48,now+.64,.25);}
     if(name==='coin'){const k=o.big?1.4:1;[0,.07,.14].forEach((w,i)=>this.tone([1976,2637,3136][i],{type:'square',dur:.12,gain:.05*k,when:w,reverb:.2}));}
     if(name==='cash'){this.burst(this.white,{type:'bandpass',freq:2500,q:2,dur:.05,gain:.4});this.tone(2093,{type:'triangle',dur:.6,gain:.18,when:.08,reverb:.4});this.tone(3136,{type:'sine',dur:.5,gain:.1,when:.1,reverb:.4});for(let i=0;i<10;i++)this.tone(2400+Math.random()*1800,{type:'sine',dur:.06,gain:.05,when:.2+i*.05});}

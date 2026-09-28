@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import {Kit,loft,limb,ellipsoid,box,sculpt,paint,reseed,rand,V} from './geometry.js';
+import {Kit,loft,limb,ellipsoid,box,sculpt,paint,reseed,rand,V,hollow} from './geometry.js';
 import {SHOP,ISLAND} from './terrain.js';
 import {makeCatch} from './fish.js';
 import {buildFixtures,buildLane} from './storefront.js';
@@ -149,7 +149,7 @@ export function buildShop(mats){
   for(const [x,c]of [[5.4,0xf2c6d8],[7.4,0x6a3c24],[10.6,0xf6f0e0],[12.8,0xf3d73a]]){inn.add(im,loft([{y:F+1.07,rx:.26,rz:.26},{y:F+1.33,rx:.26,rz:.26}],{n:14}).translate(x,0,22.9),c,.04).add(im,loft([{y:F+1.33,rx:.27,rz:.27},{y:F+1.38,rx:.22,rz:.22}],{n:14}).translate(x,0,22.9),0xffffff,.03);}
   inn.add(im,box([9,F+1.06,22.62],[10,.02,.8]),0xf5f5f5,.01);
   // prateleiras de pão na parede do fundo com cestos de vime cheios de pão francês
-  for(let r=0;r<3;r++){inn.add(im,box([9,F+.9+r*.55,v1-.45],[10,.05,.6]),0x8a6a45,.04);for(let b=0;b<6;b++){const x=4.8+b*1.7;inn.add(im,loft([{y:F+.93+r*.55,rx:.32,rz:.2},{y:F+1.07+r*.55,rx:.36,rz:.24}],{n:10,capStart:true,capEnd:false}).translate(x,0,v1-.45),0xb88a4a,.1);for(let p=0;p<7;p++)inn.add(im,ellipsoid([x-.24+p*.08,F+1.1+r*.55,v1-.45+(p%2)*.06-.03],[.07,.045,.045],6,4),p%2?bread:crust,.08);}}
+  for(let r=0;r<3;r++){inn.add(im,box([9,F+.9+r*.55,v1-.45],[10,.05,.6]),0x8a6a45,.04);for(let b=0;b<6;b++){const x=4.8+b*1.7;inn.add(im,hollow(loft([{y:F+.93+r*.55,rx:.32,rz:.2},{y:F+1.07+r*.55,rx:.36,rz:.24}],{n:10,capStart:true,capEnd:false})).translate(x,0,v1-.45),0xb88a4a,.1);for(let p=0;p<7;p++)inn.add(im,ellipsoid([x-.24+p*.08,F+1.1+r*.55,v1-.45+(p%2)*.06-.03],[.07,.045,.045],6,4),p%2?bread:crust,.08);}}
   inn.add(im,box([9,F+2.5,v1-.45],[10,.05,.6]),0x8a6a45,.04);
   inn.add(imMetal,box([14.5,F+1,v1-1.6],[1.6,2,1.3]),0xb9c0c6,.02);const ovenWin=new THREE.Mesh(new THREE.PlaneGeometry(1,.5),new THREE.MeshStandardMaterial({color:0x331100,emissive:0xff7a20,emissiveIntensity:1.8}));ovenWin.position.set(14.5,F+1.3,v1-2.27);ovenWin.rotation.y=Math.PI;group.add(ovenWin);
   const chalk=new THREE.Mesh(new THREE.PlaneGeometry(1.4,1),new THREE.MeshStandardMaterial({map:canvasTex(420,300,(c,w,h)=>{c.fillStyle='#2b3a2e';c.fillRect(0,0,w,h);c.strokeStyle='#8a6a45';c.lineWidth=18;c.strokeRect(0,0,w,h);c.fillStyle='#f4f1e8';c.textAlign='center';c.font='bold 40px "Comic Sans MS", cursive';c.fillText('Pão francês',w/2,90);c.fillText('quentinho!',w/2,140);c.font='30px "Comic Sans MS", cursive';c.fillStyle='#f3d73a';c.fillText('saiu agora 🥖',w/2,200);c.fillStyle='#fff';c.fillText('R$ 12,90 o kg',w/2,250);}),roughness:.9}));
@@ -158,7 +158,7 @@ export function buildShop(mats){
   // ----- caixas de autoatendimento (modelo novo em storefront.js) -----
   const lanes=[[1,-11],[2,-7.2],[3,7.2],[4,11]].map(([n,u])=>buildLane({inn,im,imMetal,group,colliders,canvasTex,drawLogo,F,u,v:7.2,n}));
   // cestinhas empilhadas e carrinhos na entrada, por dentro
-  for(let i=0;i<5;i++)inn.add(im,loft([{y:F+i*.12,rx:.22,rz:.16},{y:F+.24+i*.12,rx:.26,rz:.19}],{n:8,capStart:true,capEnd:false}).translate(-3.2,0,5.4),0xd62028,.05);colliders.push({x:-3.2,z:5.4,r:.3});
+  for(let i=0;i<5;i++)inn.add(im,hollow(loft([{y:F+i*.12,rx:.22,rz:.16},{y:F+.24+i*.12,rx:.26,rz:.19}],{n:8,capStart:true,capEnd:false})).translate(-3.2,0,5.4),0xd62028,.05);colliders.push({x:-3.2,z:5.4,r:.3});
   const bakerSpot={u:9,v:23.45,yaw:Math.PI};
   const e=ext.build(),n=inn.build();e.traverse(o=>{if(o.isMesh)o.castShadow=true;});n.traverse(o=>{if(o.isMesh){o.castShadow=false;o.receiveShadow=true;}});group.add(e,n);
   const points={baker:bakerSpot,sell:{u:u0+2.6,v:15.5},door:{u:0,v:v0},lanes:lanes.map(l=>({u:l.u,v:7.2,scan:l.scan,pay:l.pay})),slots:store.slots};

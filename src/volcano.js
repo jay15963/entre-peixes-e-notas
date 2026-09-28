@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
-import {Kit,limb,ellipsoid,box,sculpt,paint,loft,reseed,rand,V} from './geometry.js';
+import {Kit,limb,ellipsoid,box,sculpt,paint,loft,reseed,rand,V,hollow} from './geometry.js';
 import {sway,palm,broadTree,bush,rock} from './island.js';
 import {U} from './shaders.js';
 
@@ -16,7 +16,7 @@ export const TEMPLE={u:-22,v:30,y0:12};
 const TIER=[20,15,10],TOP=TEMPLE.y0+15;
 // quatro níveis subterrâneos, 6 m um abaixo do outro; cada nível é um puzzle e um portão de pedra libera a escada do próximo
 const L1=TEMPLE.y0-5,L2=L1-6,L3=L2-6,L4=L3-6;export const LEVELS=[L1,L2,L3,L4];
-const CONE={u:8,v:-80,R:138,H:108,cr:22,cd:28};
+export const CONE={u:8,v:-80,R:138,H:108,cr:22,cd:28};
 const RIVER=[[-4,222],[-2,172],[10,142],[6,116],[20,94],[36,77],[50,62]],LAGOON={u:54,v:55,r:17},RIVER_W=6.5;
 // cachoeira: paredão ao sul da lagoa (a água cai para o norte, dentro da lagoa) e o riacho que a alimenta
 export const WF={u:58,v:36.2,top:12.5,w:6};const STREAM=[[WF.u,WF.v+.4],[WF.u+3,WF.v-8],[WF.u-2,WF.v-18],[WF.u+4,WF.v-30]];
@@ -46,25 +46,51 @@ export const ROOMS=[
   {x:[-1.5,1.5],z:[-19,3],f:ramp(-19,L1,3,TOP),c:3.4,name:'Escadaria do Santuário',stairs:true},
   // Nível 1
   {x:[-6,6],z:[-35,-19],f:L1,c:4.4,name:'Nível 1 · Salão dos Dardos',level:1},
-  {x:[-1.3,1.3],z:[-48,-35],f:ramp(-48,L2,-38,L1),c:3.4,stairs:true},
+  {x:[-1.5,1.5],z:[-48,-35],f:ramp(-48,L2,-38,L1),c:3.4,stairs:true},
   // Nível 2
   {x:[-6,6],z:[-68,-48],f:L2,c:5,name:'Nível 2 · Fosso das Lanças',level:2},
   {x:[-6,6],z:[-65,-51],f:L2-2.6,c:7.6,pit:true},
-  {x:[-6,-4.6],z:[-65,-58],f:ramp(-58,L2-2.6,-65,L2),c:7.6},
+  {x:[-6,-4.6],z:[-58,-51],f:ramp(-58,L2-2.6,-51,L2),c:7.6},
   {x:[-.55,.55],z:[-65,-51],f:L2,c:5,bridge:true},
   {x:[-2.5,2.5],z:[-84,-68],f:L2,c:6.6,name:'Galeria das Lâminas'},
-  {x:[-1.3,1.3],z:[-97,-84],f:ramp(-97,L3,-87,L2),c:3.4,stairs:true},
+  {x:[-1.5,1.5],z:[-97,-84],f:ramp(-97,L3,-87,L2),c:3.4,stairs:true},
   // Nível 3
   {x:[-9,9],z:[-113,-97],f:L3,c:5.6,name:'Nível 3 · Câmara dos Pilares',level:3},
   {x:[9,10],z:[-107,-103],f:L3,c:3.4},
   {x:[10,25],z:[-113,-97],f:L3,c:6.2,name:'Sala dos Espelhos'},
-  {x:[15,17.6],z:[-126,-113],f:ramp(-126,L4,-116,L3),c:3.4,stairs:true},
+  {x:[15,17.5],z:[-126,-113],f:ramp(-126,L4,-116,L3),c:3.4,stairs:true},
   // Nível 4
   {x:[3,31],z:[-154,-126],f:L4,c:10,name:'Nível 4 · Câmara do Coração',level:4},
+  {x:[12.5,21.5],z:[-144,-136],f:L4+.5,c:9.5,dais:1},{x:[13.7,20.3],z:[-143,-137],f:L4+1,c:9,dais:1},{x:[14.9,19.1],z:[-142,-138],f:L4+1.5,c:8.5,dais:1},
 ];
 // portões de pedra no topo de cada escada (fechados até o puzzle do nível ser resolvido)
-export const GATES=[{x:[-1.4,1.4],z:-36.3,y:L1},{x:[-1.4,1.4],z:-85.3,y:L2},{x:[14.9,17.7],z:-114.3,y:L3}];
+export const GATES=[{x:[-1.5,1.5],z:-36.3,y:L1},{x:[-1.5,1.5],z:-85.3,y:L2},{x:[15,17.5],z:-114.3,y:L3}];
 const DUNGEON={x0:-12,x1:34,z0:-157,z1:8};
+// ---------- puzzles (coordenadas do templo) ----------
+export const GLYPHS=['☉','☽','✶','◈','♆','⚶','♁','⟁','⌬','☿'];
+// Nível 1: ladrilhos com glifos; só os da lua (☽) são seguros. O caminho da lua é contínuo (sem diagonais).
+export const L1T={x0:-4.4,dx:2.2,z0:-21.5,dz:-2.3,cols:5,rows:6,safe:1,path:[[0,1],[1,1],[1,2],[2,2],[2,3],[3,3],[4,3],[4,2],[4,1],[5,1]]};
+export const l1Glyph=(r,c)=>L1T.path.some(([a,b])=>a===r&&b===c)?L1T.safe:[0,2,3,4,5,6,7,8][(r*5+c*3+r*c)%8];
+export function l1Cell(tx,tz){const c=Math.round((tx-L1T.x0)/L1T.dx),r=Math.round((tz-L1T.z0)/L1T.dz);return c<0||r<0||c>=L1T.cols||r>=L1T.rows?null:[r,c];}
+// Nível 2: quatro lâminas com um glifo cada; a ordem delas (da entrada para o fundo) é o segredo dos quatro botões
+export const BLADES=[-71,-74.4,-77.8,-81.2],BLADE_G=[4,0,7,2];
+export const bladeAngle=(t,i)=>Math.sin(t*1.1+i*1.3)*.9;
+export const BUTTONS=[{x:-2.47,z:-82.6,f:1,g:2},{x:-2.47,z:-83.5,f:1,g:0},{x:2.47,z:-82.6,f:-1,g:7},{x:2.47,z:-83.5,f:-1,g:4}];
+export const BUTTON_ORDER=BLADE_G.map(g=>BUTTONS.findIndex(b=>b.g===g));
+// Nível 3: a luz do poço desce no canto noroeste e segue para o sul; espelhos giram de 45 em 45 graus até ela chegar ao disco solar
+export const MIRRORS=[[12,-104],[12,-110],[21,-110],[21,-104]],MIRROR_START=[0,2,2,1],MROOM={x0:10,x1:25,z0:-113,z1:-97},SUN={x:25,z:-104},SRC={x:12,z:-98.5};
+export function beamPath(mir){const pts=[[SRC.x,SRC.z]];let x=SRC.x,z=SRC.z,dx=0,dz=-1,skip=-1,hit=false;
+  for(let n=0;n<8;n++){let best=null;
+    MIRRORS.forEach(([mx,mz],i)=>{if(i===skip)return;const t=(mx-x)*dx+(mz-z)*dz;if(t<.3)return;const off=Math.abs((mx-x)*dz-(mz-z)*dx);if(off<.3&&(!best||t<best.t))best={t,i};});
+    const tw=Math.min(dx>0?(MROOM.x1-x)/dx:dx<0?(MROOM.x0-x)/dx:1e9,dz>0?(MROOM.z1-z)/dz:dz<0?(MROOM.z0-z)/dz:1e9);
+    if(best&&best.t<tw){x+=dx*best.t;z+=dz*best.t;pts.push([x,z]);const a=(mir[best.i]||0)*Math.PI/4,lx=Math.cos(a),lz=-Math.sin(a),dl=dx*lx+dz*lz;
+      if(Math.abs(dl)>.9){skip=best.i;continue;}          // de lado: o feixe passa rente ao disco
+      if(Math.abs(dl)<.1)break;                              // de frente: a luz bate e volta, morre ali
+      const rx=2*dl*lx-dx,rz=2*dl*lz-dz,l=Math.hypot(rx,rz);dx=Math.round(rx/l);dz=Math.round(rz/l);skip=best.i;continue;}
+    x+=dx*tw;z+=dz*tw;pts.push([x,z]);hit=dx>0&&Math.abs(z-SUN.z)<1.1;break;}
+  return {pts,hit};}
+// Nível 4: o Coração do Vulcão sobre o altar, no alto do estrado
+export const HEART={x:17,z:-140,y:L4+3.4};
 function interiorFloor(tx,tz){let f=null;for(const r of ROOMS)if(tx>=r.x[0]&&tx<=r.x[1]&&tz>=r.z[0]&&tz<=r.z[1])f=typeof r.f==='function'?r.f(tz):r.f;return f;}
 function roomAt(tx,tz){let f=null;for(const r of ROOMS)if(tx>=r.x[0]&&tx<=r.x[1]&&tz>=r.z[0]&&tz<=r.z[1])f=r;return f;}
 // pirâmide de três degraus, escadaria norte e o poço aberto dentro do santuário
@@ -102,6 +128,7 @@ let TRAIL_H=null;
 function trailHeights(){if(TRAIL_H)return TRAIL_H;TRAIL_H=TRAILS.map((t,i)=>{if(i!==VOLC_TRAIL)return t.map(([u,v])=>terrainBase(u,v));
     const lens=[0];for(let k=1;k<t.length;k++)lens.push(lens[k-1]+Math.hypot(t[k][0]-t[k-1][0],t[k][1]-t[k-1][1]));const h0=terrainBase(...t[0]),h1=terrainBase(RIM.u,RIM.v)+.4;return lens.map(l=>lerp(h0,h1,l/lens.at(-1)));});return TRAIL_H;}
 function terrainRaw(u,v){let h=terrainBase(u,v);const TH=trailHeights();
+  {const tx=u-TEMPLE.u,tz=v-TEMPLE.v;/* só onde o morro (y0+1) cruza o túnel, bem dentro da base da pirâmide */if(Math.abs(tx)<3&&tz>-17.5&&tz<-10.5)h=Math.min(h,ROOMS[0].f(tz)-2.5);}
   for(let i=0;i<TRAILS.length;i++){const t=TRAILS[i],R=i===VOLC_TRAIL?6:4.6;let best=1e9,bh=0;
     for(let k=0;k<t.length-1;k++){const [ax,az]=t[k],[bx,bz]=t[k+1],dx=bx-ax,dz=bz-az,q=Math.max(0,Math.min(1,((u-ax)*dx+(v-az)*dz)/(dx*dx+dz*dz))),d=Math.hypot(u-ax-dx*q,v-az-dz*q);if(d<best){best=d;bh=lerp(TH[i][k],TH[i][k+1],q);}}
     if(best<R)h=lerp(h,bh-.08,1-smooth(2.2,R,best));}
@@ -195,7 +222,15 @@ export class VolcanoIsland {
     return [px+VOLCANO.x,pz+VOLCANO.z];}
   solid(c){c.y0??=-50;c.y1??=500;this.grid.add(c);this.colliders.push(c);}
   // chão para a física dos corpos (ragdoll): superfície, mas com as salas "escavadas"
-  physicsGround(x,z){const u=x-VOLCANO.x,v=z-VOLCANO.z,f=interiorFloor(u-TEMPLE.u,v-TEMPLE.v);return f!=null?f:this.ground(x,z);}
+  physicsGround(x,z){return this.ground(x,z);}
+  // piso das salas para o heightfield fino do templo (null = rocha)
+  dungeonFloor(x,z){return interiorFloor(x-VOLCANO.x-TEMPLE.u,z-VOLCANO.z-TEMPLE.v);}
+  deepValid(x,y,z){const f=this.dungeonFloor(x,z);return f!=null&&y>f-.6;}
+  get dungeonRect(){return {x0:VOLCANO.x+TEMPLE.u+DUNGEON.x0,z0:VOLCANO.z+TEMPLE.v+DUNGEON.z0,w:DUNGEON.x1-DUNGEON.x0,d:DUNGEON.z1-DUNGEON.z0};}
+  // ponto abaixo da superfície, dentro de uma sala (corpo que cai lá dentro usa o chão fino)
+  underground(x,y,z){const u=x-VOLCANO.x,v=z-VOLCANO.z,tx=u-TEMPLE.u,tz=v-TEMPLE.v;if(tx<DUNGEON.x0||tx>DUNGEON.x1||tz<DUNGEON.z0||tz>DUNGEON.z1)return false;const f=interiorFloor(tx,tz);if(f==null)return false;const top=pyramidTop(tx,tz)??this.hAt(u,v);return y<top-1.2;}
+  // colisor que fica dentro das salas (vai para o grupo de física do templo)
+  deepCollider(c){const tx=(c.r?c.x:(c.x0+c.x1)/2)-TEMPLE.u,tz=(c.r?c.z:(c.z0+c.z1)/2)-TEMPLE.v;return c.y1!=null&&c.y1<TEMPLE.y0+1.5&&tx>DUNGEON.x0&&tx<DUNGEON.x1&&tz>DUNGEON.z0&&tz<DUNGEON.z1;}
   get physicsRect(){return {x0:VOLCANO.x-VOLCANO.size/2,z0:VOLCANO.z-VOLCANO.size/2,size:VOLCANO.size,n:180};}
   makeHeightTex(){const N=256,S=VOLCANO.size,data=new Uint8Array(N*N);for(let j=0;j<N;j++)for(let i=0;i<N;i++){const h=this.hAt(-S/2+(i+.5)/N*S,-S/2+(j+.5)/N*S);data[j*N+i]=Math.max(0,Math.min(255,Math.round((h+12)/24*255)));}
     const t=new THREE.DataTexture(data,N,N,THREE.RedFormat,THREE.UnsignedByteType);t.magFilter=t.minFilter=THREE.LinearFilter;t.needsUpdate=true;return t;}
@@ -322,11 +357,11 @@ export class VolcanoIsland {
   // ======================= cratera acesa e fumaça =======================
   buildVolcanoTop(){const C=CONE,lavaY=this.hAt(C.u,C.v)+1.5,rimY=this.hAt(RIM.u,RIM.v);this.lavaY=lavaY;this.ledgeY=rimY+.35;
     // lago de lava: correnteza com crosta que racha, veios brilhantes e pulso de calor
-    this.lavaMat=new THREE.ShaderMaterial({uniforms:{uTime:U.uTime},vertexShader:'varying vec3 vW;void main(){vec4 w=modelMatrix*vec4(position,1.);vW=w.xyz;gl_Position=projectionMatrix*viewMatrix*w;}',
-      fragmentShader:`uniform float uTime;varying vec3 vW;float h(vec2 p){return fract(sin(dot(p,vec2(12.9,78.2)))*43758.5);}float n(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(h(i),h(i+vec2(1,0)),f.x),mix(h(i+vec2(0,1)),h(i+vec2(1,1)),f.x),f.y);}
+    this.lavaMat=new THREE.ShaderMaterial({uniforms:{uTime:U.uTime,uBoost:{value:0}},vertexShader:'varying vec3 vW;void main(){vec4 w=modelMatrix*vec4(position,1.);vW=w.xyz;gl_Position=projectionMatrix*viewMatrix*w;}',
+      fragmentShader:`uniform float uTime,uBoost;varying vec3 vW;float h(vec2 p){return fract(sin(dot(p,vec2(12.9,78.2)))*43758.5);}float n(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(h(i),h(i+vec2(1,0)),f.x),mix(h(i+vec2(0,1)),h(i+vec2(1,1)),f.x),f.y);}
       float fb(vec2 p){float s=0.,a=.5;for(int i=0;i<4;i++){s+=a*n(p);p*=2.1;a*=.5;}return s;}
       void main(){vec2 p=vW.xz*.16;vec2 w=vec2(fb(p+uTime*.05),fb(p.yx-uTime*.04));float a=fb(p+w*1.6+vec2(uTime*.03,0.));float crust=smoothstep(.48,.6,a);float vein=1.-smoothstep(0.,.045,abs(a-.52));
-        float pulse=.85+.15*sin(uTime*1.7+fb(p*3.)*6.);vec3 hot=mix(vec3(2.2,.55,.07),vec3(3.2,1.45,.35),fb(p*4.+uTime*.3))*pulse;vec3 c=mix(hot,vec3(.06,.03,.02)+vec3(1.4,.3,.05)*vein,crust*.92);gl_FragColor=vec4(c,1.);}`});
+        float pulse=.85+.15*sin(uTime*1.7+fb(p*3.)*6.);vec3 hot=mix(vec3(2.2,.55,.07),vec3(3.2,1.45,.35),fb(p*4.+uTime*.3))*pulse;vec3 c=mix(hot,vec3(.06,.03,.02)+vec3(1.4,.3,.05)*vein,crust*.92);c*=1.+uBoost*(1.+.5*sin(uTime*5.+fb(p*2.)*6.));gl_FragColor=vec4(c,1.);}`});
     const lava=new THREE.Mesh(new THREE.CircleGeometry(C.cr*.76,64).rotateX(-Math.PI/2),this.lavaMat);lava.position.set(C.u,lavaY,C.v);this.group.add(lava);
     // paredes da cratera acesas por baixo (casca aditiva que some para cima)
     const shell=new THREE.Mesh(new THREE.CylinderGeometry(C.cr*1.02,C.cr*.74,rimY-lavaY+1,56,1,true),new THREE.ShaderMaterial({transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,side:THREE.DoubleSide,uniforms:{uTime:U.uTime},
@@ -360,7 +395,7 @@ export class VolcanoIsland {
       for(let i=0;i<5;i++)k.add(st,box([L.u+s*(L.w-.15),y+.82,L.v0-1-i*2.2],[.4,.25,.4]),0x6a635a,.03);}
     k.add(st,box([L.u,y+.3,L.v1+.6],[L.w*2,.6,.5]),0x6f685f,.03);this.solid({x0:L.u-L.w,x1:L.u+L.w,z0:L.v1,z1:L.v1+.9,y0:y-1,y1:y+1});
     // altar da ponta: bacia de pedra com glifos, onde o Coração será oferecido
-    k.add(st,box([L.u,y+.55,L.v1+1.9],[1.6,1.1,1.1]),0x857d72,.03).add(st,loft([{y:y+1.1,rx:.7,rz:.5},{y:y+1.35,rx:.8,rz:.6}],{n:12,capStart:true,capEnd:false}).translate(L.u,0,L.v1+1.9),0x6a635a,.03);this.solid({x0:L.u-.8,x1:L.u+.8,z0:L.v1+1.35,z1:L.v1+2.45,y0:y-1,y1:y+1.4});
+    k.add(st,box([L.u,y+.55,L.v1+1.9],[1.6,1.1,1.1]),0x857d72,.03).add(st,hollow(loft([{y:y+1.1,rx:.7,rz:.5},{y:y+1.35,rx:.8,rz:.6}],{n:12,capStart:true,capEnd:false}),.86,.03).translate(L.u,0,L.v1+1.9),0x6a635a,.03);this.solid({x0:L.u-.8,x1:L.u+.8,z0:L.v1+1.35,z1:L.v1+2.45,y0:y-1,y1:y+1.4});
     // arco de entrada com lintel de glifos
     for(const s of [-1,1]){k.add(st,box([L.u+s*2.1,y+2,L.v0+.4],[.8,4,.8]),0x7e766c,.03);this.solid({x0:L.u+s*2.1-.4,x1:L.u+s*2.1+.4,z0:L.v0,z1:L.v0+.8,y0:y-1,y1:y+4});brazier(k,this.dark,[L.u+s*1.2,y,L.v0-1.2]);this.addTorch(L.u+s*1.2,y+1.35,L.v0-1.2,.7,this.group,1.2);}
     k.add(st,box([L.u,y+4.3,L.v0+.4],[5.2,.7,1]),0x6f685f,.03);const lintel=new THREE.Mesh(new THREE.PlaneGeometry(4.6,.55),friezeMat(2));lintel.position.set(L.u,y+4.3,L.v0+.91);this.group.add(lintel);
@@ -372,11 +407,18 @@ export class VolcanoIsland {
   buildTemple(){const T=TEMPLE,k=new Kit(),kd=new Kit(),st=this.stone,dark=this.dark,gold=this.gold,y0=T.y0,W=(x,z)=>[T.u+x,T.v+z];
     const P=(x,y,z)=>[T.u+x,y,T.v+z];
     // degraus da pirâmide (o degrau de cima tem o vão da escada interna)
-    for(let i=0;i<3;i++){const s=TIER[i],yb=y0+5*i,yt=y0+5*(i+1);
-      if(i<2)k.add(st,box(P(0,(yb+yt)/2,0),[s*2,5,s*2]),i?0x8a8278:0x7e766c,.03);
-      else{const h=[-1.5,1.5],zz=[-3,3];k.add(st,box(P(0,(yb+yt)/2,(zz[1]+s)/2),[s*2,5,s-zz[1]]),0x958c80,.03).add(st,box(P(0,(yb+yt)/2,(zz[0]-s)/2),[s*2,5,s+zz[0]]),0x958c80,.03).add(st,box(P((h[0]-s)/2,(yb+yt)/2,0),[s+h[0],5,6]),0x958c80,.03).add(st,box(P((h[1]+s)/2,(yb+yt)/2,0),[s-h[1],5,6]),0x958c80,.03);}
-      // cornija e friso de glifos em volta de cada degrau
-      k.add(st,box(P(0,yt-.15,0),[s*2+.8,.35,s*2+.8]),0x6f685f,.03);
+    // o túnel da escada (|x|<2 com as paredes, do vão do santuário até o Nível 1) é escavado em cada degrau
+    const tf=ROOMS[0].f,tcl=ROOMS[0].c,HW=2;
+    for(let i=0;i<3;i++){const s=TIER[i],yb=y0+5*i,yt=y0+5*(i+1),col=i===2?0x958c80:i?0x8a8278:0x7e766c;
+      k.add(st,box(P((-s-HW)/2,(yb+yt)/2,0),[s-HW,5,s*2]),col,.03).add(st,box(P((s+HW)/2,(yb+yt)/2,0),[s-HW,5,s*2]),col,.03);
+      let run=null;const flush=()=>{if(!run)return;for(const [a,b]of run.parts)k.add(st,box(P(0,(a+b)/2,(run.z0+run.z1)/2),[HW*2,b-a,run.z1-run.z0]),col,.03);run=null;};
+      for(let z=-s;z<s-1e-6;z+=.5){const za=z,zb=Math.min(s,z+.5);let parts;
+        if(i===2&&za>=-3-1e-6&&zb<=3+1e-6)parts=[];
+        else if(zb<=-19||za>=3)parts=[[yb,yt]];
+        else{const up=tf(zb)+tcl+.05,lo=tf(za)-1.85;parts=[];if(lo>yb)parts.push([yb,Math.min(yt,lo)]);if(up<yt)parts.push([Math.max(yb,up),yt]);}
+        const key=parts.map(q=>q.map(v=>v.toFixed(2)).join('/')).join('|');if(run&&run.key===key)run.z1=zb;else{flush();run={key,parts,z0:za,z1:zb};}}flush();
+      // cornija (moldura, não laje: a laje inteira tampava o vão da escada) e friso de glifos em volta de cada degrau
+      for(const [x,z,w,d]of [[0,s-.2,s*2+.8,1.2],[0,-s+.2,s*2+.8,1.2],[s-.2,0,1.2,s*2-1.6],[-s+.2,0,1.2,s*2-1.6]])k.add(st,box(P(x,yt-.15,z),[w,.35,d]),0x6f685f,.03);
       for(const [x,z,ry,len]of [[0,s+.02,0,s*2],[0,-s-.02,Math.PI,s*2],[s+.02,0,Math.PI/2,s*2],[-s-.02,0,-Math.PI/2,s*2]]){const f=new THREE.Mesh(new THREE.PlaneGeometry(len-.4,1.1),friezeMat(i));f.position.set(...P(x,yt-1.1,z));f.rotation.y=ry;kd.addMesh=kd.addMesh||[];kd.addMesh.push(f);}
       // máscaras de pedra nos cantos (nariz curvo, olhos fundos, dentes)
       for(const [sx,sz]of [[1,1],[-1,1],[1,-1],[-1,-1]])mask(kd,st,P(sx*(s-.2),yb+2.4,sz*(s-.2)),Math.atan2(sx,sz));}
@@ -403,7 +445,7 @@ export class VolcanoIsland {
     // dentro do santuário: parapeito em volta do vão da escada, serpentes de pedra na boca, altar de oferendas e murais
     for(const sx of [-1,1]){k.add(st,box(P(sx*1.75,ty+.35,0),[.4,.7,6.2]),0x7a7268,.03);this.solid({x0:T.u+sx*1.75-.2,x1:T.u+sx*1.75+.2,z0:T.v-3.1,z1:T.v+3.1,y0:ty-.5,y1:ty+1});serpent(kd,st,V(T.u+sx*1.75,ty+.4,T.v+3.4),sx);}
     k.add(st,box(P(0,ty+.35,-3.3),[3.9,.7,.4]),0x7a7268,.03);this.solid({x0:T.u-1.95,x1:T.u+1.95,z0:T.v-3.5,z1:T.v-3.1,y0:ty-.5,y1:ty+1});
-    k.add(st,box(P(0,ty+.5,-4.15),[3.2,1,.9]),0x857d72,.03);for(const x of [-1,0,1]){kd.add(dark,loft([{y:ty+1,rx:.22,rz:.22},{y:ty+1.18,rx:.28,rz:.28}],{n:10,capStart:true,capEnd:false}).translate(T.u+x,0,T.v-4.15),0x3a3028,.05);}
+    k.add(st,box(P(0,ty+.5,-4.15),[3.2,1,.9]),0x857d72,.03);for(const x of [-1,0,1]){kd.add(this.metal,hollow(loft([{y:ty+1,rx:.2,rz:.2},{y:ty+1.06,rx:.27,rz:.27},{y:ty+1.2,rx:.3,rz:.3}],{n:14,capStart:true,capEnd:false}),.86,.03).translate(T.u+x,0,T.v-4.15),0x6a4a2a,.05);kd.add(this.embers||(this.embers=new THREE.MeshStandardMaterial({vertexColors:true,emissive:0xff5a18,emissiveIntensity:1.6,roughness:.9})),ellipsoid([T.u+x,ty+1.1,T.v-4.15],[.22,.05,.22],10,4),0x3a1408,.2);}
     for(const [x,ry]of [[-4.68,Math.PI/2],[4.68,-Math.PI/2]]){const m=new THREE.Mesh(new THREE.PlaneGeometry(4,2.6),glyphMat(x<0?'lv1':'lv4'));m.position.set(...P(x,ty+2.4,0));m.rotation.y=ry;(kd.addMesh=kd.addMesh||[]).push(m);}
     for(const sx of [-1,1]){kd.add(this.metal,limb(V(...P(sx*4.6,ty+1.8,-3)),V(...P(sx*4.25,ty+2.3,-3)),.04,.05,5),0x3a2a1e,.05);this.addTorch(T.u+sx*4.2,ty+2.6,T.v-3,1.6,this.group,.75);}
     const base=k.build();this.templeBase=base;this.nearG.add(base);const det=kd.build();for(const m of kd.addMesh||[])det.add(m);this.templeDetail=det;this.nearG.add(det);
@@ -412,8 +454,8 @@ export class VolcanoIsland {
   // ======================= templo por dentro: salas, armadilhas, puzzles e o Coração =======================
   buildInterior(){const T=TEMPLE,k=new Kit(),kd=new Kit(),si=this.stoneIn,dark=this.dark,metal=this.metal,gold=this.gold,P=(x,y,z)=>[T.u+x,y,T.v+z];this.interior=new THREE.Group();
     // grade de 0,5 m: piso de cada célula; paredes onde uma célula de sala encosta em rocha
-    const cs=.5,nx=Math.round((DUNGEON.x1-DUNGEON.x0)/cs),nz=Math.round((DUNGEON.z1-DUNGEON.z0)/cs),F=new Float32Array(nx*nz).fill(NaN),C=new Float32Array(nx*nz);
-    for(let j=0;j<nz;j++)for(let i=0;i<nx;i++){const x=DUNGEON.x0+(i+.5)*cs,z=DUNGEON.z0+(j+.5)*cs,r=roomAt(x,z);if(r){F[j*nx+i]=interiorFloor(x,z);C[j*nx+i]=r.c;}}
+    const cs=.5,nx=Math.round((DUNGEON.x1-DUNGEON.x0)/cs),nz=Math.round((DUNGEON.z1-DUNGEON.z0)/cs),F=new Float32Array(nx*nz).fill(NaN),C=new Float32Array(nx*nz),DS=new Uint8Array(nx*nz);
+    for(let j=0;j<nz;j++)for(let i=0;i<nx;i++){const x=DUNGEON.x0+(i+.5)*cs,z=DUNGEON.z0+(j+.5)*cs,r=roomAt(x,z);if(r){F[j*nx+i]=interiorFloor(x,z);C[j*nx+i]=r.c;DS[j*nx+i]=r.dais?1:r.stairs?2:0;}}
     const at=(i,j)=>i<0||j<0||i>=nx||j>=nz?NaN:F[j*nx+i];
     for(let j=0;j<nz;j++){let run=null;const flush=()=>{if(!run)return;const x0=DUNGEON.x0+run.i0*cs,x1=DUNGEON.x0+(run.i1+1)*cs,z=DUNGEON.z0+(j+.5)*cs;k.add(si,box(P((x0+x1)/2,(run.b+run.t)/2,z),[x1-x0,run.t-run.b,cs]),0x6a625a,.03);run=null;};
       for(let i=0;i<nx;i++){if(!isNaN(at(i,j))){flush();continue;}const nb=[[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[1,1],[-1,1],[1,-1]].filter(([di,dj])=>!isNaN(at(i+di,j+dj)));
@@ -421,11 +463,11 @@ export class VolcanoIsland {
         {const wx=DUNGEON.x0+(i+.5)*cs,wz=DUNGEON.z0+(j+.5)*cs,top=pyramidTop(wx,wz)??this.hAt(T.u+wx,T.v+wz);t=Math.min(t,top-.02);}b=Math.round(b*4)/4;t=Math.round(t*4)/4;if(t<=b+.05){flush();continue;}
         if(run&&Math.abs(run.b-b)<.01&&Math.abs(run.t-t)<.01&&run.i1===i-1)run.i1=i;else{flush();run={i0:i,i1:i,b,t};}}flush();}
     // degraus entre pisos diferentes (borda do fosso) e vergas onde o teto muda de altura
-    for(let j=0;j<nz;j++)for(let i=0;i<nx;i++){const f=at(i,j);if(isNaN(f))continue;for(const [di,dj]of [[1,0],[0,1]]){const g=at(i+di,j+dj);if(isNaN(g))continue;const x=DUNGEON.x0+(i+.5+di*.5)*cs,z=DUNGEON.z0+(j+.5+dj*.5)*cs;
+    for(let j=0;j<nz;j++)for(let i=0;i<nx;i++){const f=at(i,j);if(isNaN(f))continue;for(const [di,dj]of [[1,0],[0,1]]){const g=at(i+di,j+dj);if(isNaN(g))continue;{const a=DS[j*nx+i],b=DS[(j+dj)*nx+i+di];if(a===1||b===1||(a===2&&b===2))continue;}const x=DUNGEON.x0+(i+.5+di*.5)*cs,z=DUNGEON.z0+(j+.5+dj*.5)*cs;
       if(Math.abs(g-f)>=.4){const lo=Math.min(f,g),hi=Math.max(f,g);k.add(si,box(P(x,(lo+hi)/2,z),[dj?cs:.12,hi-lo,di?cs:.12]),0x5f574f,.03);}
       const ca=f+C[j*nx+i],cb=g+C[(j+dj)*nx+i+di];if(Math.abs(ca-cb)>=.3){const lo=Math.min(ca,cb),hi=Math.max(ca,cb);k.add(si,box(P(x,(lo+hi)/2,z),[dj?cs:.3,hi-lo,di?cs:.3]),0x5f574f,.03);}}}
     // pisos e tetos (as escadas têm degraus maciços, sem vão por baixo)
-    for(const r of ROOMS){const [x0,x1]=r.x,[z0,z1]=r.z,fz=typeof r.f==='function'?r.f:()=>r.f,w=x1-x0;
+    for(const r of ROOMS){if(r.dais)continue;const [x0,x1]=r.x,[z0,z1]=r.z,fz=typeof r.f==='function'?r.f:()=>r.f,w=x1-x0;
       if(r.stairs){const n=Math.ceil((z1-z0)/.42);for(let q=0;q<n;q++){const za=z0+q*(z1-z0)/n,zb=za+(z1-z0)/n,y=fz((za+zb)/2);k.add(si,box(P((x0+x1)/2,y-.9,(za+zb)/2),[w,1.8,zb-za+.02]),q%2?0x6a625a:0x625a52,.03);}}
       else{k.add(si,quad(P(x0,fz(z1),z1),P(x1,fz(z1),z1),P(x1,fz(z0),z0),P(x0,fz(z0),z0)),r.pit?0x3a3430:0x77706a,.05);}
       const ze=r===ROOMS[0]?-3:z1;k.add(dark,quad(P(x0,fz(z0)+r.c,z0),P(x1,fz(z0)+r.c,z0),P(x1,fz(ze)+r.c,ze),P(x0,fz(ze)+r.c,ze)),0x3f3934,.04);}
@@ -436,8 +478,12 @@ export class VolcanoIsland {
     const mural=(x,y,z,ry,key)=>{const m=new THREE.Mesh(new THREE.PlaneGeometry(2.6,1.9),glyphMat(key));m.position.set(...P(x,y,z));m.rotation.y=ry;this.interior.add(m);kd.add(si,box(P(x-Math.sin(ry)*.06,y,z-Math.cos(ry)*.06),[Math.abs(Math.cos(ry))*2.9+.12,2.2,Math.abs(Math.sin(ry))*2.9+.12]),0x5a524a,.03);};
     // ======== NÍVEL 1 · Salão dos Dardos: placas de pressão, paredes furadas, esqueleto ========
     for(const z of [-22,-32])for(const sx of [-1,1])torch(sx*5.95,L1+2.3,z,[-sx,0]);
-    mural(-3.5,L1+2.2,-19.1,Math.PI,'lv1');mural(3.5,L1+2.2,-19.1,Math.PI,'lv1b');
-    for(let a=0;a<5;a++)for(let b=0;b<6;b++){const x=-4.4+a*2.2,z=-21.5-b*2.3,glyph=(a*7+b*3)%5===0;kd.add(si,box(P(x,L1+.04,z),[1.7,.08,1.8]),glyph?0x8a6a4a:0x6d655d,.05);if(glyph)kd.add(gold,box(P(x,L1+.09,z),[.5,.02,.5]),0xc8a15a,.05);}
+    mural(-3.5,L1+2.2,-19.1,Math.PI,'lv1');
+    {const byG={};for(let rr=0;rr<L1T.rows;rr++)for(let c=0;c<L1T.cols;c++){const x=L1T.x0+c*L1T.dx,z=L1T.z0+rr*L1T.dz,g=l1Glyph(rr,c);kd.add(si,box(P(x,L1+.04,z),[1.7,.08,1.8]),0x6d655d,.05);
+        (byG[g]||(byG[g]=[])).push(new THREE.PlaneGeometry(1.25,1.25).rotateX(-Math.PI/2).translate(...P(x,L1+.085,z)));}
+      for(const g in byG){const m=new THREE.Mesh(mergeGeometries(byG[g]),glyphMat('G'+g));m.receiveShadow=true;this.interior.add(m);}
+      // placa de pressão diante do portão: quem chega nela (pelo caminho certo) ergue a pedra
+      kd.add(si,new THREE.CylinderGeometry(1.1,1.2,.1,20).translate(...P(0,L1+.05,-35.2)),0x5a524a,.03);this.l1Plate=new THREE.Mesh(new THREE.CylinderGeometry(.85,.85,.08,20),new THREE.MeshStandardMaterial({color:0x9a7a4a,metalness:.5,roughness:.5,emissive:0x3a2008,emissiveIntensity:.4}));this.l1Plate.position.set(...P(0,L1+.1,-35.2));this.interior.add(this.l1Plate);}
     for(const sx of [-1,1])for(let r=0;r<4;r++)for(let c=0;c<14;c++)kd.add(dark,new THREE.CylinderGeometry(.045,.045,.1,6).rotateZ(Math.PI/2).translate(...P(sx*5.97,L1+.6+r*.55,-20.5-c*1.05)),0x0b0908,.02);
     for(let i=0;i<9;i++){const z=-21-rand()*13,x=(rand()-.5)*10;kd.add(metal,limb(V(...P(x,L1+.03,z)),V(...P(x+(rand()-.5)*.4,L1+.05,z+.35)),.012,.004,4),0x5a4a38,.05);}
     skeleton(kd,si,P(-2.5,L1,-31),.6);
@@ -447,12 +493,16 @@ export class VolcanoIsland {
     const spikes=[];for(let x=-5.7;x<=5.7;x+=.55)for(let z=-64.6;z<=-51.4;z+=.55){if(Math.abs(x)<.7||(x<-4.5&&z<-58))continue;spikes.push(new THREE.ConeGeometry(.07,.8+rand()*.4,5).translate(...P(x+(rand()-.5)*.15,L2-2.6+.45,z+(rand()-.5)*.15)));}
     kd.add(metal,mergeGeometries(spikes),0x6a5a4a,.08);kd.add(si,box(P(0,L2-.3,-58),[1.1,.6,14]),0x77706a,.03);for(let i=0;i<4;i++)kd.add(si,box(P(0,L2-1.5,-53-i*3.2),[.5,2.4,.5]),0x5a524a,.03);
     for(let i=0;i<6;i++)kd.add(dark,box(P(1.6+rand()*3.4,L2-2.55,-52-rand()*12),[.3,.08,1.2],[0,rand()*3,0]),0x4a3a2a,.1);skeleton(kd,si,P(3.2,L2-2.6,-56),.5);
-    this.blades=[];for(let i=0;i<4;i++){const z=-71-i*3.4,g=new THREE.Group(),bk=new Kit();bk.add(metal,limb(V(0,0,0),V(0,-5,0),.06,.06,6),0x3a3430,.05);
+    this.blades=[];for(let i=0;i<4;i++){const z=BLADES[i],g=new THREE.Group(),bk=new Kit();bk.add(metal,limb(V(0,0,0),V(0,-5,0),.06,.06,6),0x3a3430,.05);
       const sh=new THREE.Shape();sh.moveTo(-1.4,0);sh.quadraticCurveTo(0,-1.4,1.4,0);sh.lineTo(1.1,.2);sh.quadraticCurveTo(0,-.7,-1.1,.2);sh.closePath();
-      bk.add(metal,new THREE.ExtrudeGeometry(sh,{depth:.05,bevelEnabled:true,bevelSize:.03,bevelThickness:.02,bevelSegments:1}).translate(0,-5.2,-.025),0x8a8a88,.04);bk.add(metal,box([0,-4.95,0],[.35,.35,.18]),0x3a3430,.05);
-      g.add(bk.build());g.position.set(...P(0,L2+6.5,z));g.rotation.z=(i%2?1:-1)*.9;this.interior.add(g);this.blades.push(g);kd.add(dark,box(P(0,L2+6.55,z),[5,.1,.25]),0x0a0908,.02);}
+      bk.add(metal,new THREE.ExtrudeGeometry(sh,{depth:.05,bevelEnabled:true,bevelSize:.03,bevelThickness:.02,bevelSegments:1}).translate(0,-5.2,-.025),0x8a8a88,.04);bk.add(metal,box([0,-4.95,0],[.35,.35,.18]),0x3a3430,.05);bk.add(gold,new THREE.CylinderGeometry(.42,.42,.06,20).rotateX(Math.PI/2).translate(0,-4.5,0),0xc8983a,.04);
+      g.add(bk.build());for(const sd of [-1,1]){const gl=new THREE.Mesh(new THREE.CircleGeometry(.36,24),glyphMat('G'+BLADE_G[i]));gl.position.set(0,-4.5,sd*.035);if(sd<0)gl.rotation.y=Math.PI;g.add(gl);}g.position.set(...P(0,L2+6.5,z));g.rotation.z=(i%2?1:-1)*.9;this.interior.add(g);this.blades.push(g);kd.add(dark,box(P(0,L2+6.55,z),[5,.1,.25]),0x0a0908,.02);}
     // bola de pedra no nicho do fim da galeria (a armadilha que desce a escada)
-    const boulder=sculpt(new THREE.IcosahedronGeometry(1.15,3),v=>{v.multiplyScalar(1+(fbm(v.x*2.3,v.z*2.3+v.y)-.5)*.12);});boulder.translate(...P(1.3,L2+1.2,-83.2));kd.add(si,boulder,0x6a625a,.04);
+    const boulder=sculpt(new THREE.IcosahedronGeometry(1.15,3),v=>{v.multiplyScalar(1+(fbm(v.x*2.3,v.z*2.3+v.y)-.5)*.12);});boulder.translate(...P(3.6,L2-2.6+1.1,-62.5));kd.add(si,boulder,0x6a625a,.04);
+    // quatro botões de glifo no fim da galeria (dois em cada parede)
+    this.buttons=BUTTONS.map((b,i)=>{kd.add(si,box(P(b.x-b.f*.02,L2+1.5,b.z),[.12,.8,.8]),0x5a524a,.03);const g=new THREE.Group(),bk=new Kit();bk.add(si,box([0,0,0],[.6,.6,.14]),0x857d72,.03);g.add(bk.build());
+      const face=new THREE.Mesh(new THREE.PlaneGeometry(.5,.5),glyphMat('G'+b.g));face.position.z=.075;g.add(face);const glow=new THREE.Mesh(new THREE.PlaneGeometry(.62,.62),new THREE.MeshBasicMaterial({color:0xffb040,transparent:true,opacity:0,depthWrite:false,blending:THREE.AdditiveBlending}));glow.position.z=.08;g.add(glow);g.userData.glow=glow;
+      g.position.set(...P(b.x+b.f*.05,L2+1.5,b.z));g.rotation.y=b.f*Math.PI/2;this.interior.add(g);return g;});
     // ======== NÍVEL 3 · Câmara dos Pilares e Sala dos Espelhos ========
     torch(-8.95,L3+2.6,-101,[1,0]);torch(-8.95,L3+2.6,-109,[1,0]);torch(24.95,L3+2.6,-100,[-1,0]);torch(24.95,L3+2.6,-110,[-1,0]);
     mural(0,L3+2.8,-97.1,Math.PI,'lv3');
@@ -460,25 +510,29 @@ export class VolcanoIsland {
       g.add(pk.build());for(let f=0;f<4;f++){const pl=new THREE.Mesh(new THREE.PlaneGeometry(.9,.9),glyphMat('g'+f));pl.position.set(Math.sin(f*Math.PI/2)*.61,1.8,Math.cos(f*Math.PI/2)*.61);pl.rotation.y=f*Math.PI/2;g.add(pl);}
       kd.add(si,new THREE.CylinderGeometry(1,1,.12,20).translate(...P(x,L3+.06,z)),0x5a524a,.03);g.position.set(...P(x,L3+.12,z));g.rotation.y=((x+z)%4)*Math.PI/2;this.interior.add(g);this.pillars.push(g);this.solid({x:T.u+x,z:T.v+z,r:.9,y0:L3-1,y1:L3+4});}
     for(let a=0;a<3;a++)for(let b=0;b<3;b++){const tile=new THREE.Mesh(new THREE.PlaneGeometry(1.6,1.6).rotateX(-Math.PI/2),glyphMat('t'+((a*3+b*5)%8)));tile.position.set(...P(-1.8+a*1.8,L3+.03,-103.2-b*1.8));this.interior.add(tile);}
-    this.mirrors=[];for(const [x,z]of [[13,-101],[21,-104],[14,-110]]){const g=new THREE.Group(),mk=new Kit();mk.add(si,new THREE.CylinderGeometry(.5,.6,.9,10).translate(0,.45,0),0x77706a,.04);mk.add(metal,limb(V(-.55,.9,0),V(-.55,1.9,0),.05,.05,5),0x8a6a3a,.05).add(metal,limb(V(.55,.9,0),V(.55,1.9,0),.05,.05,5),0x8a6a3a,.05);
-      mk.add(gold,new THREE.CylinderGeometry(.5,.5,.05,24).rotateX(Math.PI/2).translate(0,1.55,0),0xd8a84a,.02);g.add(mk.build());g.position.set(...P(x,L3,z));g.rotation.y=rand()*6;this.interior.add(g);this.mirrors.push(g);this.solid({x:T.u+x,z:T.v+z,r:.6,y0:L3-1,y1:L3+3});}
-    const sun=new THREE.Mesh(new THREE.CircleGeometry(1.3,32),new THREE.MeshStandardMaterial({color:0xd8a84a,metalness:1,roughness:.3,emissive:0x5a3a10,emissiveIntensity:.6}));sun.position.set(...P(24.93,L3+3,-105));sun.rotation.y=-Math.PI/2;this.interior.add(sun);
-    for(let i=0;i<16;i++){const a=i/16*6.28;kd.add(gold,box(P(24.9,L3+3+Math.sin(a)*1.75,-105+Math.cos(a)*1.75),[.05,.45,.16],[a,0,0]),0xc8983a,.04);}
-    this.beams=[];const beam=new THREE.Mesh(new THREE.CylinderGeometry(.45,.8,6.2,16,1,true),beamMat());beam.position.set(...P(17,L3+3.1,-104));this.interior.add(beam);this.beams.push(beam);
-    const boulder2=sculpt(new THREE.IcosahedronGeometry(1.6,2),v=>{v.multiplyScalar(1+(fbm(v.x*1.9,v.z*1.9+v.y)-.5)*.14);});boulder2.translate(...P(23,L3+1.4,-98.8));kd.add(si,boulder2,0x5f574f,.05);this.solid({x:T.u+23,z:T.v-98.8,r:1.5,y0:L3-1,y1:L3+3});
+    this.mirrors=[];for(const [x,z]of MIRRORS){const g=new THREE.Group(),mk=new Kit();mk.add(si,new THREE.CylinderGeometry(.5,.6,.9,10).translate(0,.45,0),0x77706a,.04);mk.add(metal,limb(V(-.55,.9,0),V(-.55,1.9,0),.05,.05,5),0x8a6a3a,.05).add(metal,limb(V(.55,.9,0),V(.55,1.9,0),.05,.05,5),0x8a6a3a,.05);
+      mk.add(gold,new THREE.CylinderGeometry(.5,.5,.05,24).rotateX(Math.PI/2).translate(0,1.55,0),0xd8a84a,.02);g.add(mk.build());g.position.set(...P(x,L3,z));g.rotation.y=MIRROR_START[this.mirrors.length]*Math.PI/4;this.interior.add(g);this.mirrors.push(g);this.solid({x:T.u+x,z:T.v+z,r:.6,y0:L3-1,y1:L3+3});}
+    const sun=new THREE.Mesh(new THREE.CircleGeometry(1.3,32),new THREE.MeshStandardMaterial({color:0xd8a84a,metalness:1,roughness:.3,emissive:0x5a3a10,emissiveIntensity:.6}));sun.position.set(...P(24.93,L3+1.55,SUN.z));sun.rotation.y=-Math.PI/2;this.interior.add(sun);this.sun=sun;
+    for(let i=0;i<16;i++){const a=i/16*6.28;kd.add(gold,box(P(24.9,L3+1.55+Math.sin(a)*1.75,SUN.z+Math.cos(a)*1.75),[.05,.45,.16],[a,0,0]),0xc8983a,.04);}
+    this.beams=[];const beam=new THREE.Mesh(new THREE.CylinderGeometry(.35,.55,4.65,16,1,true),beamMat());beam.position.set(...P(SRC.x,L3+3.87,SRC.z));this.interior.add(beam);this.beams.push(beam);
+    // prisma fixo sob o poço: vira a luz para o sul; e o feixe horizontal (segmentos reaproveitados)
+    kd.add(si,new THREE.CylinderGeometry(.45,.55,1.1,10).translate(...P(SRC.x,L3+.55,SRC.z)),0x77706a,.04);kd.add(gold,box(P(SRC.x,L3+1.5,SRC.z),[.7,.7,.06],[-Math.PI/4,0,0]),0xd8a84a,.03);this.solid({x:T.u+SRC.x,z:T.v+SRC.z,r:.55,y0:L3-1,y1:L3+2});
+    this.beamSegs=Array.from({length:8},()=>{const m=new THREE.Mesh(new THREE.CylinderGeometry(.09,.09,1,8,1,true).rotateX(Math.PI/2),new THREE.MeshBasicMaterial({color:0xffd890,transparent:true,opacity:.55,depthWrite:false,blending:THREE.AdditiveBlending}));m.visible=false;this.interior.add(m);return m;});
+    this.beamKey='';
+    const boulder2=sculpt(new THREE.IcosahedronGeometry(1.6,2),v=>{v.multiplyScalar(1+(fbm(v.x*1.9,v.z*1.9+v.y)-.5)*.14);});boulder2.translate(...P(23.2,L3+1.4,-111.2));kd.add(si,boulder2,0x5f574f,.05);this.solid({x:T.u+23.2,z:T.v-111.2,r:1.5,y0:L3-1,y1:L3+3});
     // ======== NÍVEL 4 · Câmara do Coração: colunas, fissuras de lava, anel de ladrilhos, ídolo, altar e o artefato ========
     const cy=L4;for(const [x,z]of [[4,-128],[30,-128],[4,-152],[30,-152]])torch(x+(x<17?-.9:.9),cy+3.2,z,[x<17?1:-1,0]);
     mural(17,cy+3,-126.1,Math.PI,'lv4');
     for(let i=0;i<6;i++)for(const x of [7,27]){const z=-131-i*4;column(k,si,P(x,cy,z),9.6);this.solid({x:T.u+x,z:T.v+z,r:.5,y0:cy-1,y1:cy+10});}
     for(let i=0;i<7;i++){const f=new THREE.Mesh(new THREE.PlaneGeometry(.35+rand()*.4,3+rand()*5).rotateX(-Math.PI/2).rotateY(rand()*3),this.lavaMat);f.position.set(...P(9+rand()*16,cy+.02,-131-rand()*18));this.interior.add(f);}
     for(let a=0;a<16;a++){const ang=a/16*6.283,tile=new THREE.Mesh(new THREE.PlaneGeometry(1.4,1.4).rotateX(-Math.PI/2),glyphMat('t'+(a%8)));tile.position.set(...P(17+Math.cos(ang)*6.5,cy+.03,-140+Math.sin(ang)*6.5));tile.rotation.y=-ang;this.interior.add(tile);}
-    for(let q=0;q<3;q++)k.add(si,box(P(17,cy+.25+q*.5,-140),[9-q*2.4,.5,8-q*2]),0x7a7268,.03);this.solid({x0:T.u+14,x1:T.u+20,z0:T.v-143,z1:T.v-137,y0:cy-1,y1:cy+1.4});
+    for(let q=0;q<3;q++)k.add(si,box(P(17,cy+.25+q*.5,-140),[9-q*2.4,.5,8-q*2]),0x7a7268,.03);this.solid({x0:T.u+16.1,x1:T.u+17.9,z0:T.v-140.6,z1:T.v-139.4,y0:cy-1,y1:cy+2.7});
     k.add(si,box(P(17,cy+2.1,-140),[1.8,1.2,1.2]),0x857d72,.03);
     idol(kd,si,gold,P(17,cy,-151.5));this.solid({x0:T.u+13.5,x1:T.u+20.5,z0:T.v-153.5,z1:T.v-148.5,y0:cy-1,y1:cy+9});
     this.heart=heartModel();this.heart.position.set(...P(17,cy+3.4,-140));this.interior.add(this.heart);
     const shaft=new THREE.Mesh(new THREE.CylinderGeometry(.9,1.6,9.6,20,1,true),beamMat(0xffc27a));shaft.position.set(...P(17,cy+5,-140));this.interior.add(shaft);this.beams.push(shaft);
-    this.addTorch(T.u+17,cy+3.4,T.v-140,3.2,this.interior,.01);
-    for(const [x,y,z]of [[17,cy+9.98,-140],[17,L3+6.18,-104]]){const o=new THREE.Mesh(new THREE.CircleGeometry(1,24).rotateX(Math.PI/2),new THREE.MeshBasicMaterial({color:0xfff0c8}));o.position.set(...P(x,y,z));this.interior.add(o);}
+    this.heartTorch=this.torchCount;this.addTorch(T.u+17,cy+3.4,T.v-140,3.2,this.interior,.01);
+    for(const [x,y,z]of [[17,cy+9.98,-140],[SRC.x,L3+6.18,SRC.z]]){const o=new THREE.Mesh(new THREE.CircleGeometry(1,24).rotateX(Math.PI/2),new THREE.MeshBasicMaterial({color:0xfff0c8}));o.position.set(...P(x,y,z));this.interior.add(o);}
     // ======== portões de pedra no topo de cada escada (sobem quando o puzzle do nível for resolvido) ========
     this.gateMeshes=GATES.map((g,i)=>{const [x0,x1]=g.x,w=x1-x0,cx=(x0+x1)/2;for(const s of [x0-.25,x1+.25])kd.add(si,box(P(s,g.y+1.75,g.z),[.5,3.5,.7]),0x6f685f,.03);kd.add(si,box(P(cx,g.y+3.65,g.z),[w+1,.5,.8]),0x5f574f,.03);
       const door=new THREE.Group(),dk=new Kit();dk.add(si,box([0,0,0],[w,3.3,.35]),0x7a7268,.03);for(const s of [-1,1])dk.add(metal,box([0,s*1.2,.19],[w*.9,.12,.04]),0x3a3028,.05);door.add(dk.build());
@@ -495,7 +549,7 @@ export class VolcanoIsland {
   // ======================= por quadro: LOD, fumaça, chamas, lâminas balançando de leve =======================
   update(t,dt,camera){const cam=camera.position,lu=cam.x-VOLCANO.x,lv=cam.z-VOLCANO.z,d=Math.hypot(lu,lv);
     // longe demais (a névoa já cobre): nada é desenhado
-    this.group.visible=d<760;if(!this.group.visible)return;
+    this.group.visible=d<1900;if(!this.group.visible)return;
     const near=d<340;this.nearG.visible=near;this.farG.visible=!near;
     const dt2=Math.hypot(lu-TEMPLE.u,lv-TEMPLE.v);if(this.templeDetail)this.templeDetail.visible=near&&dt2<200;{const tx=lu-TEMPLE.u,tz=lv-TEMPLE.v;this.interior.visible=tx>DUNGEON.x0-40&&tx<DUNGEON.x1+40&&tz>DUNGEON.z0-40&&tz<DUNGEON.z1+60;}
     this.frame=(this.frame||0)+1;if(near&&this.frame%10===0){const dir=camera.getWorldDirection(V());const c=V(lu,0,lv);for(const s of this.scatters)s.update(c,dir);}
@@ -510,7 +564,18 @@ export class VolcanoIsland {
     if(this.rainbow)this.rainbow.material.uniforms.uA.value=.1+Math.sin(t*.4)*.05;
     for(const s of this.steam||[]){const k=(s.userData.k+t*.09)%1;s.position.set(s.userData.u+k*3,s.userData.y+.5+k*9,s.userData.v);s.scale.setScalar(1.5+k*6);s.material.opacity=.3*(1-k)*Math.min(1,k*5);}
     // portões: sobem devagar quando abertos (e descem quando fechados)
-    (this.gateMeshes||[]).forEach((g,i)=>{this.gateY[i]+=((this.gateOpen[i]?3.2:0)-this.gateY[i])*Math.min(1,dt*1.2);g.position.y=GATES[i].y+1.65+this.gateY[i];});}
+    (this.gateMeshes||[]).forEach((g,i)=>{this.gateY[i]+=((this.gateOpen[i]?3.2:0)-this.gateY[i])*Math.min(1,dt*1.2);g.position.y=GATES[i].y+1.65+this.gateY[i];});
+    if(this.interior.visible)this.puzzleFx(t,dt);}
+  // estado dos puzzles (world.temple) desenhado: espelhos girando, feixe de luz, botões acesos, placa, coração no altar
+  puzzleFx(t,dt){const pz=this.puzzle||{gates:[0,0,0]},k=Math.min(1,dt*8);
+    const mir=pz.mir||MIRROR_START;this.mirrors.forEach((g,i)=>{const s=mir[i]||0,u=g.userData;if(u.s===undefined){u.s=MIRROR_START[i];u.target=u.s*Math.PI/4;g.rotation.y=u.target;}if(s!==u.s){u.target+=((s-u.s+8)%8)*Math.PI/4;u.s=s;}g.rotation.y+=(u.target-g.rotation.y)*k;});
+    const key=mir.join();if(key!==this.beamKey){this.beamKey=key;const {pts,hit}=beamPath(mir);this.beamHit=hit;
+      this.beamSegs.forEach((m,i)=>{const a=pts[i],b=pts[i+1];m.visible=!!b;if(!b)return;const ax=TEMPLE.u+a[0],az=TEMPLE.v+a[1],bx=TEMPLE.u+b[0],bz=TEMPLE.v+b[1];m.position.set((ax+bx)/2,L3+1.55,(az+bz)/2);m.scale.set(1,1,Math.max(.01,Math.hypot(bx-ax,bz-az)));m.rotation.set(0,Math.atan2(bx-ax,bz-az),0);});}
+    for(const m of this.beamSegs)m.material.opacity=.42+Math.sin(t*9)*.06+(this.beamHit?.2:0);
+    if(this.sun){const want=this.beamHit?2.6:.5;this.sun.material.emissiveIntensity+=(want-this.sun.material.emissiveIntensity)*Math.min(1,dt*2);}
+    const flash=Math.max(0,(this.btnFlash||0)-t);this.buttons.forEach((g,i)=>{const on=pz.gates[1]||(pz.seq||[]).includes(i),m=g.userData.glow.material;m.color.set(flash>0?0xff3020:0xffb040);const want=flash>0?.9*(Math.sin(t*30)>0?1:.3):on?.85:0;m.opacity+=(want-m.opacity)*Math.min(1,dt*10);});
+    if(this.heart){const here=pz.relic===-1||pz.relic===undefined;this.heart.visible=here;if(this.heartTorch<TORCH_MAX)this.torches[this.heartTorch].w=here?3.2:0;}
+    if(this.l1Plate){const down=pz.gates[0]?1:0;this.l1Plate.position.y+=((L1+.1-down*.06)-this.l1Plate.position.y)*k;this.l1Plate.material.emissiveIntensity=down?1.4+Math.sin(t*3)*.3:.4;}}
 }
 // ======================= peças reutilizáveis =======================
 function quad(a,b,c,d){const g=new THREE.BufferGeometry().setFromPoints([V(...a),V(...b),V(...c),V(...a),V(...c),V(...d)]);g.computeVertexNormals();return g;}
@@ -549,17 +614,25 @@ function monstera(k,m){for(let f=0;f<5;f++){const a=f/5*6.28,stemTop=V(Math.cos(
 // ======================= texturas desenhadas =======================
 let _flame=null;function flameTex(){if(_flame)return _flame;const c=document.createElement('canvas');c.width=c.height=64;const x=c.getContext('2d'),g=x.createRadialGradient(32,36,0,32,32,32);g.addColorStop(0,'rgba(255,255,255,1)');g.addColorStop(.35,'rgba(255,255,255,.55)');g.addColorStop(1,'rgba(255,255,255,0)');x.fillStyle=g;x.fillRect(0,0,64,64);_flame=new THREE.CanvasTexture(c);return _flame;}
 function stripeTex(){const c=document.createElement('canvas');c.width=64;c.height=256;const x=c.getContext('2d');for(let i=0;i<64;i+=2){x.fillStyle=`rgba(255,255,255,${.3+Math.random()*.7})`;x.fillRect(i,0,2,256);}for(let i=0;i<60;i++){x.fillStyle='rgba(255,255,255,.9)';x.fillRect(Math.random()*64,Math.random()*256,1+Math.random()*3,10+Math.random()*30);}return new THREE.CanvasTexture(c);}
-const GLYPHS=['☉','☽','✶','◈','♆','⚶','♁','⟁','⌬','☿'];
 const _glyph={};function glyphMat(key){if(_glyph[key])return _glyph[key];const c=document.createElement('canvas');c.width=c.height=256;const x=c.getContext('2d');
   // pedra entalhada: fundo de pedra, sulcos escuros com borda clara (relevo), um pouco de musgo
   x.fillStyle='#6f675e';x.fillRect(0,0,256,256);for(let i=0;i<500;i++){x.fillStyle=`rgba(${Math.random()<.5?30:200},${Math.random()<.5?30:190},${Math.random()<.5?25:170},.06)`;x.fillRect(Math.random()*256,Math.random()*256,3+Math.random()*9,3+Math.random()*9);}
   const carve=(draw)=>{x.save();x.translate(2,2);x.strokeStyle='rgba(255,240,210,.35)';x.fillStyle='rgba(255,240,210,.35)';draw();x.restore();x.strokeStyle='#2a241e';x.fillStyle='#2a241e';draw();};
   x.lineWidth=9;x.lineCap='round';
   if(key.startsWith('gate')){carve(()=>{x.strokeRect(20,20,216,216);x.beginPath();x.arc(128,128,70,0,6.3);x.stroke();x.font='bold 64px serif';x.textAlign='center';x.textBaseline='middle';x.fillText(['☉','☽','✶'][+key.slice(4)]||'◈',128,132);for(let i=0;i<8;i++){const a=i/8*6.28;x.beginPath();x.moveTo(128+Math.cos(a)*78,128+Math.sin(a)*78);x.lineTo(128+Math.cos(a)*100,128+Math.sin(a)*100);x.stroke();}});}
-  else if(key.startsWith('lv')){const n=parseInt(key.slice(2));carve(()=>{x.strokeRect(14,14,228,228);x.font='bold 30px serif';x.textAlign='center';x.fillText(['','I','II','III','IV'][n]||'',128,52);x.font='bold 50px serif';x.fillText(GLYPHS.slice(n,n+3).join(' '),128,130);x.font='bold 26px serif';x.fillText(GLYPHS.slice(n+3,n+7).join(' '),128,195);});}
+  else if(key.startsWith('lv')){const n=parseInt(key.slice(2)),C=x;carve(()=>{C.strokeRect(14,14,228,228);C.font='bold 26px serif';C.textAlign='center';C.textBaseline='middle';C.fillText(['','I','II','III','IV'][n]||'',128,36);
+      if(n===1){// pegadas só sobre a lua; flechas cruzando os outros glifos
+        C.font='bold 40px serif';[['☉',60,90],['☽',128,90],['✶',196,90],['◈',60,150],['☽',128,150],['♆',196,150]].forEach(([g,a,b])=>C.fillText(g,a,b));for(const [a,b]of [[128,120],[128,182]]){C.beginPath();C.ellipse(a-8,b+30,5,9,0,0,6.3);C.fill();C.beginPath();C.ellipse(a+8,b+22,5,9,0,0,6.3);C.fill();}
+        C.lineWidth=5;for(const b of [90,150]){C.beginPath();C.moveTo(20,b-22);C.lineTo(92,b-22);C.moveTo(164,b-22);C.lineTo(236,b-22);C.stroke();}C.font='bold 18px serif';C.fillText('SIGA A LUA',128,222);}
+      else if(n===2){// o pêndulo e a contagem: a ordem das lâminas abre a porta
+        C.lineWidth=6;for(let i=0;i<4;i++){const a=58+i*47;C.beginPath();C.moveTo(a,60);C.lineTo(a+(i%2?-14:14),150);C.stroke();C.beginPath();C.arc(a+(i%2?-14:14),160,13,0,6.3);C.stroke();C.font='bold 20px serif';C.fillText(String(i+1),a+(i%2?-14:14),192);}C.font='bold 18px serif';C.fillText('A ORDEM DAS LÂMINAS',128,224);}
+      else if(n===3){// o sol no alto, espelhos em diagonal e o disco na parede
+        C.beginPath();C.arc(52,58,18,0,6.3);C.stroke();C.lineWidth=4;C.beginPath();C.moveTo(52,80);C.lineTo(52,172);C.lineTo(196,172);C.lineTo(196,118);C.lineTo(222,118);C.stroke();C.lineWidth=7;for(const [a,b,s]of [[52,172,1],[196,172,-1],[196,118,1]]){C.beginPath();C.moveTo(a-13,b-13*s);C.lineTo(a+13,b+13*s);C.stroke();}C.beginPath();C.arc(226,118,11,0,6.3);C.fill();C.font='bold 18px serif';C.fillText('LEVE A LUZ AO SOL',128,222);}
+      else{// o coração cai na boca do vulcão
+        C.lineWidth=6;C.beginPath();C.moveTo(30,200);C.lineTo(100,90);C.lineTo(156,90);C.lineTo(226,200);C.stroke();C.beginPath();C.moveTo(112,90);C.quadraticCurveTo(128,112,144,90);C.stroke();C.font='bold 34px serif';C.fillText('◈',128,56);C.lineWidth=4;C.beginPath();C.moveTo(128,72);C.lineTo(128,98);C.stroke();C.font='bold 18px serif';C.fillText('DEVOLVA À LAVA',128,224);}});}
   else if(key==='door'){carve(()=>{x.strokeRect(24,24,208,208);x.beginPath();x.arc(128,110,58,0,6.3);x.stroke();for(let i=0;i<12;i++){const a=i/12*6.28;x.beginPath();x.moveTo(128+Math.cos(a)*66,110+Math.sin(a)*66);x.lineTo(128+Math.cos(a)*86,110+Math.sin(a)*86);x.stroke();}x.font='bold 40px serif';x.textAlign='center';x.fillText('☉ ☽ ✶ ◈',128,215);});}
   else if(key==='stela'){carve(()=>{x.font='bold 36px serif';x.textAlign='center';for(let r=0;r<5;r++)x.fillText(GLYPHS.slice(r,r+3).join(' '),128,50+r*44);});}
-  else{const g=GLYPHS[(key.charCodeAt(1)||0)%GLYPHS.length];carve(()=>{x.strokeRect(20,20,216,216);x.font='bold 150px serif';x.textAlign='center';x.textBaseline='middle';x.fillText(g,128,138);});}
+  else{const g=key[0]==='G'?GLYPHS[+key.slice(1)]:GLYPHS[(key.charCodeAt(1)||0)%GLYPHS.length];carve(()=>{x.strokeRect(20,20,216,216);x.font='bold 150px serif';x.textAlign='center';x.textBaseline='middle';x.fillText(g,128,138);});}
   x.fillStyle='rgba(50,80,30,.35)';for(let i=0;i<30;i++){x.beginPath();x.arc(Math.random()*256,Math.random()<.5?Math.random()*40:256-Math.random()*40,4+Math.random()*12,0,6.3);x.fill();}
   const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;return _glyph[key]=new THREE.MeshStandardMaterial({map:t,roughness:.9});}
 const _frieze={};function friezeMat(i){if(_frieze[i])return _frieze[i];const c=document.createElement('canvas');c.width=1024;c.height=64;const x=c.getContext('2d');x.fillStyle='#716960';x.fillRect(0,0,1024,64);

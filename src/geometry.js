@@ -44,6 +44,12 @@ export function tube(path,r,seg=6){const curve=new THREE.CatmullRomCurve3(path);
 // Desloca vértices por função (esculpir), mantendo faces compartilhadas unidas.
 export function sculpt(geo,fn){const p=geo.attributes.position,v=V();for(let i=0;i<p.count;i++){v.fromBufferAttribute(p,i);fn(v);p.setXYZ(i,v.x,v.y,v.z);}geo.computeVertexNormals();return geo;}
 // Coleção de peças por material; ao final, uma malha por material.
+// Casca com parede interna: copia a peça encolhida em x/z (em volta do eixo vertical local) com as faces viradas para dentro.
+// Sem isso, tigela ou cesto aberto só tem o lado de fora e, visto por cima, vira uma meia-lua preta ou some.
+export function hollow(geo,k=.88,lift=.015){const outer=geo.index?geo.toNonIndexed():geo.clone(),inner=outer.clone(),p=inner.attributes.position;
+  for(let i=0;i<p.count;i++){p.setX(i,p.getX(i)*k);p.setZ(i,p.getZ(i)*k);p.setY(i,p.getY(i)+lift);}
+  for(let i=0;i<p.count;i+=3){const x=p.getX(i+1),y=p.getY(i+1),z=p.getZ(i+1);p.setXYZ(i+1,p.getX(i+2),p.getY(i+2),p.getZ(i+2));p.setXYZ(i+2,x,y,z);}
+  inner.deleteAttribute('normal');inner.computeVertexNormals();outer.deleteAttribute('normal');outer.computeVertexNormals();for(const g of [outer,inner])if(g.attributes.uv)g.deleteAttribute('uv');return mergeGeometries([outer,inner]);}
 export class Kit {
   constructor(){this.parts=new Map();}
   add(material,geo,color,jitter){if(!geo)return this;let g=geo;if(color!==undefined)g=tint(g,color,jitter);else if(!g.attributes.color)g=tint(g,0xffffff,0);if(g.index)g=g.toNonIndexed();if(g.attributes.uv)g.deleteAttribute('uv');if(!g.attributes.normal)g.computeVertexNormals();if(!this.parts.has(material))this.parts.set(material,[]);this.parts.get(material).push(g);return this;}
