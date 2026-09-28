@@ -132,10 +132,11 @@ export function twoBone(S,T,l1,l2,pole){const d=Math.min(T.distanceTo(S),l1+l2-1
   const bend=_b.copy(pole).sub(S);bend.addScaledVector(dir,-bend.dot(dir));if(bend.lengthSq()<1e-8)bend.set(0,-1,0);bend.normalize();return S.clone().addScaledVector(dir,l1*cosA).addScaledVector(bend,l1*sinA);}
 
 // ================= Suporte no barco =================
-export const RACK={x:-.93,z:-1.55,slots:[[-.95,-1.36],[-.95,-1.74]]};
+// quatro rifles no suporte de bombordo (um para cada pescador na luta contra a Nessie)
+export const RACK={x:-.93,z:-1.55,slots:[[-.95,-1.1],[-.95,-1.4],[-.95,-1.7],[-.95,-2.0]]};
 export function addRack(parent){
   const kit=new Kit(),wood=new THREE.MeshStandardMaterial({vertexColors:true,roughness:.8,flatShading:true});
-  kit.add(wood,box([RACK.x+.02,.02,RACK.z],[.16,.08,.7]),0x6e4b2e,.05).add(wood,box([RACK.x+.04,.62,RACK.z],[.08,.06,.7]),0x8d6541,.05);
+  kit.add(wood,box([RACK.x+.02,.02,RACK.z],[.16,.08,1.15]),0x6e4b2e,.05).add(wood,box([RACK.x+.04,.62,RACK.z],[.08,.06,1.15]),0x8d6541,.05);
   for(const [x,z]of RACK.slots){kit.add(wood,box([x+.07,.62,z],[.03,.07,.06]),0x5a3c24,.03);}
   parent.add(kit.build());
   const rifles=RACK.slots.map(([x,z])=>{const r=makeRifle();r.rotation.x=-Math.PI/2+.08;r.rotation.z=.08;r.position.set(x+.05,.5,z);parent.add(r);return r;});

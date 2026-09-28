@@ -39,7 +39,7 @@ const $=id=>document.getElementById(id),show=(id,value=true)=>$(id).hidden=!valu
 const Y=new THREE.Vector3(0,1,0),V=(x=0,y=0,z=0)=>new THREE.Vector3(x,y,z);
 let renderer,scene,camera,environment,cataclysm,fluid,post,assets,boat,helm,lantern,motor,fx,ragdolls,gulls,rackRifles=[],viewmodel,shotFX,menuCharacters=[],island,story=45;
 let running=false,solo=false,host=true,localId=0,selected=0,elapsed=0,menuTime=0,paused=false,cinematic=false,ended=false,blackout=false,titleShown=false,engineDead=false;
-const NEW_WORLD=()=>({storm:null,nessie:0,impact:null,bucket:[],rifles:[-1,-1],money:0,trig:null,stolen:{},bucketAt:-1,bucketPos:null,rope:{s:'tied',h:-1,tgt:1,pid:-1,t:0,ok:true,from:null,to:null},guitar:-1,shoo:null,talk:null,eq:NEW_EQ(),mk:NEW_MARKET(),nextStorm:nextStormAt(0),stormCount:0,temple:NEW_TEMPLE(),eclipse:null});
+const NEW_WORLD=()=>({storm:null,nessie:0,impact:null,bucket:[],rifles:[-1,-1,-1,-1],money:0,trig:null,stolen:{},bucketAt:-1,bucketPos:null,rope:{s:'tied',h:-1,tgt:1,pid:-1,t:0,ok:true,from:null,to:null},guitar:-1,shoo:null,talk:null,eq:NEW_EQ(),mk:NEW_MARKET(),nextStorm:nextStormAt(0),stormCount:0,temple:NEW_TEMPLE(),eclipse:null});
 // Balde: -1 no barco, -2 no chão (bucketPos), ou o id de quem carrega. Corda: 'boat' (rolo no convés), 'held', 'fly', 'tied' (no cabeço), 'pull' (resgate)
 let players=[],models=[],fishing=[],remoteInputs={},netTick=0,lastPhase='sunset',world=NEW_WORLD(),pred=null,boatTarget=null,myNet=0,hitMarkT=0;
 let lobby=new Lobby(),codeAction='',expectUnlock=false;
@@ -201,7 +201,7 @@ function endFightLocal(win=false){if(!fight)return;fight.end();show('boss-hud',f
 // Na luta a tempestade dura enquanto ela estiver viva; o meteoro continua sendo só do anfitrião (TAB).
 function stormTick(){if(world.trig||fight?.alive||island.exploded||eclipseK()>=0)return;const st=world.storm;if(st&&elapsed<st.at+(st.dur??STORM_TIME))return;
   if(world.nessie&&st){world.nessie=0;}
-  if(elapsed>=world.nextStorm){world.stormCount=(world.stormCount||0)+1;world.storm={at:elapsed,dur:STORM_DUR};const boss=world.stormCount%2===0;if(boss)world.nessie=1;world.nextStorm=elapsed+STORM_DUR+(nextStormAt(0));stateEvent('storm',{on:true,n:world.stormCount,boss});if(boss)stateEvent('nessieArmed',{});}}
+  if(elapsed>=world.nextStorm){world.stormCount=(world.stormCount||0)+1;world.storm={at:elapsed,dur:STORM_DUR};const boss=world.stormCount%2===0||!!world.nessieNext;if(boss){world.nessie=1;world.nessieNext=0;}world.nextStorm=elapsed+STORM_DUR+(nextStormAt(0));stateEvent('storm',{on:true,n:world.stormCount,boss});if(boss)stateEvent('nessieArmed',{});}}
 function summonNessie(){nessieCheck(true);}
 function nessieCheck(force=false){if(!world.nessie||fight?.alive||world.trig||island.exploded||eclipseK()>=0)return;const d=Math.hypot(boatState.x-ISLAND.x,boatState.z-ISLAND.z);if(d<(force?60:150))return;if(Math.hypot(boatState.x-VOLCANO.x,boatState.z-VOLCANO.z)<VOLCANO.size*.62)return;world.eq.fightId++;
   world.nessie=0;const a=boatState.heading+Math.PI*.6;const x=boatState.x+Math.sin(a)*45,z=boatState.z+Math.cos(a)*45;world.storm={at:elapsed-20,dur:9999};startFightLocal(x,z);stateEvent('bossStart',{x,z});}
@@ -362,19 +362,20 @@ function renderBaker(t,dt){const m=baker.model;if(!m)return;if(island.exploded||
   let look=null,bd=6;for(const p of players){if(p.mode==='gone')continue;const w=worldOf(p===players[localId]?me():p,1.6);const dd=Math.hypot(w.x-d.x,w.z-d.z);if(dd<bd){const l=lookAngles(V(d.x,d.y+1.6,d.z),d.yaw,w);if(l){bd=dd;look=l;}}}
   m.userData.anim.update(dt,{time:t,speed:baker.mode==='walk'?Math.min(sp,1.6):0,yaw:d.yaw,grounded:true,look});}
 // ---------- Alvos de interação: só vale olhar para a malha do objeto (raio do centro da tela, até 3 m) ----------
-const T={HELM:1,RIFLE0:2,RIFLE1:3,BUCKET:4,COIL:5,GUITAR:6,ROPE:7,SELL:8,BAKER:9,LANE:10,SCAN:11,PAY:12,HULL:13};
+const T={HELM:1,RIFLE0:2,RIFLE1:3,BUCKET:4,COIL:5,GUITAR:6,ROPE:7,SELL:8,BAKER:9,LANE:10,SCAN:11,PAY:12,HULL:13,RIFLE2:14,RIFLE3:15};
+const RIFLE_CODES=[T.RIFLE0,T.RIFLE1,T.RIFLE2,T.RIFLE3];
 let sellProxy=null,laneProxies=[],tieProxies=[],hover=null;const _ray=new THREE.Raycaster();
-function targetObjects(){const l=[[T.HELM,helm],[T.RIFLE0,rackRifles[0]],[T.RIFLE1,rackRifles[1]],[T.BUCKET,bucketObj],[T.COIL,hull.userData.coil],[T.GUITAR,guitarStand],[T.ROPE,rope.mesh],[T.ROPE,rope.loop],[T.ROPE,tieProxies[0]],[T.ROPE,tieProxies[1]],[T.SELL,sellProxy],[T.BAKER,baker.model],[T.HULL,hull]];return l.concat(market.targets(),gear.targets(),temple?temple.targets():[]);}
+function targetObjects(){const l=[[T.HELM,helm],...RIFLE_CODES.map((c,i)=>[c,rackRifles[i]]),[T.BUCKET,bucketObj],[T.COIL,hull.userData.coil],[T.GUITAR,guitarStand],[T.ROPE,rope.mesh],[T.ROPE,rope.loop],[T.ROPE,tieProxies[0]],[T.ROPE,tieProxies[1]],[T.SELL,sellProxy],[T.BAKER,baker.model],[T.HULL,hull]];return l.concat(market.targets(),gear.targets(),temple?temple.targets():[]);}
 const shown=o=>{for(let q=o;q;q=q.parent){if(!q.visible)return false;if(q===scene)return true;}return false;};
 function targetPos(code,p){const w=worldOf(p,1.2);if(isTempleCode(code))return temple?.pos(code)||null;if(code===T.HULL)return boat.position.clone();if(code>=11&&code<=12||code>=60)return market.pos(code,p);if(code>=30&&code<60)return gear.pos(code);switch(code){
-  case T.HELM:return helm.getWorldPosition(V());case T.RIFLE0:case T.RIFLE1:return rackRifles[code-T.RIFLE0].getWorldPosition(V());case T.BUCKET:return bucketWorld();
+  case T.HELM:return helm.getWorldPosition(V());case T.RIFLE0:case T.RIFLE1:case T.RIFLE2:case T.RIFLE3:return rackRifles[RIFLE_CODES.indexOf(code)].getWorldPosition(V());case T.BUCKET:return bucketWorld();
   case T.COIL:return hull.userData.coil.getWorldPosition(V());case T.GUITAR:return guitarStand.getWorldPosition(V());case T.SELL:return sellProxy.getWorldPosition(V());case T.BAKER:return V(baker.x,baker.y+1,baker.z);
   case T.ROPE:{if(world.rope.s!=='tied')return null;const a=boat.localToWorld(V(BOW_CLEAT.x,BOW_CLEAT.y,BOW_CLEAT.z)),b=bollardPos(world.rope.tgt);return a.distanceTo(w)<b.distanceTo(w)?a:b;}
   case T.LANE:{let best=null;for(const o of laneProxies){const q=o.getWorldPosition(V());if(!best||q.distanceTo(w)<best.distanceTo(w))best=q;}return best;}}return null;}
 // texto do aviso (e se dá para usar agora) para quem está olhando
 function targetLabel(code,p){const free=handsFree(p);if(isTempleCode(code))return temple?.label(code,p)||null;if(code===T.HULL){const id=gear.boatItem(p,gear.sel??-1);return id&&gear.nearBoat(p)?[`Segure E · instalar ${ITEMS[id].name} no barco`,1]:null;}if(code>=11&&code<=12||code>=60)return market.label(code,p);if(code>=30&&code<60)return gear.label(code,p);switch(code){
   case T.HELM:return engineDead?['Motor morto',0]:players.some(q=>q.mode==='drive')?['Leme ocupado',0]:!free?['Mãos ocupadas',0]:['Assumir o leme',1];
-  case T.RIFLE0:case T.RIFLE1:return free?['Pegar o rifle',1]:['Mãos ocupadas',0];
+  case T.RIFLE0:case T.RIFLE1:case T.RIFLE2:case T.RIFLE3:return free?['Pegar o rifle',1]:['Mãos ocupadas',0];
   case T.BUCKET:return world.bucketAt<0?(free?[`Pegar o balde (${world.bucket.length} ${world.bucket.length===1?'item':'itens'})`,1]:['Mãos ocupadas',0]):null;
   case T.COIL:return world.rope.s!=='boat'?null:free?['Pegar a corda',1]:['Mãos ocupadas',0];
   case T.GUITAR:return world.guitar>=0?null:free?['Tocar o violão',1]:['Mãos ocupadas',0];
@@ -402,7 +403,7 @@ function interact(p,target=-1){
   const at=target>0?targetPos(target,p):null;if(!at||at.distanceTo(worldOf(p,1.2))>3.8)return;const lab=targetLabel(target,p);if(!lab)return;if(!lab[1]){toastFor(p.id,lab[0]+'.');return;}
   switch(target){
     case T.HELM:fishing[p.id].reset();if(p.land){p.yaw+=-boatState.heading;if(p.id===localId)input.yaw-=boatState.heading;}p.land=0;p.mode='drive';p.x=0;p.z=-3.3;p.height=0;p.vy=0;p.tp++;stateEvent('drive',{id:p.id,on:true});return;
-    case T.RIFLE0:case T.RIFLE1:{const slot=target-T.RIFLE0;if(world.rifles[slot]>=0){toastFor(p.id,'Esse rifle já está com alguém.');return;}fishing[p.id].reset();if(p.mode==='fish')p.mode='walk';p.rifle=slot;world.rifles[slot]=p.id;stateEvent('rifle',{id:p.id,slot,on:true});return;}
+    case T.RIFLE0:case T.RIFLE1:case T.RIFLE2:case T.RIFLE3:{const slot=RIFLE_CODES.indexOf(target);if(world.rifles[slot]>=0){toastFor(p.id,'Esse rifle já está com alguém.');return;}fishing[p.id].reset();if(p.mode==='fish')p.mode='walk';p.rifle=slot;world.rifles[slot]=p.id;stateEvent('rifle',{id:p.id,slot,on:true});return;}
     case T.BUCKET:fishing[p.id].reset();if(p.mode==='fish')p.mode='walk';world.bucketAt=p.id;world.bucketPos=null;stateEvent('bucket',{id:p.id,on:true});return;
     case T.COIL:world.rope={s:'held',h:p.id,tgt:-1,pid:-1,t:0};stateEvent('rope',{id:p.id,on:true});return;
     case T.GUITAR:if(p.land)return;fishing[p.id].reset();world.guitar=p.id;p.mode='guitar';p.speed=0;stateEvent('guitar',{id:p.id,on:true});return;
@@ -472,7 +473,7 @@ function resolveShoo(stole){const sh=world.shoo;if(!sh)return;world.shoo=null;co
 const HULL_PTS=[[0,4.5],[0,-3.9],[1.55,0],[-1.55,0],[1.25,2.6],[-1.25,2.6],[1.25,-2.6],[-1.25,-2.6]];
 function boatHits(){const h=boatState.heading,c=Math.cos(h),s=Math.sin(h);for(const [lx,lz]of HULL_PTS){if(island.ground(boatState.x+lx*c+lz*s,boatState.z-lx*s+lz*c,-1)>-.85)return true;}return false;}
 let emptyBoatT=0;
-function boatHome(){if(fight?.alive){endFightLocal();stateEvent('bossEnd',{win:false});world.storm=null;}boatState=BERTH_STATE();world.rope={s:'tied',h:-1,tgt:1,pid:-1,t:elapsed,ok:true,from:null,to:null};world.eq.anchor=0;world.eq.anchorAt=null;world.eq.drogue=0;world.eq.gear={};world.eq.fuel=0;world.eq.energy=100;stateEvent('boatHome',{});}
+function boatHome(){if(fight?.alive){endFightLocal();stateEvent('bossEnd',{win:false});world.storm={at:elapsed-(STORM_DUR-20),dur:STORM_DUR};world.nextStorm=elapsed+20+nextStormAt(0);world.nessie=0;world.nessieNext=1;stateEvent('storm',{on:false});}boatState=BERTH_STATE();world.rope={s:'tied',h:-1,tgt:1,pid:-1,t:elapsed,ok:true,from:null,to:null};world.eq.anchor=0;world.eq.anchorAt=null;world.eq.drogue=0;world.eq.gear={};world.eq.fuel=0;world.eq.energy=100;stateEvent('boatHome',{});}
 function hostTick(dt,local){
   elapsed+=dt;const t=elapsed;story=storyTime(t,world.trig,world.storm);const inputs=players.map(p=>p.id===localId?local:remoteInputs[p.net]||{});
   for(const p of players)tickPlayer(p,inputs[p.id]||{},dt,t,p.id===localId);

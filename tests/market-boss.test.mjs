@@ -64,13 +64,17 @@ function fightFixture(stage=3){
   f.rig={head:{localToWorld:v=>v.add(new THREE.Vector3(f.S.x,8,f.S.z))}};
   return f;
 }
-function runAttack(name,moving){const f=fightFixture();f.startAttack(name);const hits=[];let x=0,speed=0;
+function runAttack(name,moving,stage=1,sure=null){const f=fightFixture(stage);if(sure!==null)f.sure=()=>sure;f.startAttack(name);const hits=[];let x=0,speed=0;
   for(let t=0;t<7&&f.attack.name===name;t+=1/60){if(moving&&t>1){speed=Math.min(5,speed+(2.2-speed*.24)/60);x+=speed/60;}
     hits.push(...f.simulate(1/60,{x,z:0,vx:speed,vz:0,heading:Math.PI/2}).filter(e=>e.k==='boatHit'));}
   return hits;
 }
-for(const name of ['tail','bite','cannon'])test(`Nessie ${name}: barco básico escapa com reação de 1 s, parado recebe dano`,()=>{
+for(const name of ['tail','bite','cannon'])test(`Nessie ${name}: no estágio 1 o barco básico escapa com reação de 1 s, parado recebe dano; golpe certeiro acerta mesmo andando`,()=>{
   assert.ok(runAttack(name,false).length>0);assert.equal(runAttack(name,true).length,0);
+  assert.ok(runAttack(name,true,3,true).length>0,'certeiro persegue o barco');assert.equal(runAttack(name,true,3,false).length,0,'não certeiro continua desviável');
+});
+test('Nessie: golpes certeiros por estágio (1: nenhum, 2: um a cada dois, 3: quatro a cada cinco)',()=>{
+  for(const [stage,want]of [[1,0],[2,10],[3,16]]){const f=fightFixture(stage);f.hitN=0;let n=0;for(let i=0;i<20;i++)if(f.sure())n++;assert.equal(n,want);}
 });
 test('Nessie: avisos, velocidade e pausas permitem reagir no último estágio',()=>{
   const f=fightFixture();f.startAttack('tripleRam');assert.equal(f.attack.count,4);assert.ok(f.attack.warn>=2.4,'dá tempo de sair da frente');
