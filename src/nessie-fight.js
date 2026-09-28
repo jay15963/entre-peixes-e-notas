@@ -15,7 +15,7 @@ const smooth=(a,b,x)=>{const t=clamp((x-a)/(b-a));return t*t*(3-2*t);};
 const damp=(a,b,k,dt)=>a+(b-a)*(1-Math.exp(-k*dt));
 const angDiff=(a,b)=>Math.atan2(Math.sin(a-b),Math.cos(a-b));
 const rnd=(a=0,b=1)=>a+Math.random()*(b-a);
-export const MAX_HP=1600,STAGE_AT=[1,.80,.50],BASE_DMG=10;
+export const MAX_HP=800,STAGE_AT=[1,.80,.50],BASE_DMG=10;
 export const ZONES={eye:{mult:5,label:'OLHO',color:'#ffd23c'},mouth:{mult:3,label:'GARGANTA',color:'#ff8a3c'},gill:{mult:2,label:'GUELRA',color:'#ff5ad0'},body:{mult:1,label:'CORPO',color:'#ffffff'},spine:{mult:.25,label:'ESPINHOS',color:'#8fa9a3'}};
 export const ZONE_LIST=['eye','mouth','gill','body','spine'];
 export const ATTACK_NAMES={ram:'INVESTIDA SUBMERSA',tripleRam:'INVESTIDA EM SÉRIE',tail:'GOLPE DE CAUDA',emerge:'O RUGIDO',rage:'FÚRIA DA MATRIARCA',cannon:'JATO D\'ÁGUA',whirlpool:'REDEMOINHO',bite:'MORDIDA DO ABISMO',wall:'MURALHA D\'ÁGUA',volley:'CHUVA DE ESPINHOS',death:'',cruise:''};
@@ -82,7 +82,8 @@ export class NessieFight {
       const light=new THREE.PointLight(0xff4020,0,30,1.6);g.add(core,halo,light);this.rig.head.add(g);return {g,core,halo,light};});
     this.throat=new THREE.PointLight(0xff8a30,0,20,1.8);this.throat.position.set(0,-.2,2.2);this.rig.head.add(this.throat);
     // as luzes ficam SEMPRE na cena (apagadas fora da luta): se aparecessem junto com o modelo, a contagem de luzes mudaria e o three.js recompilaria todos os materiais do jogo
-    this.lightPairs=[...this.eyeFX.map(e=>e.light),this.throat].map(l=>{const a=new THREE.Object3D();a.position.copy(l.position);l.parent.add(a);l.parent.remove(l);this.scene.add(l);return [l,a];});
+    const fake=l=>{l.parent.remove(l);return {color:new THREE.Color(),intensity:0,position:V()};};for(const e of this.eyeFX.slice(1))e.light=fake(e.light);this.throat=fake(this.throat);
+    this.lightPairs=[this.eyeFX[0].light].map(l=>{const a=new THREE.Object3D();a.position.copy(l.position);l.parent.add(a);l.parent.remove(l);this.scene.add(l);return [l,a];});
     this.throatGlow=new THREE.Sprite(new THREE.SpriteMaterial({map:tex,color:new THREE.Color(3,1.2,.3),transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,opacity:0}));this.throatGlow.position.set(0,-.25,2.4);this.throatGlow.scale.setScalar(3.5);this.rig.head.add(this.throatGlow);
     this.effectPool={column:[],beam:[],wall:[]};this.fx=[];this.rings=[];this.walls=[];this.projectiles=[];this.prevPts=null;this.dropCursor=0;
     this.spineGeo=new THREE.ConeGeometry(.3,2.4,6).rotateX(Math.PI/2);this.spineMat=new THREE.MeshStandardMaterial({color:0x3a5c51,roughness:.5,metalness:.1,emissive:0x330000});

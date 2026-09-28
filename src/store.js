@@ -60,7 +60,7 @@ const D={
 };
 // fora da loja: itens que dependiam de vida, frio, casco ou alagamento (sistemas que o jogo não tem)
 export const REMOVED=new Set(['medkit','flask','repair','pump','tent']);
-export const ITEMS=Object.fromEntries(STORE_ITEMS.filter(it=>!REMOVED.has(it.id)).map(it=>[it.id,{...it,...D[it.id],status:'À venda na Loja do Pescador'}]));
+export const ITEMS=Object.fromEntries(STORE_ITEMS.filter(it=>!REMOVED.has(it.id)).map(it=>{const d=D[it.id];return [it.id,{...it,...d,rule:d.kind==='boat'?d.rule+' Melhoria do barco: com ela na mochila, segure E olhando o barco para instalar (some se o barco reaparecer no cais).':d.rule,status:'À venda na Loja do Pescador'}];}));
 // isca de corte: sai da faca (não é vendida)
 ITEMS.cut={id:'cut',name:'Isca de corte',description:'Pedaços frescos de peixe.',effect:'Mordida 40% mais rápida.',kind:'bait',uses:3,price:0,rule:'Isca: mordida 40% mais rápida.',category:'Iscas e caçada',number:0};
 export const ITEM_IDS=STORE_ITEMS.filter(i=>!REMOVED.has(i.id)).map(i=>i.id);
@@ -77,11 +77,11 @@ export function slotsOf(p){return BASE_SLOTS+(invHas(p,'pack')?PACK_SLOTS:0);}
 export function usedSlots(p){const tackle=invHas(p,'tackle');return (p.inv||[]).filter(e=>!(tackle&&ITEMS[e[0]]?.kind==='bait')).length;}
 // Pode comprar/receber? devolve null ou o motivo
 export function cannotAdd(p,id,gear={}){const it=ITEMS[id];if(!it)return 'Item desconhecido.';
-  if(it.kind==='boat')return gear[id]?'Já está instalado no barco.':null;
-  const has=invHas(p,id);if(has&&(it.kind==='passive'||it.kind==='tool'||it.kind==='place'))return 'Você já tem.';
+  if(it.kind==='boat'&&gear[id])return 'Já está instalado no barco.';
+  const has=invHas(p,id);if(has&&(it.kind==='passive'||it.kind==='tool'||it.kind==='place'||it.kind==='boat'))return 'Você já tem.';
   if(has)return null;const tackle=invHas(p,'tackle');if(it.kind==='bait'&&tackle)return null;
   return usedSlots(p)>=slotsOf(p)?'Mochila cheia.':null;}
-export function addItem(p,id,gear={}){const it=ITEMS[id],why=cannotAdd(p,id,gear);if(why)return why;if(it.kind==='boat'){gear[id]=1;return null;}
+export function addItem(p,id,gear={}){const it=ITEMS[id],why=cannotAdd(p,id,gear);if(why)return why;
   p.inv=p.inv||[];const uses=it.uses?Math.round(it.uses*(it.kind==='bait'&&invHas(p,'tackle')?1.5:1)):0;const e=p.inv.find(q=>q[0]===id);if(e)e[1]+=uses;else p.inv.push([id,uses]);return null;}
 export function consume(p,id,n=1){const e=(p.inv||[]).find(q=>q[0]===id);if(!e)return false;e[1]-=n;if(e[1]<=0){p.inv.splice(p.inv.indexOf(e),1);if(p.bait===id)p.bait=null;}return true;}
 // o que a cesta do supermercado aceita: repete só o que tem usos (iscas, cargas)

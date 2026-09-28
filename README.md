@@ -109,7 +109,7 @@ As gaivotas circulam bem alto e **não podem ser atingidas** enquanto circulam. 
 Nada acontece sozinho: o clima fica calmo até o anfitrião segurar **TAB** e escolher um evento.
 
 - **Tempestade:** vento, chuva, raios e ondas grandes por uns 2 minutos (clique de novo para acalmar).
-- **Nessie:** a Matriarca do Abismo desperta em mar aberto quando o barco se afasta da ilha. São três estágios (A Espreita, A Fúria e A Matriarca Ferida, com céu vermelho e olhos em brasa), 1.600 de vida e nove ataques sem marcas na tela (lidos pela animação e pelo som), com pausas curtas entre eles: investidas, golpe de cauda, jato d'água, redemoinho, mordida de baixo para cima, muralha d'água e chuva de espinhos. Os rifles são a arma, e ela é acertável até debaixo d'água: olhos ×5, garganta ×3, guelras ×2, corpo ×1 e espinhos ×0,25. Todo golpe que acerta o barco derruba gente no mar, mas nunca a tripulação inteira: 1 pescador, e o golpe forte derruba até metade (resgate com a corda). Vencer rende R$ 1.000. O ateliê mostra a luta inteira em funcionamento.
+- **Nessie:** a Matriarca do Abismo desperta em mar aberto quando o barco se afasta da ilha. São três estágios (A Espreita, A Fúria e A Matriarca Ferida, com céu vermelho e olhos em brasa), 800 de vida e nove ataques sem marcas na tela (lidos pela animação e pelo som), com pausas curtas entre eles: investidas, golpe de cauda, jato d'água, redemoinho, mordida de baixo para cima, muralha d'água e chuva de espinhos. Os rifles são a arma, e ela é acertável até debaixo d'água: olhos ×5, garganta ×3, guelras ×2, corpo ×1 e espinhos ×0,25. Todo golpe que acerta o barco derruba gente no mar, mas nunca a tripulação inteira: 1 pescador, e o golpe forte derruba até metade (resgate com a corda). Vencer rende R$ 1.000. O ateliê mostra a luta inteira em funcionamento.
 - **Meteoro:** o fim da partida.
 
 ## Mercado Althoff e Loja do Pescador
@@ -118,7 +118,7 @@ Nada acontece sozinho: o clima fica calmo até o anfitrião segurar **TAB** e es
 - **Loja do Pescador:** 45 itens em dois expositores e na vitrine de iscas, cada um com modelo 3D, etiqueta de preço e a regra do que faz (aparece ao olhar). **E** num item joga no carrinho que você empurra, ou pega na mão.
 - **Autoatendimento:** segure **E** olhando o leitor para passar um item por vez (o laser acende e a tela lista tudo). **E** na maquininha paga com o caixa da tripulação; a impressora solta o cupom. Sem saldo, a tela avisa.
 - **A porta não deixa sair nada sem pagar:** nem o carrinho, nem o item na mão.
-- **Depois de pagar:** item pessoal vai direto para a mochila (8 espaços; 12 com a mochila estanque). Equipamento de barco fica no carrinho ou na mão: leve até o barco (ou estacione no cais ao lado) e ele é instalado.
+- **Depois de pagar:** tudo vai para a mochila (8 espaços; 12 com a mochila estanque). **Melhorias do barco** (sonar, rádio, barômetro, âncora, guincho, motor, hélice, leme, bateria, âncora de deriva, lampião) se instalam uma por vez: com a melhoria na mochila, segure **E** olhando o barco. Ela aparece no convés. Se o barco reaparecer no cais (abandonado), as melhorias instaladas se perdem.
 - **O que os itens fazem:**
   - pesca: vara (11 m), carretilha, linha, iscas, passaguá, bicheiro, arpão, faca, alicate, balança, sonda, ceva, armadilha de lagosta;
   - navegação: sonar, rádio, barômetro, bússola, carta náutica, sextante, luneta, boia sinalizadora, câmera (fotos pagas);
@@ -149,7 +149,7 @@ O lobby mostra o diagnóstico da sua rede, por exemplo "NAT comum", "NAT simétr
 
 ## Desempenho
 
-Qualidade **Alta** usa resolução até 1,5×, sombras de 2048 px que acompanham o jogador, pós-processamento completo e SMAA. **Leve** reduz resolução, sombras, grama e partículas. Os shaders do clímax são compilados no carregamento.
+As luzes nunca mudam de quantidade (as da ilha e da Nessie ficam fixas na cena e só apagam pela intensidade); se mudassem, o three.js recompilaria todos os materiais no meio do jogo, que era o engasgo do meteoro, da explosão e da Nessie. As malhas estáticas da ilha são juntadas por material, o interior do mercado só é desenhado de perto e moradores longe não projetam sombra. Qualidade **Alta** usa resolução até 1,5×, sombras de 2048 px que acompanham o jogador, pós-processamento completo e SMAA. **Leve** reduz resolução, sombras, grama e partículas. Os shaders do clímax são compilados no carregamento.
 
 ## GitHub Pages
 

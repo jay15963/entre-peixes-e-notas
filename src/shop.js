@@ -98,7 +98,7 @@ export function buildShop(mats){
     inn.add(im,box([p[0]+off[0],F+2.6,p[1]+off[1]],[s[0],.3,s[1]]),YELLOW,.01).add(im,box([p[0]+off[0],F+2.95,p[1]+off[1]],[s[0],.12,s[1]]),BLUE,.01);}
   const lightPanels=new THREE.Group(),panelMat=new THREE.MeshStandardMaterial({color:0xffffff,emissive:0xf4f8ff,emissiveIntensity:1.5});
   for(let u=-12;u<=12;u+=4)for(let v=v0+3;v<v1-1;v+=4){const l=new THREE.Mesh(new THREE.BoxGeometry(.4,.05,1.6),panelMat);l.position.set(u,F+Hh-.37,v);lightPanels.add(l);}group.add(lightPanels);
-  const lights=[];for(const [u,v]of [[-7,11],[7,11],[-7,21],[7,21]]){const l=new THREE.PointLight(0xfff4e2,13,24,1.7);l.position.set(u,F+Hh-1,v);group.add(l);lights.push(l);}
+  const lights=[];for(const [u,v]of [[0,11],[0,21]]){const l=new THREE.PointLight(0xfff4e2,22,30,1.6);l.position.set(u,F+Hh-1,v);group.add(l);lights.push(l);}
   // placas de setor penduradas
   const hang=(text,u,v,rot,opts={})=>{const t=signTexture(text,opts),m=new THREE.MeshStandardMaterial({map:t,roughness:.6,emissive:0xffffff,emissiveIntensity:.12,emissiveMap:t});
     inn.add(imMetal,box([u,F+4.1,v],[3.3,.72,.04]),0x2c6db8,.01);for(const s of [-1,1])inn.add(imMetal,limb(V(u+s*1.4,F+4.45,v),V(u+s*1.4,F+Hh-.35,v),.008,.008,4),0x888888);

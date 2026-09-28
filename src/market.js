@@ -97,11 +97,9 @@ export class Market {
     if(code===12){this.pay(p);return true;}
     return true;}// SCAN: só segurando E (entrada 'scan')
   // pegar um item: pago e pessoal vai direto para a mochila; o resto fica na mão
-  take(p,it){const C=this.c;if(it.s===2&&ITEMS[it.id].kind!=='boat'){const why=C.gear.addItem(p,it.id);if(!why){C.stateEvent('mk',{k:'bag',id:p.id,item:it.id});return;}C.toastFor(p.id,why+' Ficou na mão.');}
+  take(p,it){const C=this.c;if(it.s===2){const why=C.gear.addItem(p,it.id);if(!why){C.stateEvent('mk',{k:'bag',id:p.id,item:it.id});return;}C.toastFor(p.id,why+' Ficou na mão.');}
     p.hold=it;C.stateEvent('mk',{k:'hand',id:p.id,item:it.id});}
   drop(p){const C=this.c,w=this.w,it=p.hold;if(!it)return;p.hold=null;const pw=C.worldOf(p),yaw=C.worldYaw(p);let x=pw.x+Math.sin(yaw)*.5,z=pw.z+Math.cos(yaw)*.5;
-    if(!p.land){// no barco: equipamento pago é instalado; o resto vai para o chão do convés... ou para a mochila
-      if(it.s===2&&ITEMS[it.id].kind==='boat'){this.install(p,it.id);return;}}
     if(it.s<2&&!inStore(x,z,-.3)){x=pw.x;z=pw.z;}const g=C.ground(x,z);if(!p.land||g<-.3){x=pw.x;z=pw.z;}w.ground.push({u:it.u,id:it.id,s:it.s,x:+x.toFixed(2),y:+(Math.max(g,pw.y)).toFixed(2),z:+z.toFixed(2)});if(w.ground.length>20)w.ground.shift();C.stateEvent('mk',{k:'drop',id:p.id,item:it.id});}
   release(p){const c=this.w.carts[p.cartH];if(c)c.h=-1;p.cartH=-1;this.c.stateEvent('mk',{k:'release',id:p.id});}
   ride(p,i){const c=this.w.carts[i];if(this.c.players.some(q=>q.ride===i))return this.c.toastFor(p.id,'Já tem alguém de carona.');p.ride=i;p.mode='ride';p.tp++;this.c.stateEvent('mk',{k:'ride',id:p.id,cart:i});}
@@ -114,7 +112,7 @@ export class Market {
   pay(p){const C=this.c,w=this.w;const i=this.laneOf(C.worldOf(p));if(i<0)return;const L=w.lanes[i];if(L.o!==p.id)return;const items=this.laneItems(i).filter(q=>q.s===1);if(!items.length)return;
     const total=items.reduce((s,q)=>s+ITEMS[q.id].price,0);if(C.world.money+1e-6<total){L.m='fail';L.t=C.elapsed;C.stateEvent('mk',{k:'fail',id:p.id,lane:i,total,money:C.world.money});return;}
     C.world.money=Math.round((C.world.money-total)*100)/100;const bagged=[],boat=[];
-    for(const it of items){it.s=2;const kind=ITEMS[it.id].kind;if(kind==='boat'){boat.push(it.id);continue;}
+    for(const it of items){it.s=2;
       // pessoal: sai do carrinho/mão direto para a mochila de quem pagou
       if(!C.gear.addItem(p,it.id)){bagged.push(it.id);for(const q of C.players)if(q.hold===it)q.hold=null;w.ground=w.ground.filter(q=>q!==it);for(const c of w.carts){const k=c.it.indexOf(it);if(k>=0)c.it.splice(k,1);}}}
     L.m='done';L.t=C.elapsed;L.l=[];C.stateEvent('mk',{k:'paid',id:p.id,lane:i,total,money:C.world.money,bagged,boat});}
@@ -123,10 +121,8 @@ export class Market {
     for(let i=0;i<w.carts.length;i++){const c=w.carts[i];
       if(c.h>=0){const q=C.players[c.h];if(!q||q.cartH!==i||q.mode!=='walk'||!q.land){if(q)q.cartH=-1;c.h=-1;}
         else{const pw=C.worldOf(q),want=C.worldYaw(q);const yaw=c.yaw+angDiff(want,c.yaw)*Math.min(1,dt*7),x=pw.x+Math.sin(yaw)*CART_REACH,z=pw.z+Math.cos(yaw)*CART_REACH;if(!this.cartBlocked(c,x,z)){c.yaw=yaw;c.x=x;c.z=z;}else if(this.unpaid(q))this.gate(q);}}
-      // equipamento pago chegou ao barco (carrinho estacionado no cais ao lado): instala
-      if(c.it.some(q=>q.s===2&&ITEMS[q.id].kind==='boat')&&Math.hypot(c.x-boat.x,c.z-boat.z)<9){for(const q of c.it.filter(q=>q.s===2&&ITEMS[q.id].kind==='boat')){c.it.splice(c.it.indexOf(q),1);this.install(C.players[c.h]||null,q.id);}}}
+    }
     for(const q of C.players){if(q.ride>=0){const c=w.carts[q.ride];if(!c||q.mode!=='ride'){q.ride=-1;if(q.mode==='ride')q.mode='walk';continue;}q.land=1;q.x=c.x;q.z=c.z;q.height=C.ground(c.x,c.z)+.45;q.speed=0;}
-      if(q.hold&&q.hold.s===2&&ITEMS[q.hold.id].kind==='boat'&&!q.land&&q.mode!=='ragdoll'){const id=q.hold.id;q.hold=null;this.install(q,id);}
       // item não pago fora da loja (tapa, queda, teletransporte): volta para a prateleira
       if(q.hold&&q.hold.s<2&&q.land&&!inStore(q.x,q.z,.2)&&q.mode!=='ride'){q.hold=null;C.stateEvent('mk',{k:'shelf',id:q.id,put:1,alarm:1});}}
     for(let i=0;i<w.lanes.length;i++){const L=w.lanes[i];if((L.m==='done'&&t-L.t>4.5)||(L.m==='fail'&&t-L.t>3)){L.m=L.l.length?'scan':'idle';if(!L.l.length)L.o=-1;}

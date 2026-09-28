@@ -23,12 +23,16 @@ export class Gear {
     this.built=false;}
   get eq(){return this.c.world.eq;}
   // ================= inventário =================
-  addItem(p,id){const it=ITEMS[id];if(it.kind==='boat')return this.install(id);const why=cannotAdd(p,id,this.eq.gear);if(why)return why;addItem(p,id,this.eq.gear);return null;}
+  addItem(p,id){const why=cannotAdd(p,id,this.eq.gear);if(why)return why;addItem(p,id,this.eq.gear);return null;}
   // pode comprar? (o que já está no leitor conta)
-  cannotOwn(p,id,pending=[]){const it=ITEMS[id];if(it.kind==='boat')return this.eq.gear[id]||pending.includes(id)?'Já tem no barco.':null;
-    if((it.kind==='passive'||it.kind==='tool'||it.kind==='place')&&(invHas(p,id)||pending.includes(id)))return 'Você já tem esse.';
-    const extra=pending.filter(q=>ITEMS[q].kind!=='boat'&&!(ITEMS[q].kind==='bait'&&invHas(p,'tackle'))&&!invHas(p,q)).length;
+  cannotOwn(p,id,pending=[]){const it=ITEMS[id];if(it.kind==='boat'&&this.eq.gear[id])return 'Já está instalado no barco.';
+    if((it.kind==='passive'||it.kind==='tool'||it.kind==='place'||it.kind==='boat')&&(invHas(p,id)||pending.includes(id)))return 'Você já tem esse.';
+    const extra=pending.filter(q=>!(ITEMS[q].kind==='bait'&&invHas(p,'tackle'))&&!invHas(p,q)).length;
     if(!invHas(p,id)&&!(it.kind==='bait'&&invHas(p,'tackle'))&&usedSlots(p)+extra>=slotsOf(p)+(pending.includes('pack')||id==='pack'?4:0))return 'Mochila cheia.';return null;}
+  // melhoria do barco: sai da mochila e é instalada (uma por vez, segurando E olhando o barco)
+  boatItem(p,sel){const inv=p.inv||[],e=inv[sel];if(e&&ITEMS[e[0]]?.kind==='boat'&&!this.eq.gear[e[0]])return e[0];return inv.find(q=>ITEMS[q[0]]?.kind==='boat'&&!this.eq.gear[q[0]])?.[0]||null;}
+  nearBoat(p){if(!p.land)return true;const l=this.c.boat.worldToLocal(this.c.worldOf(p,.5));return Math.abs(l.z)<5.8&&Math.abs(l.x)<3;}
+  installFromInv(p,sel){const id=this.boatItem(p,sel);if(!id||!this.nearBoat(p)||p.mode==='ragdoll')return;const e=p.inv.find(q=>q[0]===id);p.inv.splice(p.inv.indexOf(e),1);if(p.bait===id)p.bait=null;this.install(id);this.c.stateEvent('gear',{k:'installed',id:p.id,item:id});}
   install(id){const g=this.eq.gear;if(g[id])return 'Já estava instalado.';g[id]=1;if(id==='motor')this.eq.fuel=100;if(id==='battery'||id==='sonar'||id==='radio')this.eq.energy=100;return null;}
   // ================= pesca =================
   castMods(p,cx,cz,world=true){const C=this.c,eq=this.eq,t=C.elapsed,w=world?V(cx,0,cz):C.boat.localToWorld(V(cx,0,cz));
@@ -144,7 +148,10 @@ export class Gear {
       if(id==='harpoon'&&C.fight?.alive){const ray=new THREE.Ray(C.camera.position.clone(),C.camera.getWorldDirection(V()));const bh=C.fight.raycast(ray,70);if(bh){controls.boss=0;controls.bossPt=bh.point.toArray().map(v=>+v.toFixed(2));}}
       if(id==='camera'){controls.photo=this.photoSubject();this.photoQ=true;}}
     // na água: mergulhar (SHIFT) e subir (ESPAÇO)
-    if(p.mode==='ragdoll'&&p.water){controls.dive=!!controls.run;controls.climb=!!controls.jump;}}
+    if(p.mode==='ragdoll'&&p.water){controls.dive=!!controls.run;controls.climb=!!controls.jump;}
+    // segurar E olhando o barco com uma melhoria na mochila: instala (1,2 s)
+    const hv=C.hover;if(hv?.code===13&&hv.ok&&input.keys.has('KeyE')){this.installT=(this.installT||0)+dt;if(this.installT>=1.2){controls.install=true;this.installT=-.4;}}else this.installT=Math.min(0,(this.installT||0)+dt);}
+  get installing(){return Math.max(0,this.installT||0)/1.2;}
   onSel(){const C=this.c,p=C.me(),e=(p?.inv||[])[this.sel];C.sound.effect('tick');if(e){const it=ITEMS[e[0]];this.tipT=4;}}
   photoSubject(){const C=this.c,cam=C.camera;cam.updateMatrixWorld();const fr=new THREE.Frustum().setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(cam.projectionMatrix,cam.matrixWorldInverse));
     const f=C.fight;if(f?.alive){const h=f.headWorld();if(fr.containsPoint(h)&&h.distanceTo(cam.position)<280)return 1;}
@@ -181,14 +188,15 @@ export class Gear {
       case 'anchor':C.sound.effect(e.on===2?'winch':'anchor',{pos:this.mounts.anchor?.getWorldPosition(V())});C.toast(e.on===1?'Âncora no fundo: o barco não deriva e balança menos.':e.on===2?'Recolhendo a âncora…':'Âncora recolhida.');break;
       case 'drogue':C.sound.effect('splash',{pos:this.mounts.drogue?.getWorldPosition(V())});C.toast(e.on?'Âncora de deriva na água: o barco segura a proa nas ondas.':'Âncora de deriva recolhida.');break;
       case 'lamp':C.sound.effect('click');break;
+      case 'installed':{const m=this.mounts[e.item],at=m?m.getWorldPosition(V()):C.boat.position.clone();C.sound.effect('wrench',{pos:at});for(let k=0;k<40;k++){const a=Math.random()*6.28,s=.6+Math.random()*1.4;C.fx.spray.emit(C.elapsed,at.x,at.y+.3,at.z,Math.cos(a)*s,1+Math.random()*2,Math.sin(a)*s,.9,1.4,.5,.05,.12,0);}this.popT=1;this.popId=e.item;break;}
       case 'nofuel':C.toast('O Motor Rabeta-40 ficou sem combustível. Voltando ao motor antigo.');break;
     }}
   splashAt(at,n){if(at)this.c.fx.splash(at,n,.8);}
   // ================= cliente: visual =================
   build(){const C=this.c,scene=C.scene;this.built=true;
     // luzes fixas (a contagem de luzes nunca muda: nada recompila no meio do jogo)
-    this.lampLight=new THREE.PointLight(0xffc27a,0,22,1.6);scene.add(this.lampLight);this.flareLight=new THREE.PointLight(0xff3a2a,0,160,1.4);scene.add(this.flareLight);
-    this.torches=[0,1,2,3,4].map(()=>{const s=new THREE.SpotLight(0xfff2d8,0,40,.32,.5,1.2);scene.add(s,s.target);return s;});
+    this.flareLight=new THREE.PointLight(0xff3a2a,0,160,1.4);scene.add(this.flareLight);
+    this.torch=new THREE.SpotLight(0xfff2d8,0,40,.32,.5,1.2);scene.add(this.torch,this.torch.target);
     // algas: manchas perto da ilha (a Rã é boa aqui; sem a hélice antialgas o barco engasga)
     this.weeds=[];this.treasures=[];const G=(x,z)=>C.ground(x,z);
     for(let k=0;k<20&&this.weeds.length<5;k++){const a=k*2.399+.7,dirToBerth=Math.atan2(BERTH.u,BERTH.v);if(Math.abs(angDiff(a,dirToBerth))<.5)continue;for(let r=60;r<160;r+=2){const x=ISLAND.x+Math.sin(a)*r,z=ISLAND.z+Math.cos(a)*r,g=G(x,z);if(g<-1.6){this.weeds.push({x:x+Math.sin(a)*8,z:z+Math.cos(a)*8,r:9+(k%3)*2.5});break;}}}
@@ -210,10 +218,10 @@ export class Gear {
   render(t,dt){const C=this.c,eq=this.eq;if(!eq)return;if(!this.built)this.build();const scene=C.scene,cam=C.camera.position;
     // equipamento instalado no convés
     for(const [id,[x,y,z,size,ry]]of Object.entries(MOUNTS)){if(!eq.gear[id]){if(this.mounts[id])this.mounts[id].visible=false;continue;}
-      if(!this.mounts[id]){const g=this.mini(id,size);g.position.set(x,y,z);g.rotation.y=ry;const hit=new THREE.Mesh(new THREE.BoxGeometry(size*1.2,size*1.2,size*1.2),new THREE.MeshBasicMaterial({visible:false}));hit.position.y=size*.5;g.add(hit);g.userData.hit=hit;C.boat.add(g);this.mounts[id]=g;}this.mounts[id].visible=true;}
+      if(!this.mounts[id]){const g=this.mini(id,size);g.position.set(x,y,z);g.rotation.y=ry;const hit=new THREE.Mesh(new THREE.BoxGeometry(size*1.2,size*1.2,size*1.2),new THREE.MeshBasicMaterial({visible:false}));hit.position.y=size*.5;g.add(hit);g.userData.hit=hit;C.boat.add(g);this.mounts[id]=g;}this.mounts[id].visible=true;const pop=this.popId===id?Math.max(0,this.popT||0):0;this.mounts[id].scale.setScalar(1+pop*.5*Math.abs(Math.sin(pop*10)));}
+    this.popT=Math.max(0,(this.popT||0)-dt*1.4);
     if(this.mounts.anchor)this.mounts.anchor.position.y=eq.anchor===1?-1.4:eq.anchor===2?lerp(-1.4,.1,1-clamp((eq.anchorT-t)/3.5)):.1;
     if(this.mounts.drogue)this.mounts.drogue.visible=!!eq.gear.drogue&&!eq.drogue;
-    const lampOn=eq.gear.lantern&&eq.lamp;this.lampLight.intensity=lampOn?(6+C.storm()*6)*(.92+Math.sin(t*23)*.05):0;if(this.mounts.lantern)this.mounts.lantern.getWorldPosition(this.lampLight.position).add(V(0,.4,0));
     // água no porão
     // boias sinalizadoras
     while(this.beaconObjs.length<eq.beacons.length){const o=this.beaconModel();scene.add(o);this.beaconObjs.push(o);}
@@ -226,9 +234,8 @@ export class Gear {
     const fl=eq.flare,fk=fl?t-fl.at:99;this.flareObj.visible=fk<15;this.flareLight.intensity=fk<15?(1-fk/15)*900*(.8+Math.random()*.3):0;if(fk<15){const y=fl.y+Math.min(fk,1.2)*38-Math.max(0,fk-1.2)*1.6;this.flareObj.position.set(fl.x,y,fl.z);this.flareLight.position.copy(this.flareObj.position);if(Math.random()<.5)C.fx.spray.emit(t,fl.x,y,fl.z,(Math.random()-.5)*.4,-.5,(Math.random()-.5)*.4,1.5,1,-.02,.3,1.2,1);}
     const teth=C.fight?.alive&&eq.tether>t;this.tetherLine.visible=teth;if(teth){const a=C.boat.localToWorld(V(0,.9,4.4)),b=C.fight.toWorld(V(0,6,-1)),pts=[];for(let k=0;k<24;k++){const s=k/23,p=a.clone().lerp(b,s);p.y-=Math.sin(s*Math.PI)*3*(1+Math.sin(t*6)*.1);pts.push(p);}this.tetherLine.geometry.setFromPoints(pts);}
     // lanternas de mão
-    C.players.forEach((q,i)=>{const s=this.torches[i];if(!s)return;const on=q.torch&&q.mode!=='gone'&&q.mode!=='ragdoll';s.intensity=on?60:0;if(!on)return;
-      if(i===C.localId&&!window.__peixesThirdPerson){s.position.copy(C.camera.position).add(V(0,-.2,0));s.target.position.copy(C.camera.position).add(C.camera.getWorldDirection(V()).multiplyScalar(10));}
-      else{const w=C.worldOf(q,1.4),yaw=C.worldYaw(q);s.position.copy(w);s.target.position.set(w.x+Math.sin(yaw)*10,w.y-3,w.z+Math.cos(yaw)*10);}s.target.updateMatrixWorld();});
+    // lanterna de mão: só a do próprio jogador vira luz de verdade (cada luz a mais pesa em todo o jogo)
+    {const me=C.me(),s=this.torch,on=me&&me.torch&&me.mode!=='gone'&&me.mode!=='ragdoll'&&!window.__peixesThirdPerson;s.intensity=on?60:0;if(on){s.position.copy(C.camera.position).add(V(0,-.2,0));s.target.position.copy(C.camera.position).add(C.camera.getWorldDirection(V()).multiplyScalar(10));s.target.updateMatrixWorld();}}
     // brilho dos tesouros: fraco perto; forte no facho da lanterna
     const me=C.me(),torch=me?.torch,dir=C.camera.getWorldDirection(V());
     this.glints.forEach((o,k)=>{const s=this.treasures[k],gone=eq.treasure[k]>t,d=Math.hypot(s.x-cam.x,s.z-cam.z);const lit=torch&&d<60&&V(s.x-cam.x,-cam.y,s.z-cam.z).normalize().dot(dir)>.9;const a=gone?0:lit?1:d<14?.35:0;
@@ -281,7 +288,7 @@ export class Gear {
     const cart=p.cartH>=0?C.world.mk?.carts[p.cartH]:null;const list=[...(p.hold?[p.hold]:[]),...(cart?.it||[])];const ck=list.map(q=>q.id+q.s).join()+C.world.money;
     if(ck!==this.cartKey){this.cartKey=ck;const tot=list.filter(q=>q.s<2).reduce((s,q)=>s+ITEMS[q.id].price,0);this.cartBox.innerHTML=list.length?`<b>${cart?'🛒 CARRINHO':'✋ NA MÃO'} · ${list.length} ${list.length===1?'item':'itens'}</b>${list.map(q=>`<div class="ci ${q.s===2?'paid':q.s===1?'scanned':''}"><img src="${this.icon(q.id)}"><span>${ITEMS[q.id].name}</span><em>${q.s===2?'PAGO':money(ITEMS[q.id].price)}</em></div>`).join('')}<div class="tot">A pagar <b>${money(tot)}</b> · saldo ${money(C.world.money)}</div>`:'';}
     this.cartBox.hidden=!list.length;
-    const sc=C.market.scanning;this.scanRing.hidden=!(sc>0);if(sc>0)this.scanRing.querySelector('circle').style.strokeDashoffset=String(151*(1-sc));}
+    const sc=Math.max(C.market.scanning,this.installing);this.scanRing.hidden=!(sc>0);if(sc>0)this.scanRing.querySelector('circle').style.strokeDashoffset=String(151*(1-sc));}
   drawSonar(t){const C=this.c,c=this.sonar.getContext('2d'),W=180,R=86,b=C.boatState,range=120,T=C.elapsed;c.clearRect(0,0,W,W);c.save();c.translate(W/2,W/2);
     c.fillStyle='rgba(4,24,20,.88)';c.beginPath();c.arc(0,0,R,0,6.283);c.fill();c.strokeStyle='rgba(80,255,170,.35)';c.lineWidth=1;for(const r of [R/3,R*2/3,R]){c.beginPath();c.arc(0,0,r,0,6.283);c.stroke();}
     const sw=(t*1.4)%6.283;const g=c.createConicGradient?c.createConicGradient(sw-1,0,0):null;if(g){g.addColorStop(0,'rgba(80,255,170,0)');g.addColorStop(.16,'rgba(80,255,170,.35)');g.addColorStop(.161,'rgba(80,255,170,0)');c.fillStyle=g;c.beginPath();c.arc(0,0,R,0,6.283);c.fill();}

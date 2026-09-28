@@ -1,6 +1,7 @@
 import './style.css';
 import './items.css';
 import * as THREE from 'three';
+import {mergeGeometries} from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import {CONFIG,SPAWNS,Lobby,Fishing,newPlayer,weatherAt,waveHeight,tsunamiHeight,insideBoat,smooth,clamp,lerp,inputPacket,storyTime,STORM_TIME,ROPE,ropeWindow,ropeAngle,ropeHit,driftAt,Shoo,DROWN_TIME} from './core.js';
 import {loadAssets,setFirstPerson} from './models.js';
 import {makeCharacter,addBakerOutfit,LOOKS} from './characters.js';
@@ -46,7 +47,7 @@ let stepDist=0,bobPhase=0,shockAt=Infinity,reelTick=0,hold=null,warned=false,tab
 // Padeiro da padaria do mercado (NPC): trabalha no balcão, voa com o tapa e volta andando
 const baker={mode:'work',x:0,y:0,z:0,yaw:Math.PI,t:0,path:[],model:null};
 // Itens do barco: balde, corda (física de Verlet), violão; minigames locais (laço, espantar gaivota, violão)
-let showroom=null,market=null,gear=null,icons={},vmItem='',fight=null,battle=null,bossHud=null,bossMarkers=[],fluidOff=0,villagers=null,hull=null,bucketObj=null,rope=null,guitarStand=null,ropeGame=null,shooGame=new Shoo(),gh=new GuitarHero(),ghCanvas=null,driftT=0,talkShown=null;
+let shopDetail=[],lightPins=[],showroom=null,market=null,gear=null,icons={},vmItem='',fight=null,battle=null,bossHud=null,bossMarkers=[],fluidOff=0,villagers=null,hull=null,bucketObj=null,rope=null,guitarStand=null,ropeGame=null,shooGame=new Shoo(),gh=new GuitarHero(),ghCanvas=null,driftT=0,talkShown=null;
 const GUITAR_SPOT={x:-.62,z:-.26},ROPE_HOME={x:-.45,z:2.9},BOW_CLEAT={x:0,y:.9,z:4.55};
 // Juice: hit-stop, câmera lenta e molas de câmera (tranco, aterrissagem, soco de FOV)
 let breath=1,hitStop=0,slowMo=0,aberrPulse=0,runFov=0,strafeRoll=0,prevGrounded=true,prevSlap=0,prevHeading=0,steerVis=0,lastVy=0,lastControls={};
@@ -159,7 +160,7 @@ function receive(p,from){
     if(p.type==='hello'){const pref=Number.isInteger(p.character)?p.character:0,cur=lobby.players.get(from);if(!cur){const c=lobby.freeCharacter(pref);if(c>=0)lobby.join(from,c);}else if(cur.character!==pref&&lobby.freeCharacter(pref)===pref){try{lobby.join(from,pref);}catch{}}broadcastLobby();}
     if(p.type==='pick'&&!running){try{lobby.join(from,p.character);}catch{}broadcastLobby();}
     if(p.type==='ready'){lobby.ready(from,p.ready);broadcastLobby();}
-    if(p.type==='input'){const i=inputPacket(p),prev=remoteInputs[from]||{};remoteInputs[from]={...i,interact:i.interact||prev.interact,target:i.interact?i.target:prev.interact?prev.target:-1,cast:i.cast||prev.cast,slap:i.slap||prev.slap,jump:i.jump||prev.jump,fall:i.fall||prev.fall,fire:i.fire||prev.fire,use:i.use||prev.use,scan:i.scan||prev.scan,climb:i.climb||prev.climb,aimPt:i.use?i.aimPt:prev.use?prev.aimPt:null,photo:i.use?i.photo:prev.use?prev.photo:0,boss:(i.fire||i.use)?i.boss:(prev.fire||prev.use)?prev.boss:-1,bossPt:(i.fire||i.use)?i.bossPt:prev.bossPt,gull:i.fire?i.gull:prev.fire?prev.gull:-1,ray:i.fire?i.ray:prev.ray,throwAt:i.throwAt>=0?i.throwAt:prev.throwAt??-1,throwOk:i.throwAt>=0?i.throwOk:prev.throwOk,shoo:i.shoo||prev.shoo||0,strum:i.strum?[...(prev.strum||[]),...i.strum].slice(-12):prev.strum||null};}
+    if(p.type==='input'){const i=inputPacket(p),prev=remoteInputs[from]||{};remoteInputs[from]={...i,interact:i.interact||prev.interact,target:i.interact?i.target:prev.interact?prev.target:-1,cast:i.cast||prev.cast,slap:i.slap||prev.slap,jump:i.jump||prev.jump,fall:i.fall||prev.fall,fire:i.fire||prev.fire,use:i.use||prev.use,scan:i.scan||prev.scan,install:i.install||prev.install,climb:i.climb||prev.climb,aimPt:i.use?i.aimPt:prev.use?prev.aimPt:null,photo:i.use?i.photo:prev.use?prev.photo:0,boss:(i.fire||i.use)?i.boss:(prev.fire||prev.use)?prev.boss:-1,bossPt:(i.fire||i.use)?i.bossPt:prev.bossPt,gull:i.fire?i.gull:prev.fire?prev.gull:-1,ray:i.fire?i.ray:prev.ray,throwAt:i.throwAt>=0?i.throwAt:prev.throwAt??-1,throwOk:i.throwAt>=0?i.throwOk:prev.throwOk,shoo:i.shoo||prev.shoo||0,strum:i.strum?[...(prev.strum||[]),...i.strum].slice(-12):prev.strum||null};}
     if(p.type==='song'){const idx=players.findIndex(q=>q.net===from);if(idx>=0&&typeof p.name==='string'&&players[idx].mode==='guitar')stateEvent('song',{id:idx,name:p.name.slice(0,60),acc:clamp(Number(p.acc)||0)});}
     if(p.type==='bye')net.dropPeer(from);
     return;
@@ -346,17 +347,17 @@ function renderBaker(t,dt){const m=baker.model;if(!m)return;if(island.exploded||
   let look=null,bd=6;for(const p of players){if(p.mode==='gone')continue;const w=worldOf(p===players[localId]?me():p,1.6);const dd=Math.hypot(w.x-d.x,w.z-d.z);if(dd<bd){const l=lookAngles(V(d.x,d.y+1.6,d.z),d.yaw,w);if(l){bd=dd;look=l;}}}
   m.userData.anim.update(dt,{time:t,speed:baker.mode==='walk'?Math.min(sp,1.6):0,yaw:d.yaw,grounded:true,look});}
 // ---------- Alvos de interação: só vale olhar para a malha do objeto (raio do centro da tela, até 3 m) ----------
-const T={HELM:1,RIFLE0:2,RIFLE1:3,BUCKET:4,COIL:5,GUITAR:6,ROPE:7,SELL:8,BAKER:9,LANE:10,SCAN:11,PAY:12};
+const T={HELM:1,RIFLE0:2,RIFLE1:3,BUCKET:4,COIL:5,GUITAR:6,ROPE:7,SELL:8,BAKER:9,LANE:10,SCAN:11,PAY:12,HULL:13};
 let sellProxy=null,laneProxies=[],tieProxies=[],hover=null;const _ray=new THREE.Raycaster();
-function targetObjects(){const l=[[T.HELM,helm],[T.RIFLE0,rackRifles[0]],[T.RIFLE1,rackRifles[1]],[T.BUCKET,bucketObj],[T.COIL,hull.userData.coil],[T.GUITAR,guitarStand],[T.ROPE,rope.mesh],[T.ROPE,rope.loop],[T.ROPE,tieProxies[0]],[T.ROPE,tieProxies[1]],[T.SELL,sellProxy],[T.BAKER,baker.model]];return l.concat(market.targets(),gear.targets());}
+function targetObjects(){const l=[[T.HELM,helm],[T.RIFLE0,rackRifles[0]],[T.RIFLE1,rackRifles[1]],[T.BUCKET,bucketObj],[T.COIL,hull.userData.coil],[T.GUITAR,guitarStand],[T.ROPE,rope.mesh],[T.ROPE,rope.loop],[T.ROPE,tieProxies[0]],[T.ROPE,tieProxies[1]],[T.SELL,sellProxy],[T.BAKER,baker.model],[T.HULL,hull]];return l.concat(market.targets(),gear.targets());}
 const shown=o=>{for(let q=o;q;q=q.parent){if(!q.visible)return false;if(q===scene)return true;}return false;};
-function targetPos(code,p){const w=worldOf(p,1.2);if(code>=11&&code<=12||code>=60)return market.pos(code,p);if(code>=30&&code<60)return gear.pos(code);switch(code){
+function targetPos(code,p){const w=worldOf(p,1.2);if(code===T.HULL)return boat.position.clone();if(code>=11&&code<=12||code>=60)return market.pos(code,p);if(code>=30&&code<60)return gear.pos(code);switch(code){
   case T.HELM:return helm.getWorldPosition(V());case T.RIFLE0:case T.RIFLE1:return rackRifles[code-T.RIFLE0].getWorldPosition(V());case T.BUCKET:return bucketWorld();
   case T.COIL:return hull.userData.coil.getWorldPosition(V());case T.GUITAR:return guitarStand.getWorldPosition(V());case T.SELL:return sellProxy.getWorldPosition(V());case T.BAKER:return V(baker.x,baker.y+1,baker.z);
   case T.ROPE:{if(world.rope.s!=='tied')return null;const a=boat.localToWorld(V(BOW_CLEAT.x,BOW_CLEAT.y,BOW_CLEAT.z)),b=bollardPos(world.rope.tgt);return a.distanceTo(w)<b.distanceTo(w)?a:b;}
   case T.LANE:{let best=null;for(const o of laneProxies){const q=o.getWorldPosition(V());if(!best||q.distanceTo(w)<best.distanceTo(w))best=q;}return best;}}return null;}
 // texto do aviso (e se dá para usar agora) para quem está olhando
-function targetLabel(code,p){const free=handsFree(p);if(code>=11&&code<=12||code>=60)return market.label(code,p);if(code>=30&&code<60)return gear.label(code,p);switch(code){
+function targetLabel(code,p){const free=handsFree(p);if(code===T.HULL){const id=gear.boatItem(p,gear.sel??-1);return id&&gear.nearBoat(p)?[`Segure E · instalar ${ITEMS[id].name} no barco`,1]:null;}if(code>=11&&code<=12||code>=60)return market.label(code,p);if(code>=30&&code<60)return gear.label(code,p);switch(code){
   case T.HELM:return engineDead?['Motor morto',0]:players.some(q=>q.mode==='drive')?['Leme ocupado',0]:!free?['Mãos ocupadas',0]:['Assumir o leme',1];
   case T.RIFLE0:case T.RIFLE1:return free?['Pegar o rifle',1]:['Mãos ocupadas',0];
   case T.BUCKET:return world.bucketAt<0?(free?[`Pegar o balde (${world.bucket.length} ${world.bucket.length===1?'item':'itens'})`,1]:['Mãos ocupadas',0]):null;
@@ -416,7 +417,7 @@ function tickPlayer(p,i,dt,t,isLocal){
   if(i.song&&p.mode==='guitar')stateEvent('song',{id:p.id,...i.song});
   if(i.throwAt>=0)throwRope(p,i.throwAt,!!i.throwOk);
   if(i.shoo&&world.shoo&&world.shoo.pid===p.id)resolveShoo(i.shoo===2);
-  if(i.scan)market.scan(p);gear.hostInput(p,i);
+  if(i.scan)market.scan(p);if(i.install)gear.installFromInv(p,i.sel??-1);gear.hostInput(p,i);
   p.swing=!!i.swing;
   if(i.yaw!==undefined){p.yaw=i.yaw;p.pitch=i.pitch;}
   if(p.rifle>=0){
@@ -456,11 +457,11 @@ function resolveShoo(stole){const sh=world.shoo;if(!sh)return;world.shoo=null;co
 const HULL_PTS=[[0,4.5],[0,-3.9],[1.55,0],[-1.55,0],[1.25,2.6],[-1.25,2.6],[1.25,-2.6],[-1.25,-2.6]];
 function boatHits(){if(island.exploded)return false;const h=boatState.heading,c=Math.cos(h),s=Math.sin(h);for(const [lx,lz]of HULL_PTS){if(island.ground(boatState.x+lx*c+lz*s,boatState.z-lx*s+lz*c)>-.85)return true;}return false;}
 let emptyBoatT=0;
-function boatHome(){if(fight?.alive){endFightLocal();stateEvent('bossEnd',{win:false});world.storm=null;}boatState=BERTH_STATE();world.rope={s:'tied',h:-1,tgt:1,pid:-1,t:elapsed,ok:true,from:null,to:null};world.eq.anchor=0;world.eq.anchorAt=null;world.eq.drogue=0;stateEvent('boatHome',{});}
+function boatHome(){if(fight?.alive){endFightLocal();stateEvent('bossEnd',{win:false});world.storm=null;}boatState=BERTH_STATE();world.rope={s:'tied',h:-1,tgt:1,pid:-1,t:elapsed,ok:true,from:null,to:null};world.eq.anchor=0;world.eq.anchorAt=null;world.eq.drogue=0;world.eq.gear={};world.eq.fuel=0;world.eq.energy=100;stateEvent('boatHome',{});}
 function hostTick(dt,local){
   elapsed+=dt;const t=elapsed;story=storyTime(t,world.trig,world.storm);const inputs=players.map(p=>p.id===localId?local:remoteInputs[p.net]||{});
   for(const p of players)tickPlayer(p,inputs[p.id]||{},dt,t,p.id===localId);
-  for(const k of Object.keys(remoteInputs))remoteInputs[k]={...remoteInputs[k],slap:false,interact:false,cast:false,jump:false,fall:false,fire:false,use:false,scan:false,climb:false,gull:-1,throwAt:-1,shoo:0,strum:null};
+  for(const k of Object.keys(remoteInputs))remoteInputs[k]={...remoteInputs[k],slap:false,interact:false,cast:false,jump:false,fall:false,fire:false,use:false,scan:false,install:false,climb:false,gull:-1,throwAt:-1,shoo:0,strum:null};
   // Gaivotas ladras: só atacam com peixe no balde, mar calmo (na tempestade elas somem) e antes do meteoro
   const w=weatherAt(story),n0=world.bucket.length,held=world.bucketAt>=0&&players[world.bucketAt]?.mode!=='ragdoll';
   gulls.simulate(dt,{active:story<CONFIG.asteroidAt-4&&!cinematic&&w.storm<.35&&!(world.eq.gullsOff>t),bucketCount:n0,time:t,water:()=>-.2,bucket:boat.worldToLocal(bucketWorld().setY(bucketWorld().y)),held});
@@ -607,7 +608,7 @@ function updateBoat(t,dt){
   boat.rotation.order='YXZ';boat.position.set(x,ud.y+Math.sin(t*1.9)*.02,z);boat.rotation.set(ud.pitch+Math.sin(t*.9)*.008-boatState.speed*.012,h,ud.roll+Math.sin(t*1.3)*(.01+w.storm*.02));
   ud.speed=boatState.speed;ud.heave=hc;let dh=h-prevHeading;dh=Math.atan2(Math.sin(dh),Math.cos(dh));prevHeading=h;steerVis=lerp(steerVis,clamp(-dh/Math.max(dt,1e-3)*2.5,-1,1),1-Math.exp(-dt*6));helm.rotation.z=steerVis*2.2;motor.prop.rotation.z+=dt*(boatState.speed*30+(players.some(p=>p.mode==='drive')&&!engineDead?10:0));motor.group.rotation.y=steerVis*-.35;boat.updateMatrixWorld(true);
   // Lanterna: balança e tremula
-  const lu=lantern.userData;lu.hang.rotation.z=-ud.roll*1.6+Math.sin(t*2.1)*.05*(1+w.storm*3);lu.hang.rotation.x=-ud.pitch*1.6;lu.light.intensity=(1.4+w.storm*2.6+w.red*1.2)*(0.92+Math.sin(t*23)*.04+Math.sin(t*37)*.04);
+  const lu=lantern.userData;lu.hang.rotation.z=-ud.roll*1.6+Math.sin(t*2.1)*.05*(1+w.storm*3);lu.hang.rotation.x=-ud.pitch*1.6;lu.light.intensity=(1.4+w.storm*2.6+w.red*1.2)*(0.92+Math.sin(t*23)*.04+Math.sin(t*37)*.04);const lamp=world.eq?.gear?.lantern&&world.eq.lamp;if(lamp)lu.light.intensity*=3.2;lu.light.distance=lamp?24:11;
 }
 function renderPlayers(t,dt){
   for(const p of players){const model=models[p.id];if(!model)continue;
@@ -764,7 +765,7 @@ function animate(){
   else{
     phaseEffects(story);if(story>=CONFIG.impactAt+.6&&!island.exploded){island.explode();ragdolls.removeIsland();environment.rain.material.uniforms.uRoofY.value=-1e5;}
     if(cinematic)cinematicUpdate(story,vdt);else{renderPlayers(t,vdt);fpCamera(t,vdt);renderItems(t,vdt);market.render(t,vdt);gear.render(t,vdt);}
-    if(showroom){const cd=camera.position.distanceTo(V(ISLAND.x,SHOP.floor,ISLAND.z+16));showroom.group.visible=cd<70&&!island.exploded;if(showroom.group.visible)showroom.update(t,dt,{hoverSlot:hover&&hover.code>=100?hover.code-100:-1});}
+    if(showroom){const cd=camera.position.distanceTo(V(ISLAND.x,SHOP.floor,ISLAND.z+16));showroom.group.visible=cd<55&&!island.exploded;for(const o of shopDetail)o.visible=cd<55;if(showroom.group.visible)showroom.update(t,dt,{hoverSlot:hover&&hover.code>=100?hover.code-100:-1});}
     renderBaker(t,vdt);cameraDrama(story,dt);
     ragdolls.moveDeck(boat);if(!paused)ragdolls.update(dt,(x,z)=>{const l=boat.worldToLocal(V(x,0,z));if(insideBoat(l.x,l.z))return -100;if(!island.exploded&&island.ground(x,z)>-.3)return -100;return waveHeight(x,z,t,weatherAt(story).storm)+tsuAt(x,z,t);},(id,pos,velocity)=>{if(!host)return;if(typeof id==='number'&&players[id]){const q=players[id];q.water=1;q.drown=gear.drownTime(q);q.breath=1;if(!(q.inv||[]).some(e=>e[0]==='pack'))for(const e of [...(q.inv||[])])if(ITEMS[e[0]]?.kind==='bait'){e[1]--;if(e[1]<=0){q.inv.splice(q.inv.indexOf(e),1);if(q.bait===e[0])q.bait=null;}}}if(id==='baker')baker.water=1;stateEvent('splash',{id,position:pos.toArray(),velocity});});
     if(displayTick%4===0)updateHUD(t);fx.update(t,vdt,{players:players.map(p=>p.id===localId?{...p,land:me().land,x:me().x,z:me().z}:p),fishing,models,boat,camera,localId,cinematic,story});fx.syncBucket(world.bucket,bucketObj);
@@ -777,7 +778,10 @@ function animate(){
   // morador derrubado levanta depois de uns segundos e volta ao caminho dele
   villagers.list.forEach((n,k)=>{if(n.rag!=null&&(elapsed-n.rag>4.5||!running)){n.rag=null;ragdolls.remove('npc'+k);}});
   villagers.update(running?elapsed:menuTime,dt,camera,island.exploded,displayTick);
+  // moradores longe não projetam sombra (o passe de sombra desenhava todos, sempre)
+  if(displayTick%30===0)for(const n of villagers.list){const far=n.model.getWorldPosition(V()).distanceTo(camera.position)>35;if(n.model.userData.farSh!==far){n.model.userData.farSh=far;n.model.traverse(o=>{if(o.isMesh)o.castShadow=!far;});}}
   island.update(t,dt,camera,running?players.filter(p=>p.mode!=='gone').map(p=>worldOf(p.id===localId?me():p)).concat(baker.mode==='walk'?[V(baker.x,baker.y,baker.z)]:[]):[]);
+  for(const p of lightPins){p.a.getWorldPosition(p.l.position);let vis=!island.exploded,q=p.a;for(;q&&q!==scene;q=q.parent)if(!q.visible){vis=false;break;}if(q!==scene)vis=false;if(!vis){if(p.saved==null)p.saved=p.l.intensity;p.l.intensity=0;}else if(p.saved!=null){p.l.intensity=p.saved;p.saved=null;}}
   if(fight){fight.render(paused?0:dt,{camera,remote:!host});if(host&&!fight.alive&&fight.rings.length)fight.time+=dt;}bossHudTick(dt);if(fluidOff>0){fluidOff-=dt;if(fluidOff<=0&&!world.impact)fluid.stop();}
   if(battle){battle.stage=fight?.stage||1;battle.tick();}
   const w=environment.update(t,paused?0:dt,boat,camera,{paused,story,focus:running&&!cinematic?camera.position:boat.position,red:fight?.alive?fight.redK:undefined,storm:fight?.alive?1:undefined});
@@ -808,6 +812,19 @@ async function init(){
     tieProxies=[new THREE.Mesh(new THREE.BoxGeometry(.7,.6,.7),hid),new THREE.Mesh(new THREE.CylinderGeometry(.45,.45,.9,12),hid)];tieProxies[0].position.set(BOW_CLEAT.x,BOW_CLEAT.y,BOW_CLEAT.z);boat.add(tieProxies[0]);scene.add(tieProxies[1]);sellProxy=new THREE.Mesh(new THREE.BoxGeometry(1.5,1.4,3),hid);sellProxy.position.set(ISLAND.x+sp.u-1.25,SHOP.floor+.7,ISLAND.z+sp.v);scene.add(sellProxy);
     // caixas de autoatendimento: área do leitor (segurar E) e da maquininha (E paga)
     laneProxies=island.shop.points.lanes.map(l=>{const a=new THREE.Mesh(new THREE.BoxGeometry(.9,.7,.8),hid),b=new THREE.Mesh(new THREE.BoxGeometry(.4,.4,.4),hid);a.position.set(ISLAND.x+l.scan[0],l.scan[1]+.05,ISLAND.z+l.scan[2]);b.position.set(ISLAND.x+l.pay[0],l.pay[1],ISLAND.z+l.pay[2]);scene.add(a,b);return {scan:a,pay:b};});}
+  // Desempenho: junta as malhas estáticas de cada parte da ilha por material (centenas de chamadas de desenho a menos).
+  // Cada parte continua separada (a explosão joga uma por uma); farol, mercado e lago da praça ficam como estão (são animados).
+  {const keep=new Set([island.shop.group]);for(const o of [island.rotor,island.water,island.flare])for(let q=o;q&&q.parent;q=q.parent)if(q.parent===island.group)keep.add(q);
+    for(const part of island.parts){if(keep.has(part))continue;let bad=false;part.traverse(o=>{if(o.isLight||o.isSprite||o.isPoints||o.isLine||o.isInstancedMesh||o.isSkinnedMesh)bad=true;});if(bad)continue;
+      part.updateMatrixWorld(true);const inv=part.matrixWorld.clone().invert(),groups=new Map();
+      part.traverse(o=>{if(!o.isMesh||Array.isArray(o.material)||!o.visible)return;const g=o.geometry,key=o.material.uuid+'|'+Object.keys(g.attributes).sort().join()+'|'+(g.index?1:0)+'|'+o.castShadow+o.receiveShadow;(groups.get(key)||groups.set(key,[]).get(key)).push(o);});
+      for(const list of groups.values()){if(list.length<2)continue;const geos=list.map(o=>o.geometry.clone().applyMatrix4(inv.clone().multiply(o.matrixWorld)));const merged=mergeGeometries(geos,false);if(!merged)continue;
+        const m=new THREE.Mesh(merged,list[0].material);m.castShadow=list[0].castShadow;m.receiveShadow=list[0].receiveShadow;for(const o of list)o.removeFromParent();part.add(m);}}}
+  // interior do mercado (etiquetas, telas, vitrine): só é desenhado com a câmera por perto
+    island.group.updateMatrixWorld(true);shopDetail=island.shop.group.children.filter(o=>{const b=new THREE.Box3().setFromObject(o);if(b.isEmpty())return false;const c=b.getCenter(V()),u=c.x-ISLAND.x,v=c.z-ISLAND.z,sz=b.getSize(V());return u>SHOP.u0+.3&&u<SHOP.u1-.3&&v>SHOP.v0+.3&&v<SHOP.v1&&Math.max(sz.x,sz.z)<SHOP.u1-SHOP.u0-2;});
+  // Luzes da ilha (mercado, farol) moram direto na cena e seguem uma âncora: se ficassem dentro de um grupo que some
+  // (farol no céu vermelho, ilha explodindo), a contagem de luzes mudaria e o three.js recompilaria TODOS os materiais
+  island.group.traverse(o=>{if(o.isLight)lightPins.push({l:o});});for(const p of lightPins){const l=p.l,a=new THREE.Object3D();a.position.copy(l.position);a.quaternion.copy(l.quaternion);l.parent.add(a);l.parent.remove(l);scene.add(l);p.a=a;}
   // Loja do Pescador: os 50 itens nas prateleiras (uma vez só, sem sombra) e os ícones do HUD
   $('loading-text').textContent='Abastecendo a Loja do Pescador…';await new Promise(r=>setTimeout(r,0));
   showroom=new Showroom(island.shop.group,island.shop.points.slots,makeStoreItem);showroom.buildAll();

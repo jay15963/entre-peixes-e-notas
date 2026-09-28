@@ -20,3 +20,8 @@ test('Iscas e vara mudam o sorteio e a briga do peixe',()=>{
   const f=new Fishing(()=>.5);f.cast({...base,w:base.w.map((w,i)=>i===PREDATORS[0]?1:0)});assert.equal(f.species,PREDATORS[0]);
   f.phase='reeling';f.assist(2);let r=null;for(let k=0;k<5&&!r;k++)r=f.step(1/60,true,0);assert.equal(r,'caught','passaguá/bicheiro tiram o peixe da água');
 });
+test('Melhoria do barco vai para a mochila; instalada, não se compra de novo',()=>{
+  const p={inv:[]},gear={};assert.equal(addItem(p,'motor',gear),null);assert.deepEqual(p.inv,[['motor',0]]);assert.equal(gear.motor,undefined,'só instala segurando E no barco');
+  assert.equal(cannotAdd(p,'motor',gear),'Você já tem.');p.inv=[];gear.motor=1;assert.equal(cannotAdd(p,'motor',gear),'Já está instalado no barco.');
+  assert.ok(ITEMS.motor.rule.includes('segure E olhando o barco'));
+});
